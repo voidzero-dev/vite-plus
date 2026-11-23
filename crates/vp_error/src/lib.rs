@@ -95,6 +95,14 @@ pub enum Error {
     #[error(transparent)]
     PackageManagerHashMismatch(#[from] Box<PackageManagerHashMismatch>),
 
+    /// The registry gives no `dist.integrity` for a package-manager download
+    /// that no `packageManager` pin covers, so vp cannot check it.
+    ///
+    /// This variant boxes its payload for the same reason as
+    /// [`Self::PackageManagerHashMismatch`].
+    #[error(transparent)]
+    PackageManagerIntegrityUnavailable(#[from] Box<PackageManagerIntegrityUnavailable>),
+
     #[error("Invalid hash format: {0}")]
     InvalidHashFormat(Str),
 
@@ -124,15 +132,40 @@ pub enum Error {
 }
 
 impl Error {
-    /// Whether the error says that an artifact failed its integrity check.
+    /// Whether the error says that an artifact failed its integrity check, or
+    /// that vp cannot check it.
     ///
     /// Some callers continue when a managed tool is missing. They must stop for
     /// this error. The user must fix an unverified artifact, and a fallback
     /// hides the cause behind a later, unrelated failure.
     #[must_use]
     pub const fn is_integrity_failure(&self) -> bool {
-        matches!(self, Self::PackageManagerHashMismatch(_) | Self::HashMismatch { .. })
+        matches!(
+            self,
+            Self::PackageManagerHashMismatch(_)
+                | Self::PackageManagerIntegrityUnavailable(_)
+                | Self::HashMismatch { .. }
+        )
     }
+}
+
+/// Details of a package-manager download that vp cannot check, because the
+/// registry gives no `dist.integrity` for it.
+///
+/// `package` is the npm package that vp looked up: the manager itself, or the
+/// platform package of Bun or pnpm 12+. `url` is the package document that
+/// vp read last. `hint` tells the user how to fix the install.
+#[derive(Error, Debug)]
+#[error(
+    "Cannot verify {name}@{version}: the registry does not provide `dist.integrity` for {package}@{version} ({url})\n\
+     {hint}"
+)]
+pub struct PackageManagerIntegrityUnavailable {
+    pub name: Str,
+    pub version: Str,
+    pub package: Str,
+    pub url: Str,
+    pub hint: Str,
 }
 
 /// Details of a failed `packageManager` integrity check.

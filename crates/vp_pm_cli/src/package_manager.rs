@@ -23,7 +23,7 @@ use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 use crate::{
     config::{NpmConfig, is_default_registry},
     env_forbidden::ensure_managed_package_manager_allowed,
-    request::{HttpClient, download_and_extract_tgz_with_hash_and_config, is_not_found},
+    request::{HttpClient, TgzDownload, Unpack, download_and_extract_tgz, is_not_found},
     shim,
 };
 
@@ -1484,13 +1484,14 @@ async fn resolve_package_manager_version_with_config(
     }
 }
 
-/// Abbreviated registry metadata: only the version list is needed.
+/// Abbreviated registry metadata, with each version's metadata read as `V`.
+///
+/// The default `IgnoredAny` reads only the version list.
 #[derive(Deserialize)]
-struct RegistryPackument {
-    // a map with ignored values is the idiomatic serde way to read only the keys
-    #[allow(clippy::zero_sized_map_values)]
-    #[serde(default)]
-    versions: HashMap<String, serde::de::IgnoredAny>,
+struct RegistryPackument<V = serde::de::IgnoredAny> {
+    // A plain `default` makes serde require `V: Default`.
+    #[serde(default = "HashMap::new")]
+    versions: HashMap<String, V>,
 }
 
 /// Fetch all published versions of a package from the npm registry.
@@ -1839,14 +1840,21 @@ async fn download_package_manager_inner(
         return Ok((install_dir, package_name, version));
     }
 
-    // A pin covers the executed files and takes precedence. Without one, the
-    // registry's integrity still rejects a corrupted or swapped tarball.
+    // A pin covers the executed files and takes precedence, so a pinned install
+    // never fetches package metadata. Without a pin, the registry's
+    // `dist.integrity` is the only check of the download, so vp requires it.
     let registry_integrity = match expected_hash {
         Some(_) => None,
-        None => {
-            fetch_registry_integrity(package_manager_type, &package_name, &version, npm_config)
-                .await?
-        }
+        None => Some(
+            fetch_registry_integrity(
+                package_manager_type,
+                &package_name,
+                &version,
+                ADD_PIN_HINT,
+                npm_config,
+            )
+            .await?,
+        ),
     };
 
     // Stage the download in a temp directory beside the version directory, not
@@ -1862,16 +1870,19 @@ async fn download_package_manager_inner(
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading {package_manager_type} v{version}...");
-    // A Yarn 2+ `packageManager` hash covers only the CLI. The rest of the archive
-    // is not authenticated by that hash, so vp never writes it to disk.
-    let archive_file = is_modern_yarn.then(|| PathBuf::from(format!("package/{YARN_CLI_ENTRY}")));
-    download_and_extract_tgz_with_hash_and_config(
-        &tgz_url,
+    // The registry integrity covers the archive. A Yarn 2+ pin covers only the
+    // CLI, and the rest of the archive is not authenticated by that pin, so vp
+    // writes only the CLI to disk. Other pins cover the archive.
+    let yarn_cli_entry = PathBuf::from(format!("package/{YARN_CLI_ENTRY}"));
+    let (archive_digest, unpack) = if is_modern_yarn {
+        let unpack = Unpack::Entry { path: &yarn_cli_entry, digest: expected_hash };
+        (registry_integrity.as_deref(), unpack)
+    } else {
+        (expected_hash.or(registry_integrity.as_deref()), Unpack::All)
+    };
+    download_and_extract_tgz(
+        TgzDownload { url: &tgz_url, archive_digest, unpack, message: Some(&download_message) },
         &target_dir_tmp,
-        archive_file.as_deref(),
-        expected_hash,
-        registry_integrity.as_deref(),
-        Some(&download_message),
         npm_config,
     )
     .await
@@ -2024,30 +2035,11 @@ async fn download_bun_package_manager(
         return Ok((install_dir, package_name, version.clone()));
     }
 
-    // A declared pin covers the main bun tarball, not the platform binary.
-    if let Some(expected_hash) = expected_hash {
-        let main_tgz_url = npm_config.package_tgz_url("bun", version);
-        let verify_dir = tempfile::tempdir()?;
-        let verify_message = format!("Verifying bun v{version}...");
-        download_and_extract_tgz_with_hash_and_config(
-            &main_tgz_url,
-            verify_dir.path(),
-            None,
-            Some(expected_hash),
-            None,
-            Some(&verify_message),
-            npm_config,
-        )
-        .await
-        .map_err(|error| name_hashed_artifact(error, PackageManagerType::Bun, version))?;
-    }
-
-    // The declared hash never covers the platform tarball, so verify it
-    // against the registry's `dist.integrity` for the platform package.
-    let platform_hash = fetch_registry_integrity(
+    let platform_hash = verify_pin_and_fetch_platform_integrity(
         PackageManagerType::Bun,
         &platform_package_name,
         version,
+        expected_hash,
         npm_config,
     )
     .await?;
@@ -2066,13 +2058,14 @@ async fn download_bun_package_manager(
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading bun v{version}...");
-    download_and_extract_tgz_with_hash_and_config(
-        &platform_tgz_url,
+    download_and_extract_tgz(
+        TgzDownload {
+            url: &platform_tgz_url,
+            archive_digest: Some(&platform_hash),
+            unpack: Unpack::All,
+            message: Some(&download_message),
+        },
         &target_dir_tmp,
-        None,
-        None,
-        platform_hash.as_deref(),
-        Some(&download_message),
         npm_config,
     )
     .await
@@ -2169,34 +2162,115 @@ struct RegistryDist {
     integrity: Option<Str>,
 }
 
+impl RegistryDist {
+    /// The first hash of the SRI. SRI allows several space-separated hashes,
+    /// and npm registries serve one.
+    fn integrity(&self) -> Option<Str> {
+        self.integrity.as_deref().and_then(|sri| sri.split_whitespace().next()).map(Str::from)
+    }
+}
+
+/// The fix when the registry gives no `dist.integrity` for a manager whose pin
+/// covers the executed files.
+const ADD_PIN_HINT: &str = "Add an integrity hash to the `packageManager` field, so that Vite+ checks the download against it, or use a registry that serves package metadata.";
+
+/// The fix when the registry gives no `dist.integrity` for the platform package
+/// of Bun or pnpm 12+. A pin does not help, because it covers only the main tarball.
+const PLATFORM_PACKAGE_HINT: &str = "Use a registry that serves package metadata. A `packageManager` hash covers only the main tarball, not the platform package that holds the executable.";
+
+/// Check the pin of a Bun or pnpm 12+ install, then fetch the registry
+/// integrity of its platform package.
+///
+/// A pin covers only the main tarball, which holds no executable. vp checks the
+/// pin against the main tarball and discards it, so a bad pin still fails, as
+/// it does for pnpm 11 and earlier. The registry integrity is then the only
+/// check of the platform executable, so vp requires it with or without a pin.
+async fn verify_pin_and_fetch_platform_integrity(
+    package_manager_type: PackageManagerType,
+    platform_package_name: &str,
+    version: &Str,
+    expected_hash: Option<&str>,
+    npm_config: &NpmConfig,
+) -> Result<Str, Error> {
+    if let Some(expected_hash) = expected_hash {
+        let main_tgz_url = npm_config.package_tgz_url(&package_manager_type.to_string(), version);
+        let verify_dir = tempfile::tempdir()?;
+        let verify_message = format!("Verifying {package_manager_type} v{version}...");
+        download_and_extract_tgz(
+            TgzDownload {
+                url: &main_tgz_url,
+                archive_digest: Some(expected_hash),
+                unpack: Unpack::All,
+                message: Some(&verify_message),
+            },
+            verify_dir.path(),
+            npm_config,
+        )
+        .await
+        .map_err(|error| name_hashed_artifact(error, package_manager_type, version))?;
+    }
+    fetch_registry_integrity(
+        package_manager_type,
+        platform_package_name,
+        version,
+        PLATFORM_PACKAGE_HINT,
+        npm_config,
+    )
+    .await
+}
+
+/// Fetch the registry `dist.integrity` (SRI) of a package version.
+///
+/// vp reads the small version document first. When the registry does not
+/// serve it, or it omits `dist.integrity`, vp reads the abbreviated package
+/// document, which `npm install` also reads when no lockfile pins a package. A
+/// download that no pin covers needs this integrity, so vp fails when neither
+/// document gives it. `hint` tells the user how to fix that.
 async fn fetch_registry_integrity(
     package_manager_type: PackageManagerType,
     package_name: &str,
     version: &Str,
+    hint: &str,
     npm_config: &NpmConfig,
-) -> Result<Option<Str>, Error> {
-    let metadata_url = npm_config.package_version_url(package_name, version);
-    let metadata: RegistryVersionMetadata = HttpClient::with_npm_config(3, 500, npm_config.clone())
-        .get_json(&metadata_url)
-        .await
-        .map_err(|err| {
-            if is_not_found(&err) {
-                Error::PackageManagerVersionNotFound {
-                    name: package_manager_type.to_string().into(),
-                    version: version.clone(),
-                    url: metadata_url.as_str().into(),
-                }
-            } else {
-                err
+) -> Result<Str, Error> {
+    let client = HttpClient::with_npm_config(3, 500, npm_config.clone());
+    let version_url = npm_config.package_version_url(package_name, version);
+    match client.get_json::<RegistryVersionMetadata>(&version_url).await {
+        Ok(metadata) => {
+            if let Some(integrity) = metadata.dist.integrity() {
+                return Ok(integrity);
             }
-        })?;
-    // SRI allows several space-separated hashes; npm registries serve one.
-    Ok(metadata
-        .dist
-        .integrity
-        .as_deref()
-        .and_then(|sri| sri.split_whitespace().next())
-        .map(Str::from))
+            tracing::debug!("{version_url} omits dist.integrity, read the package document");
+        }
+        Err(err) if is_not_found(&err) => {
+            tracing::debug!("{version_url} not found, read the package document");
+        }
+        Err(err) => return Err(err),
+    }
+
+    let package_url = npm_config.package_metadata_url(package_name);
+    let unavailable = || {
+        Error::from(Box::new(vp_error::PackageManagerIntegrityUnavailable {
+            name: package_manager_type.to_string().into(),
+            version: version.clone(),
+            package: package_name.into(),
+            url: package_url.clone(),
+            hint: hint.into(),
+        }))
+    };
+    let packument: RegistryPackument<RegistryVersionMetadata> =
+        match client.get_json_with_accept(&package_url, NPM_ABBREVIATED_METADATA_ACCEPT).await {
+            Err(err) if is_not_found(&err) => return Err(unavailable()),
+            result => result?,
+        };
+    let Some(metadata) = packument.versions.get(version.as_str()) else {
+        return Err(Error::PackageManagerVersionNotFound {
+            name: package_manager_type.to_string().into(),
+            version: version.clone(),
+            url: package_url.clone(),
+        });
+    };
+    metadata.dist.integrity().ok_or_else(unavailable)
 }
 
 /// Download pnpm >= 12 (native binary) via its platform-specific npm package.
@@ -2231,32 +2305,11 @@ async fn download_pnpm_native_package_manager(
         return Ok((install_dir, package_name, version.clone()));
     }
 
-    // A `packageManager` hash describes the main `pnpm` tarball, not the
-    // platform package: verify it against the artifact it names so a bad pin
-    // still fails, matching pnpm <= 11.
-    if let Some(expected_hash) = expected_hash {
-        let main_tgz_url = npm_config.package_tgz_url("pnpm", version);
-        let verify_dir = tempfile::tempdir()?;
-        let verify_message = format!("Verifying pnpm v{version}...");
-        download_and_extract_tgz_with_hash_and_config(
-            &main_tgz_url,
-            verify_dir.path(),
-            None,
-            Some(expected_hash),
-            None,
-            Some(&verify_message),
-            npm_config,
-        )
-        .await
-        .map_err(|error| name_hashed_artifact(error, PackageManagerType::Pnpm, version))?;
-    }
-
-    // The declared hash never covers the platform tarball, so verify it
-    // against the registry's `dist.integrity` for the platform package.
-    let platform_hash = fetch_registry_integrity(
+    let platform_hash = verify_pin_and_fetch_platform_integrity(
         PackageManagerType::Pnpm,
         platform_package_name,
         version,
+        expected_hash,
         npm_config,
     )
     .await?;
@@ -2275,13 +2328,14 @@ async fn download_pnpm_native_package_manager(
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading pnpm v{version}...");
-    download_and_extract_tgz_with_hash_and_config(
-        &platform_tgz_url,
+    download_and_extract_tgz(
+        TgzDownload {
+            url: &platform_tgz_url,
+            archive_digest: Some(&platform_hash),
+            unpack: Unpack::All,
+            message: Some(&download_message),
+        },
         &target_dir_tmp,
-        None,
-        None,
-        platform_hash.as_deref(),
-        Some(&download_message),
         npm_config,
     )
     .await
@@ -2650,7 +2704,7 @@ mod tests {
             &platform_package,
             version,
             platform_tgz,
-            Some(platform_integrity),
+            platform_integrity,
         );
     }
 
@@ -2665,7 +2719,7 @@ mod tests {
         tgz: Vec<u8>,
     ) -> httpmock::Mock<'a> {
         let integrity = sri(&tgz);
-        mount_package_with_integrity(server, package, version, tgz, Some(&integrity))
+        mount_package_with_integrity(server, package, version, tgz, &integrity)
     }
 
     fn mount_package_with_integrity<'a>(
@@ -2673,13 +2727,39 @@ mod tests {
         package: &str,
         version: &str,
         tgz: Vec<u8>,
-        integrity: Option<&str>,
+        integrity: &str,
     ) -> httpmock::Mock<'a> {
+        mount_version_document(
+            server,
+            package,
+            version,
+            serde_json::json!({"integrity": integrity}),
+        );
+        mount_tarball(server, package, version, tgz)
+    }
+
+    /// Serve the version document of `package@version` with this `dist` object.
+    fn mount_version_document(
+        server: &httpmock::MockServer,
+        package: &str,
+        version: &str,
+        dist: serde_json::Value,
+    ) {
         use httpmock::prelude::*;
         server.mock(|when, then| {
             when.method(GET).path(format!("/{package}/{version}"));
-            then.status(200).json_body(serde_json::json!({"dist": {"integrity": integrity}}));
+            then.status(200).json_body(serde_json::json!({"dist": dist}));
         });
+    }
+
+    /// Serve the tarball of `package@version`.
+    fn mount_tarball<'a>(
+        server: &'a httpmock::MockServer,
+        package: &str,
+        version: &str,
+        tgz: Vec<u8>,
+    ) -> httpmock::Mock<'a> {
+        use httpmock::prelude::*;
         let basename = package.rsplit('/').next().unwrap();
         server.mock(|when, then| {
             when.method(GET).path(format!("/{package}/-/{basename}-{version}.tgz"));
@@ -4442,6 +4522,12 @@ mod tests {
             when.method(GET).path("/yarn/-/yarn-1.22.22.tgz");
             then.status(200).body(tarball.clone());
         });
+        // A pin takes precedence over the registry, so a pinned install never
+        // fetches the version document.
+        let metadata = server.mock(|when, then| {
+            when.method(GET).path("/yarn/1.22.22");
+            then.status(200).json_body(serde_json::json!({"dist": {"integrity": sri(b"other")}}));
+        });
 
         for pin in [
             format!("sha512.{}", hex::encode(Sha512::digest(&tarball))),
@@ -4467,6 +4553,7 @@ mod tests {
             assert_eq!(manager.client, PackageManagerType::Yarn);
             assert_eq!(manager.version, "1.22.22");
         }
+        metadata.assert_hits(0);
     }
 
     #[tokio::test]
@@ -4541,20 +4628,31 @@ mod tests {
 
     #[tokio::test]
     async fn test_detect_package_manager_with_not_exists_version_in_package_manager_field() {
+        use httpmock::prelude::*;
+
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         create_package_json(
             &temp_dir_path,
             r#"{"name": "test-package", "packageManager": "yarn@10000000000.0.0"}"#,
         );
+        // The registry serves the package document, which does not list the version.
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist");
+            then.status(200).json_body(serde_json::json!({"versions": {}}));
+        });
+        let vp_home = create_temp_dir();
 
-        let result = build_with_cached_installs(PackageManager::builder(&temp_dir_path)).await;
+        let result =
+            build_with_registry(PackageManager::builder(&temp_dir_path), &server, vp_home.path())
+                .await;
         let Err(Error::PackageManagerVersionNotFound { name, version, url }) = result else {
             panic!("Expected PackageManagerVersionNotFound error, got {result:?}");
         };
         assert_eq!(name, "yarn");
         assert_eq!(version, "10000000000.0.0");
-        assert!(url.ends_with("/@yarnpkg/cli-dist/10000000000.0.0"), "{url}");
+        assert!(url.ends_with("/@yarnpkg/cli-dist"), "{url}");
     }
 
     #[tokio::test]
@@ -4671,25 +4769,127 @@ mod tests {
         assert!(matches!(result, Err(Error::InvalidArgument(_))));
     }
 
-    #[tokio::test]
-    async fn unpinned_download_verifies_registry_integrity() {
-        let pnpm_tgz = create_tgz(&[("package/bin/pnpm.cjs", &version_cli("10.0.0"))]);
-        let yarn_tgz = create_yarn_package_tgz(&version_cli("4.9.2"), None);
-        let other = sri(b"other");
-        let cases = [
-            (PackageManagerType::Pnpm, "10.0.0", "pnpm", &pnpm_tgz, Some(other.as_str())),
-            (PackageManagerType::Pnpm, "10.0.0", "pnpm", &pnpm_tgz, None),
+    /// The Bun and pnpm 12+ cases of the native-manager tests: the manager, its
+    /// version, its platform package, and the platform tarball.
+    fn native_platform_cases() -> [(PackageManagerType, &'static str, String, Vec<u8>); 2] {
+        let pnpm_native = if cfg!(windows) { "package/pnpm.exe" } else { "package/pnpm" };
+        let bun_native = if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" };
+        [
             (
-                PackageManagerType::Yarn,
-                "4.9.2",
-                "@yarnpkg/cli-dist",
-                &yarn_tgz,
-                Some(other.as_str()),
+                PackageManagerType::Pnpm,
+                "12.0.0-beta.0",
+                get_pnpm_platform_package_name().unwrap().to_string(),
+                create_tgz(&[(pnpm_native, b"mock pnpm executable")]),
             ),
+            (
+                PackageManagerType::Bun,
+                "1.2.0",
+                get_bun_platform_package_name().unwrap(),
+                create_tgz(&[(bun_native, b"mock bun executable")]),
+            ),
+        ]
+    }
+
+    /// What a mock registry serves as one metadata document of a package version.
+    #[derive(Clone, Copy, Debug)]
+    enum Doc {
+        /// `dist.integrity` matches the tarball.
+        Matching,
+        /// `dist.integrity` does not match the tarball.
+        Other,
+        /// The document omits `dist.integrity`.
+        NoIntegrity,
+        /// The registry returns 404 for the document.
+        Missing,
+    }
+
+    impl Doc {
+        fn dist(self, tgz: &[u8]) -> Option<serde_json::Value> {
+            match self {
+                Self::Matching => Some(serde_json::json!({"integrity": sri(tgz)})),
+                Self::Other => Some(serde_json::json!({"integrity": sri(b"other")})),
+                Self::NoIntegrity => Some(serde_json::json!({})),
+                Self::Missing => None,
+            }
+        }
+
+        /// Whether the integrity in the document matches the tarball, if the
+        /// document gives one.
+        const fn matches(self) -> Option<bool> {
+            match self {
+                Self::Matching => Some(true),
+                Self::Other => Some(false),
+                Self::NoIntegrity | Self::Missing => None,
+            }
+        }
+    }
+
+    /// Serve the version document and the package document of `package@version`.
+    /// Returns the package document mock, if the registry serves one.
+    fn mount_registry_documents<'a>(
+        server: &'a httpmock::MockServer,
+        package: &str,
+        version: &str,
+        tgz: &[u8],
+        version_doc: Doc,
+        package_doc: Doc,
+    ) -> Option<httpmock::Mock<'a>> {
+        use httpmock::prelude::*;
+        if let Some(dist) = version_doc.dist(tgz) {
+            mount_version_document(server, package, version, dist);
+        }
+        package_doc.dist(tgz).map(|dist| {
+            server.mock(|when, then| {
+                when.method(GET).path(format!("/{package}"));
+                then.status(200)
+                    .json_body(serde_json::json!({"versions": {version: {"dist": dist}}}));
+            })
+        })
+    }
+
+    /// An unpinned install checks the tarball against the registry
+    /// `dist.integrity`. vp reads the version document first, and reads the
+    /// package document when the version document is missing or omits the
+    /// field. When neither gives it, the install fails before the download.
+    #[tokio::test]
+    async fn unpinned_download_requires_registry_integrity() {
+        let pnpm = (
+            PackageManagerType::Pnpm,
+            "10.0.0",
+            "pnpm".to_string(),
+            create_tgz(&[("package/bin/pnpm.cjs", &version_cli("10.0.0"))]),
+        );
+        let yarn = (
+            PackageManagerType::Yarn,
+            "4.9.2",
+            "@yarnpkg/cli-dist".to_string(),
+            create_yarn_package_tgz(&version_cli("4.9.2"), None),
+        );
+        let mut cases = vec![
+            (pnpm.clone(), Doc::Other, Doc::Missing),
+            (pnpm.clone(), Doc::Missing, Doc::Matching),
+            (pnpm.clone(), Doc::NoIntegrity, Doc::Matching),
+            (pnpm.clone(), Doc::NoIntegrity, Doc::NoIntegrity),
+            (pnpm, Doc::Missing, Doc::Missing),
+            (yarn.clone(), Doc::Other, Doc::Missing),
+            (yarn.clone(), Doc::Missing, Doc::Matching),
+            (yarn, Doc::Missing, Doc::Missing),
         ];
-        for (kind, version, package, tgz, integrity) in cases {
+        for case in native_platform_cases() {
+            cases.push((case.clone(), Doc::Missing, Doc::Matching));
+            cases.push((case, Doc::Missing, Doc::Missing));
+        }
+        for ((kind, version, package, tgz), version_doc, package_doc) in cases {
             let server = httpmock::MockServer::start();
-            mount_package_with_integrity(&server, package, version, tgz.clone(), integrity);
+            let package_mock = mount_registry_documents(
+                &server,
+                &package,
+                version,
+                &tgz,
+                version_doc,
+                package_doc,
+            );
+            let tarball = mount_tarball(&server, &package, version, tgz);
             let vp_home = create_temp_dir();
             let result = EnvConfig::with_vars_async(
                 [
@@ -4700,17 +4900,101 @@ mod tests {
             )
             .await;
 
-            let case = format!("{kind}@{version} integrity={integrity:?}");
-            if integrity.is_none() {
-                result.unwrap_or_else(|error| panic!("{case}: {error}"));
-                continue;
+            let case = format!("{kind}@{version} version={version_doc:?} package={package_doc:?}");
+            // vp reads the package document only when the version document gives no integrity.
+            if let Some(package_mock) = package_mock {
+                package_mock.assert_hits(usize::from(version_doc.matches().is_none()));
             }
-            let error = result.expect_err(&case);
-            assert!(matches!(error, Error::HashMismatch { .. }), "{case}: {error:?}");
+            match version_doc.matches().or(package_doc.matches()) {
+                Some(true) => {
+                    result.unwrap_or_else(|error| panic!("{case}: {error}"));
+                    tarball.assert_hits(1);
+                    continue;
+                }
+                Some(false) => {
+                    assert!(
+                        matches!(result, Err(Error::HashMismatch { .. })),
+                        "{case}: {result:?}"
+                    );
+                }
+                None => {
+                    let Err(Error::PackageManagerIntegrityUnavailable(unavailable)) = result else {
+                        panic!(
+                            "{case}: expected PackageManagerIntegrityUnavailable, got {result:?}"
+                        );
+                    };
+                    let hint = if kind.uses_platform_binary(version) {
+                        PLATFORM_PACKAGE_HINT
+                    } else {
+                        ADD_PIN_HINT
+                    };
+                    assert_eq!(unavailable.package, package.as_str(), "{case}");
+                    assert_eq!(unavailable.hint, hint, "{case}");
+                    tarball.assert_hits(0);
+                }
+            }
             assert!(
                 !vp_home.path().join(format!("package_manager/{kind}/{version}")).exists(),
                 "{case}: a failed download left an install"
             );
+        }
+    }
+
+    /// A Bun or pnpm 12+ pin covers only the main tarball, so the registry
+    /// integrity is the only check of the platform executable. A pinned install
+    /// fails when neither registry document gives it, and adds nothing to the
+    /// verified namespace.
+    #[tokio::test]
+    async fn pinned_native_download_requires_platform_integrity() {
+        use sha2::Sha512;
+
+        for (kind, version, platform_package, platform_tgz) in native_platform_cases() {
+            let main_tgz = create_tgz(&[(
+                "package/package.json",
+                format!(r#"{{"name":"{kind}","version":"{version}"}}"#).as_bytes(),
+            )]);
+            let pin = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
+            for (version_doc, package_doc) in
+                [(Doc::Missing, Doc::Missing), (Doc::NoIntegrity, Doc::NoIntegrity)]
+            {
+                let server = httpmock::MockServer::start();
+                let main_tarball =
+                    mount_tarball(&server, &kind.to_string(), version, main_tgz.clone());
+                mount_registry_documents(
+                    &server,
+                    &platform_package,
+                    version,
+                    &platform_tgz,
+                    version_doc,
+                    package_doc,
+                );
+                let platform_tarball =
+                    mount_tarball(&server, &platform_package, version, platform_tgz.clone());
+                let vp_home = create_temp_dir();
+                let (result, verified_entries) = EnvConfig::with_vars_async(
+                    [
+                        (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                        (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+                    ],
+                    |_| async {
+                        let result = download_package_manager(kind, version, Some(&pin)).await;
+                        let verified = package_manager_verified_namespace_dir(kind);
+                        (result, fs::read_dir(verified.as_path()).map_or(0, Iterator::count))
+                    },
+                )
+                .await;
+
+                let case = format!("{kind}@{version} version={version_doc:?}");
+                let Err(Error::PackageManagerIntegrityUnavailable(unavailable)) = result else {
+                    panic!("{case}: expected PackageManagerIntegrityUnavailable, got {result:?}");
+                };
+                assert_eq!(unavailable.name, kind.to_string().as_str(), "{case}");
+                assert_eq!(unavailable.package, platform_package.as_str(), "{case}");
+                assert_eq!(unavailable.hint, PLATFORM_PACKAGE_HINT, "{case}");
+                assert!(main_tarball.hits() > 0, "{case}: the pin must still be checked first");
+                platform_tarball.assert_hits(0);
+                assert_eq!(verified_entries, 0, "{case}: a failed install added a verified entry");
+            }
         }
     }
 

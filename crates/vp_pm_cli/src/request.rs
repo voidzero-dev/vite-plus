@@ -483,21 +483,42 @@ fn extract_tgz_file(
     .into())
 }
 
-/// Download a tgz file from a URL and extract it to a target directory with optional hash verification.
-pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
-    url: &str,
+/// The entries of a downloaded tgz that vp writes, and the digest that covers them.
+#[derive(Clone, Copy)]
+pub(crate) enum Unpack<'a> {
+    /// Write every entry except links. Only [`TgzDownload::archive_digest`]
+    /// authenticates them.
+    All,
+    /// Write only the regular file at `path`, a relative path of normal
+    /// components, to the same path under the target directory. vp ignores
+    /// every other entry. `digest` covers the extracted file, not the archive.
+    Entry { path: &'a Path, digest: Option<&'a str> },
+}
+
+/// A tgz to download, verify, and extract.
+///
+/// A digest is "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`]).
+#[derive(Clone, Copy)]
+pub(crate) struct TgzDownload<'a> {
+    pub(crate) url: &'a str,
+    /// The digest of the downloaded `.tgz` bytes. vp checks it before it reads any entry.
+    pub(crate) archive_digest: Option<&'a str>,
+    pub(crate) unpack: Unpack<'a>,
+    /// A message shown above a progress bar while downloading (see [`HttpClient::download_file`]).
+    pub(crate) message: Option<&'a str>,
+}
+
+/// Download a tgz, verify its digests, and extract it to `target_dir`.
+///
+/// A failed attempt is retried from a clean `target_dir`.
+pub(crate) async fn download_and_extract_tgz(
+    download: TgzDownload<'_>,
     target_dir: impl AsRef<Path>,
-    archive_file: Option<&Path>,
-    expected_hash: Option<&str>,
-    tarball_hash: Option<&str>,
-    message: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(), Error> {
-    if let Some(archive_file) = archive_file
-        && (archive_file.as_os_str().is_empty()
-            || !archive_file
-                .components()
-                .all(|component| matches!(component, Component::Normal(_))))
+    if let Unpack::Entry { path, .. } = download.unpack
+        && (path.as_os_str().is_empty()
+            || !path.components().all(|component| matches!(component, Component::Normal(_))))
     {
         return Err(Error::InvalidArgument(
             "archive file path must be a safe relative path".into(),
@@ -505,7 +526,7 @@ pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
     }
 
     let target_dir = target_dir.as_ref().to_path_buf();
-    tracing::debug!("Start download and extract {} to {:?}", url, target_dir);
+    tracing::debug!("Start download and extract {} to {:?}", download.url, target_dir);
 
     // This is the single retry layer for the whole download → verify → extract
     // pipeline: each attempt does one download (no nested retry — see
@@ -514,26 +535,15 @@ pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
     // attempt. A 404 (version not found) and permanent config errors fail fast
     // and propagate unchanged so the caller in `package_manager.rs` can map a
     // 404 to `PackageManagerVersionNotFound`.
-    (|| async {
-        download_and_extract_tgz_once(
-            url,
-            &target_dir,
-            archive_file,
-            expected_hash,
-            tarball_hash,
-            message,
-            npm_config,
+    (|| async { download_and_extract_tgz_once(download, &target_dir, npm_config).await })
+        .retry(
+            ExponentialBuilder::default()
+                .with_jitter()
+                .with_min_delay(Duration::from_millis(500))
+                .with_max_times(3),
         )
+        .when(is_retryable_download_error)
         .await
-    })
-    .retry(
-        ExponentialBuilder::default()
-            .with_jitter()
-            .with_min_delay(Duration::from_millis(500))
-            .with_max_times(3),
-    )
-    .when(is_retryable_download_error)
-    .await
 }
 
 /// A single download → verify → extract attempt.
@@ -541,12 +551,8 @@ pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
 /// Starts from clean state by removing and recreating `target_dir`, so a
 /// partially-extracted or corrupt prior attempt cannot interfere with a retry.
 async fn download_and_extract_tgz_once(
-    url: &str,
+    download: TgzDownload<'_>,
     target_dir: &Path,
-    archive_file: Option<&Path>,
-    expected_hash: Option<&str>,
-    tarball_hash: Option<&str>,
-    message: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(), Error> {
     // Reset target directory so a partial prior attempt can't interfere.
@@ -561,42 +567,39 @@ async fn download_and_extract_tgz_once(
     // multiply attempts (up to N×M downloads) for a persistent failure.
     let tgz_file = target_dir.join("package.tgz");
     let client = HttpClient::with_npm_config(0, 0, npm_config.clone());
-    client.download_file(url, &tgz_file, message).await?;
+    client.download_file(download.url, &tgz_file, download.message).await?;
 
-    if let Some(tarball_hash) = tarball_hash {
-        verify_file_hash(&tgz_file, tarball_hash).await?;
+    if let Some(archive_digest) = download.archive_digest {
+        verify_file_hash(&tgz_file, archive_digest).await?;
     }
 
-    if let Some(archive_file) = archive_file {
-        // The hash covers one entry. The rest of the archive is unauthenticated,
-        // so vp writes only that entry.
-        let target_file = target_dir.join(archive_file);
-        let tgz_file_for_extract = tgz_file.clone();
-        let archive_file_for_extract = archive_file.to_path_buf();
-        let target_file_for_extract = target_file.clone();
-        tokio::task::spawn_blocking(move || {
-            extract_tgz_file(
-                &tgz_file_for_extract,
-                &archive_file_for_extract,
-                &target_file_for_extract,
-            )
-        })
-        .await??;
-
-        if let Some(expected_hash) = expected_hash {
-            verify_file_hash(&target_file, expected_hash).await?;
+    match download.unpack {
+        Unpack::All => {
+            let tgz_file_for_extract = tgz_file.clone();
+            let target_dir_for_extract = target_dir.to_path_buf();
+            tokio::task::spawn_blocking(move || {
+                extract_tgz(&tgz_file_for_extract, &target_dir_for_extract)
+            })
+            .await??;
         }
-    } else {
-        if let Some(expected_hash) = expected_hash {
-            verify_file_hash(&tgz_file, expected_hash).await?;
-        }
+        Unpack::Entry { path, digest } => {
+            let target_file = target_dir.join(path);
+            let tgz_file_for_extract = tgz_file.clone();
+            let archive_file_for_extract = path.to_path_buf();
+            let target_file_for_extract = target_file.clone();
+            tokio::task::spawn_blocking(move || {
+                extract_tgz_file(
+                    &tgz_file_for_extract,
+                    &archive_file_for_extract,
+                    &target_file_for_extract,
+                )
+            })
+            .await??;
 
-        let tgz_file_for_extract = tgz_file.clone();
-        let target_dir_for_extract = target_dir.to_path_buf();
-        tokio::task::spawn_blocking(move || {
-            extract_tgz(&tgz_file_for_extract, &target_dir_for_extract)
-        })
-        .await??;
+            if let Some(digest) = digest {
+                verify_file_hash(&target_file, digest).await?;
+            }
+        }
     }
 
     // Remove the temp file
@@ -720,6 +723,9 @@ mod tests {
 
     use super::*;
 
+    /// The content of `package/bin/yarn` in [`create_mock_package_tgz`].
+    const MOCK_YARN_CLI: &[u8] = b"#!/usr/bin/env node\nconsole.log('mock yarn');";
+
     /// Helper function to create a mock package tar.gz that mimics npm package structure
     fn create_mock_package_tgz() -> Vec<u8> {
         let mut tar_builder = tar::Builder::new(Vec::new());
@@ -734,7 +740,7 @@ mod tests {
             .unwrap();
 
         // Add bin/yarn mock file
-        let yarn_content = b"#!/usr/bin/env node\nconsole.log('mock yarn');";
+        let yarn_content = MOCK_YARN_CLI;
         let mut header = tar::Header::new_gnu();
         header.set_size(yarn_content.len() as u64);
         header.set_mode(0o755);
@@ -1265,13 +1271,9 @@ mod tests {
         });
 
         let url = vt_str::format!("{}/test-package.tgz", server.base_url());
-        let result = download_and_extract_tgz_with_hash_and_config(
-            &url,
+        let result = download_and_extract_tgz(
+            TgzDownload { url: &url, archive_digest: None, unpack: Unpack::All, message: None },
             &target_dir,
-            None,
-            None,
-            None,
-            None,
             &NpmConfig { values: Default::default() },
         )
         .await;
@@ -1281,6 +1283,59 @@ mod tests {
         assert!(target_dir.join("package/bin/yarn.cmd").exists());
 
         // TempDir automatically cleans up when it goes out of scope
+    }
+
+    /// In single-entry mode, `archive_digest` covers the `.tgz` bytes and the
+    /// entry `digest` covers the extracted file. A mismatch in either one fails
+    /// the download, and vp writes only the named entry. The cases use one
+    /// attempt, so a mismatch does not wait for the retry delays.
+    #[tokio::test]
+    async fn single_entry_download_checks_both_digests() {
+        let mock_tgz = create_mock_package_tgz();
+        let sha512 =
+            |bytes: &[u8]| vt_str::format!("sha512.{}", hex::encode(Sha512::digest(bytes)));
+        let archive = sha512(&mock_tgz);
+        let entry = sha512(MOCK_YARN_CLI);
+        let wrong = sha512(b"other");
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(GET).path("/entry.tgz");
+            then.status(200).body(mock_tgz);
+        });
+        let url = vt_str::format!("{}/entry.tgz", server.base_url());
+        let path = Path::new("package/bin/yarn");
+
+        for (archive_digest, digest, matches) in [
+            (Some(archive.as_str()), Some(entry.as_str()), true),
+            (Some(archive.as_str()), None, true),
+            (Some(wrong.as_str()), Some(entry.as_str()), false),
+            (Some(archive.as_str()), Some(wrong.as_str()), false),
+            // The entry digest must not be checked against the archive bytes.
+            (None, Some(archive.as_str()), false),
+        ] {
+            let temp_dir = TempDir::new().unwrap();
+            let target_dir = temp_dir.path().join("extracted");
+            let result = download_and_extract_tgz_once(
+                TgzDownload {
+                    url: &url,
+                    archive_digest,
+                    unpack: Unpack::Entry { path, digest },
+                    message: None,
+                },
+                &target_dir,
+                &NpmConfig { values: Default::default() },
+            )
+            .await;
+
+            let case = vt_str::format!("archive={archive_digest:?} entry={digest:?}");
+            if matches {
+                result.unwrap_or_else(|error| panic!("{case}: {error}"));
+                assert!(target_dir.join(path).is_file(), "{case}");
+                assert!(!target_dir.join("package/package.json").exists(), "{case}");
+            } else {
+                assert!(matches!(result, Err(Error::HashMismatch { .. })), "{case}: {result:?}");
+            }
+        }
     }
 
     /// Regression test for flaky package-manager / node downloads.
@@ -1306,13 +1361,9 @@ mod tests {
         let target_dir = temp_dir.path().join("extracted");
         let url = vt_str::format!("{}/corrupt.tgz", server.base_url());
 
-        let result = download_and_extract_tgz_with_hash_and_config(
-            &url,
+        let result = download_and_extract_tgz(
+            TgzDownload { url: &url, archive_digest: None, unpack: Unpack::All, message: None },
             &target_dir,
-            None,
-            None,
-            None,
-            None,
             &NpmConfig { values: Default::default() },
         )
         .await;
@@ -1342,13 +1393,14 @@ mod tests {
         let wrong_hash = "sha512.0000000000000000000000000000000000000000000000000000000000000000\
              0000000000000000000000000000000000000000000000000000000000000000";
 
-        let result = download_and_extract_tgz_with_hash_and_config(
-            &url,
+        let result = download_and_extract_tgz(
+            TgzDownload {
+                url: &url,
+                archive_digest: Some(wrong_hash),
+                unpack: Unpack::All,
+                message: None,
+            },
             &target_dir,
-            None,
-            Some(wrong_hash),
-            None,
-            None,
             &NpmConfig { values: Default::default() },
         )
         .await;
