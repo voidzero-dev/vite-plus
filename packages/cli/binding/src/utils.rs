@@ -91,7 +91,6 @@ pub struct RunCommandResult {
 /// ```
 #[napi]
 pub async fn run_command(options: RunCommandOptions) -> Result<RunCommandResult> {
-    tracing::debug!("Run command options: {:?}", options);
     // Parse and validate the working directory
     let cwd = AbsolutePathBuf::new(PathBuf::from(&options.cwd)).ok_or_else(|| {
         anyhow::Error::msg(format!("Invalid working directory: {} (must be absolute)", options.cwd))
