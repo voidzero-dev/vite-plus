@@ -1843,10 +1843,10 @@ async fn download_package_manager_inner(
     // registry's integrity still rejects a corrupted or swapped tarball.
     let registry_integrity = match expected_hash {
         Some(_) => None,
-        None => Some(
+        None => {
             fetch_registry_integrity(package_manager_type, &package_name, &version, npm_config)
-                .await?,
-        ),
+                .await?
+        }
     };
 
     // Stage the download in a temp directory beside the version directory, not
@@ -2074,7 +2074,7 @@ async fn download_bun_package_manager(
         &target_dir_tmp,
         None,
         None,
-        Some(&platform_hash),
+        platform_hash.as_deref(),
         Some(&download_message),
         npm_config,
     )
@@ -2180,7 +2180,7 @@ async fn fetch_registry_integrity(
     package_name: &str,
     version: &Str,
     npm_config: &NpmConfig,
-) -> Result<Str, Error> {
+) -> Result<Option<Str>, Error> {
     let metadata_url = npm_config.package_version_url(package_name, version);
     let metadata: RegistryVersionMetadata = HttpClient::with_npm_config(3, 500, npm_config.clone())
         .get_json(&metadata_url)
@@ -2200,16 +2200,12 @@ async fn fetch_registry_integrity(
             }
         })?;
     // SRI allows several space-separated hashes; npm registries serve one.
-    metadata
+    Ok(metadata
         .dist
         .integrity
         .as_deref()
         .and_then(|sri| sri.split_whitespace().next())
-        .map(Str::from)
-        .ok_or_else(|| Error::MissingRegistryIntegrity {
-            package: package_name.into(),
-            version: version.clone(),
-        })
+        .map(Str::from))
 }
 
 /// Download pnpm >= 12 (native binary) via its platform-specific npm package.
@@ -2293,7 +2289,7 @@ async fn download_pnpm_native_package_manager(
         &target_dir_tmp,
         None,
         None,
-        Some(&platform_hash),
+        platform_hash.as_deref(),
         Some(&download_message),
         npm_config,
     )
@@ -4710,8 +4706,7 @@ mod tests {
         ];
         for (kind, version, package, tgz, integrity) in cases {
             let server = httpmock::MockServer::start();
-            let tarball =
-                mount_package_with_integrity(&server, package, version, tgz.clone(), integrity);
+            mount_package_with_integrity(&server, package, version, tgz.clone(), integrity);
             let vp_home = create_temp_dir();
             let result = EnvConfig::with_vars_async(
                 [
@@ -4723,14 +4718,14 @@ mod tests {
             .await;
 
             let case = format!("{kind}@{version} integrity={integrity:?}");
-            let error = result.expect_err(&case);
-            assert!(error.is_integrity_failure(), "{case}: {error:?}");
             if integrity.is_none() {
-                assert!(matches!(error, Error::MissingRegistryIntegrity { .. }), "{case}");
-                tarball.assert_hits(0);
-            } else {
-                assert!(matches!(error, Error::HashMismatch { .. }), "{case}: {error:?}");
+                // Like the bun and pnpm 12+ platform tarballs, a registry without
+                // `dist.integrity` installs unverified.
+                result.unwrap_or_else(|error| panic!("{case}: {error}"));
+                continue;
             }
+            let error = result.expect_err(&case);
+            assert!(matches!(error, Error::HashMismatch { .. }), "{case}: {error:?}");
             assert!(
                 !vp_home.path().join(format!("package_manager/{kind}/{version}")).exists(),
                 "{case}: a failed download left an install"

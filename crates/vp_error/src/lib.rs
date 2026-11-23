@@ -95,11 +95,6 @@ pub enum Error {
     #[error(transparent)]
     PackageManagerHashMismatch(#[from] Box<PackageManagerHashMismatch>),
 
-    #[error(
-        "Registry metadata for {package}@{version} has no `dist.integrity`, so Vite+ cannot verify the download"
-    )]
-    MissingRegistryIntegrity { package: Str, version: Str },
-
     #[error("Invalid hash format: {0}")]
     InvalidHashFormat(Str),
 
@@ -136,12 +131,7 @@ impl Error {
     /// hides the cause behind a later, unrelated failure.
     #[must_use]
     pub const fn is_integrity_failure(&self) -> bool {
-        matches!(
-            self,
-            Self::PackageManagerHashMismatch(_)
-                | Self::HashMismatch { .. }
-                | Self::MissingRegistryIntegrity { .. }
-        )
+        matches!(self, Self::PackageManagerHashMismatch(_) | Self::HashMismatch { .. })
     }
 }
 
