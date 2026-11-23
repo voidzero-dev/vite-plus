@@ -80,6 +80,23 @@ describe('formatTargetDir', () => {
     expect(formatTargetDir('../../foo/bar')).matchSnapshot();
   });
 
+  it('rejects ".." path segments but accepts names that contain two dots', () => {
+    const parentError = 'Relative path contains ".." which is not allowed';
+    expect(formatTargetDir('..').error).toBe(parentError);
+    expect(formatTargetDir('../my-package').error).toBe(parentError);
+    expect(formatTargetDir('foo/../../my-package').error).toBe(parentError);
+
+    expect(formatTargetDir('my..lib')).toEqual({ directory: 'my..lib', packageName: 'my..lib' });
+    expect(formatTargetDir('./foo/my..lib')).toEqual({
+      directory: 'foo/my..lib',
+      packageName: 'my..lib',
+    });
+    expect(formatTargetDir('foo/@my-scope/my..lib')).toEqual({
+      directory: 'foo/my..lib',
+      packageName: '@my-scope/my..lib',
+    });
+  });
+
   // Regression test for https://github.com/voidzero-dev/vite-plus/issues/938
   // On Windows, path.join/normalize produce backslashes which break when passed as CLI args.
   // The snapshots pin forward slashes in every nested directory.
