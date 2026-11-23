@@ -1,0 +1,17 @@
+[[case]]
+name = "cwd_flag_script_pack_cache"
+vp = "local"
+skip-platforms = ["windows"]
+comment = """
+A cached root task runs vp -C packages/app pack. Pack excludes its own dist
+output from the cache inputs, and that exclusion must apply to packages/app/dist
+rather than the root dist, which the package reads as an input.
+"""
+steps = [
+  { argv = ["vpt", "write-file", "dist/shared.js", "export const value = 'shared-one';\n"], comment = "dist is ignored by git, so the root input is created here" },
+  { argv = ["vp", "run", "pack:app"], comment = "first run is a cache miss" },
+  { argv = ["vp", "run", "pack:app"], comment = "second run without changes is a cache hit" },
+  ["vpt", "write-file", "dist/shared.js", "export const value = 'shared-two';\n"],
+  { argv = ["vp", "run", "pack:app"], comment = "changing the root dist input is a cache miss" },
+  ["vpt", "grep-file", "packages/app/dist/index.mjs", "shared-two"],
+]

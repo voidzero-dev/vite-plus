@@ -2,6 +2,7 @@
   "name": "check-cache-enabled-test",
   "type": "module",
   "scripts": {
-    "check": "vp check"
+    "check": "vp check",
+    "check:chdir": "vp -C . check"
   }
 }

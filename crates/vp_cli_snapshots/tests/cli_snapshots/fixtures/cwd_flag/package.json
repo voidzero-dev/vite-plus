@@ -5,6 +5,9 @@
     "packages/*"
   ],
   "scripts": {
-    "where:hello": "vp -C packages/hello run where"
+    "where:hello": "vp -C packages/hello run where",
+    "build:missing": "vp -C packages/missing build",
+    "version:chdir": "vp -C packages/hello --version",
+    "help:chdir": "vp -C packages/hello"
   }
 }

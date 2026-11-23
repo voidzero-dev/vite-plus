@@ -5,3 +5,16 @@ steps = [
   { argv = ["vp", "migrate", "--agent", "claude", "--no-interactive"], comment = "migration with --agent claude should write CLAUDE.md", continue-on-failure = true },
   { argv = ["vpt", "grep-file", "CLAUDE.md", "<!--VITE PLUS START-->"], comment = "CLAUDE.md was created with the Vite+ agent block", continue-on-failure = true },
 ]
+
+[[case]]
+name = "relink_dangling_claude_symlink"
+vp = "global"
+# Creating a file symlink can require elevated privileges on Windows.
+skip-platforms = ["windows"]
+comment = "When both agent files are selected, migration repairs a dangling CLAUDE.md link."
+steps = [
+  { argv = ["node", "-e", "require('node:fs').symlinkSync('missing.md', 'CLAUDE.md')"], snapshot = false },
+  ["vp", "migrate", "--agent", "agents,claude", "--no-interactive", "--no-hooks", "--no-editor"],
+  ["node", "-p", "require('node:fs').readlinkSync('CLAUDE.md')"],
+  ["vpt", "grep-file", "CLAUDE.md", "<!--VITE PLUS START-->"],
+]

@@ -1,5 +1,8 @@
 {
   "name": "vite-argv-passthrough",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "build:chdir": "vp -C . build -- --help"
+  }
 }
