@@ -193,7 +193,7 @@ cli
       }
       if (tsrsConfig) {
         tsrsConfig.logger.info(
-          `Generating declarations with bundled tsrs ${bundledTsrsVersion()} (experimental) because \`typescript\` is not installed`,
+          `Generating declarations with bundled tsrs v${bundledTsrsVersion()} (experimental) because \`typescript\` is not installed`,
         );
       } else if (typescriptPath && cli.options.debug) {
         globalLogger.info(
