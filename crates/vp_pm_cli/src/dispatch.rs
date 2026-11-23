@@ -72,7 +72,7 @@ async fn dispatch_with_manager(
     source: ManagerSource<'_>,
 ) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
-    let manager = match source {
+    let mut manager = match source {
         ManagerSource::Detect { local_cli } => {
             if let Some((kind, version, hash)) = package_manager_override()? {
                 if local_cli {
@@ -97,6 +97,7 @@ async fn dispatch_with_manager(
         }
         ManagerSource::Resolved(manager) => manager,
     };
+    crate::yarn_path::apply_effective_version(cwd, &mut manager).await?;
     let package_manager = manager.client;
     let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
     let mut resolution = command.resolve_for_manager(&manager)?;

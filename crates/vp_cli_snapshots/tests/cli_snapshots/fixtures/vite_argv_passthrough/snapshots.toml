@@ -68,3 +68,13 @@ steps = [
   ["vpt", "grep-file", "vite-argv.json", '["build","--outDir","custom-dist","--","--app","web","--label","two words"]'],
   ["vpt", "grep-file", "custom-dist/index.html", "Build from the project root"],
 ]
+
+[[case]]
+name = "build_script_chdir_forwards_separator"
+vp = ["local", "global"]
+comment = "A task script that starts with vp -C forwards the separator to Vite like a direct call."
+steps = [
+  { argv = ["vp", "run", "build:chdir"], snapshot = false },
+  ["vpt", "grep-file", "vite-argv.json", '["build","--","--help"]'],
+  ["vpt", "grep-file", "dist/index.html", "Build from the project root"],
+]

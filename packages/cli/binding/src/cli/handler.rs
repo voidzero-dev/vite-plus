@@ -3,14 +3,14 @@ use std::iter;
 use clap::{Parser, error::ErrorKind};
 use vt::{
     CommandHandler, HandledCommand, ScriptCommand,
-    config::user::{EnabledCacheConfig, UserCacheConfig, UserRunConfig},
+    config::user::{InputBase, UserCacheConfig, UserInputEntry, UserRunConfig},
     loader::UserConfigLoader,
 };
 use vt_path::AbsolutePath;
 use vt_str::Str;
 
 use super::{
-    resolver::{SubcommandResolver, check_cache_inputs, resolve_vite_config_fields},
+    resolver::{SubcommandResolver, cache_config_for, resolve_vite_config_fields},
     types::{CLIArgs, SynthesizableSubcommand, ViteConfigResolverFn},
 };
 
@@ -57,14 +57,35 @@ impl CommandHandler for VitePlusCommandHandler {
             return Ok(HandledCommand::Verbatim);
         }
 
-        // A leading global `-C` runs verbatim: CLIArgs has no global flags, and
-        // the spawned vp/vpr binary applies the directory change (and target
-        // elicitation) exactly like a direct invocation.
-        if command.args.first().is_some_and(|arg| arg.starts_with("-C")) {
-            return Ok(HandledCommand::Verbatim);
-        }
         // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.
         let is_vpr = program == "vpr";
+
+        // A leading global `-C <dir>` keeps running in a child vp, which applies the
+        // directory, runtime, and toolchain like a direct invocation. A built-in subcommand
+        // only adds its cache config, so its tracked envs and inputs apply (#3503).
+        if command.args.first().is_some_and(|arg| arg.starts_with("-C")) {
+            // `vpr` always means `vp run`, which has no built-in cache config to attach.
+            if is_vpr {
+                return Ok(HandledCommand::Verbatim);
+            }
+            let parsed = split_leading_chdir(&command.args).and_then(|(dir, rest)| {
+                let args = iter::once("vp").chain(rest.iter().map(Str::as_str));
+                match CLIArgs::try_parse_from(args).ok()? {
+                    CLIArgs::Synthesizable(subcmd) => Some((dir, subcmd)),
+                    _ => None,
+                }
+            });
+            let Some((dir, subcmd)) = parsed else {
+                return Ok(HandledCommand::Verbatim);
+            };
+            let mut cache_config = cache_config_for(&subcmd);
+            let target = command.cwd.join(dir).clean();
+            let target = target.strip_prefix(self.resolver.workspace_path()).ok().flatten();
+            rebase_package_inputs(&mut cache_config, target.as_ref().map(|path| path.as_str()));
+            return Ok(HandledCommand::Synthesized(
+                command.to_synthetic_plan_request(cache_config),
+            ));
+        }
         let cli_args = match CLIArgs::try_parse_from(
             iter::once("vp")
                 .chain(is_vpr.then_some("run"))
@@ -79,20 +100,11 @@ impl CommandHandler for VitePlusCommandHandler {
             Err(err) => return Err(err.into()),
         };
         match cli_args {
-            CLIArgs::Synthesizable(SynthesizableSubcommand::Check { .. }) => {
+            CLIArgs::Synthesizable(subcmd @ SynthesizableSubcommand::Check { .. }) => {
                 // Check is a composite command (fmt + lint) — run as a subprocess in task scripts
-                Ok(HandledCommand::Synthesized(command.to_synthetic_plan_request(
-                    UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: Some(Box::new([
-                            Str::from("OXLINT_TSGOLINT_PATH"),
-                            Str::from(vp_shared::env_vars::VP_SKIP_STATIC_CONFIG),
-                        ])),
-                        untracked_env: None,
-                        input: Some(check_cache_inputs()),
-                        output: None,
-                        remote: None,
-                    }),
-                )))
+                Ok(HandledCommand::Synthesized(
+                    command.to_synthetic_plan_request(cache_config_for(&subcmd)),
+                ))
             }
             CLIArgs::Synthesizable(subcmd) => {
                 // Bare app commands in scripts get the same workspace-root
@@ -115,6 +127,40 @@ impl CommandHandler for VitePlusCommandHandler {
             }
         }
     }
+}
+
+fn split_leading_chdir(args: &[Str]) -> Option<(&str, &[Str])> {
+    let rest = args.first()?.as_str().strip_prefix("-C")?;
+    let (dir, remaining) = if rest.is_empty() {
+        (args.get(1)?.as_str(), &args[2..])
+    } else {
+        (rest.strip_prefix('=').unwrap_or(rest), &args[1..])
+    };
+    (!dir.is_empty()).then_some((dir, remaining))
+}
+
+/// The plan keeps the task's package as the base of package-relative globs, while the
+/// child runs in the `-C` target, so point those globs at the target from the workspace
+/// root. A target outside the workspace cannot be expressed that way, so its
+/// package-relative globs are dropped.
+fn rebase_package_inputs(cache_config: &mut UserCacheConfig, target: Option<&str>) {
+    let UserCacheConfig::Config(config) = cache_config else { return };
+    let Some(inputs) = &mut config.input else { return };
+    inputs.retain_mut(|entry| {
+        let UserInputEntry::GlobWithBase(glob) = entry else { return true };
+        if glob.base != InputBase::Package {
+            return true;
+        }
+        let Some(target) = target else { return false };
+        if !target.is_empty() {
+            let (negation, pattern) =
+                glob.pattern.strip_prefix('!').map_or(("", glob.pattern.as_str()), |p| ("!", p));
+            let target = wax::escape(target);
+            glob.pattern = Str::from(format!("{negation}{target}/{pattern}").as_str());
+        }
+        glob.base = InputBase::Workspace;
+        true
+    });
 }
 
 /// Vite Task rewrites workspace `.bin` shims. Managed package managers live
@@ -170,5 +216,59 @@ impl UserConfigLoader for VitePlusConfigLoader {
         // The task graph reads an absent config as the default, so `None` covers both.
         let config = resolve_vite_config_fields(package_path, &["run"], &self.resolve_fn).await?;
         Ok(config.run.map(serde_json::from_value).transpose()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn split(args: &[&str]) -> Option<(String, Vec<String>)> {
+        let args: Vec<Str> = args.iter().map(|arg| Str::from(*arg)).collect();
+        split_leading_chdir(&args)
+            .map(|(dir, rest)| (dir.to_owned(), rest.iter().map(ToString::to_string).collect()))
+    }
+
+    #[test]
+    fn splits_every_leading_chdir_form() {
+        let expected = Some(("apps/web".to_owned(), vec!["lint".to_owned()]));
+        assert_eq!(split(&["-C", "apps/web", "lint"]), expected);
+        assert_eq!(split(&["-C=apps/web", "lint"]), expected);
+        assert_eq!(split(&["-Capps/web", "lint"]), expected);
+        assert_eq!(split(&["-C"]), None);
+        assert_eq!(split(&["-C=", "lint"]), None);
+        assert_eq!(split(&["lint", "-C", "apps/web"]), None);
+    }
+
+    fn rebased_inputs(target: Option<&str>) -> Vec<UserInputEntry> {
+        let mut config = cache_config_for(&SynthesizableSubcommand::Pack { args: vec![] });
+        rebase_package_inputs(&mut config, target);
+        let UserCacheConfig::Config(config) = config else { panic!("pack caches") };
+        config.input.expect("pack declares its inputs")
+    }
+
+    fn glob(pattern: &str, base: InputBase) -> UserInputEntry {
+        UserInputEntry::GlobWithBase(vt::config::user::GlobWithBase {
+            pattern: Str::from(pattern),
+            base,
+        })
+    }
+
+    #[test]
+    fn rebases_package_inputs_onto_the_chdir_target() {
+        let auto = UserInputEntry::Auto(vt::config::user::AutoTracking { auto: true });
+        assert_eq!(
+            rebased_inputs(Some("packages/app")),
+            [auto.clone(), glob("!packages/app/dist/**", InputBase::Workspace)]
+        );
+        assert_eq!(
+            rebased_inputs(Some("packages/(app)")),
+            [auto.clone(), glob(r"!packages/\(app\)/dist/**", InputBase::Workspace)]
+        );
+        assert_eq!(
+            rebased_inputs(Some("")),
+            [auto.clone(), glob("!dist/**", InputBase::Workspace)]
+        );
+        assert_eq!(rebased_inputs(None), [auto]);
     }
 }

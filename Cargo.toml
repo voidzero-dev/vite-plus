@@ -269,7 +269,7 @@ rolldown-notify-debouncer-full = "0.8.0"
 rustc-hash = "2.1.3"
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 same-file = "1.0.6"
-saphyr = { version = "0.3.0", default-features = false }
+saphyr = { version = "0.4.0", default-features = false }
 schemars = "1.2.1"
 self_cell = "1.2.2"
 semver = "1.0.26"
@@ -326,6 +326,7 @@ vt_snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev 
 vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23096aa2f04eb59225c6467b15c2965ee6ae33" }
 vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23096aa2f04eb59225c6467b15c2965ee6ae33" }
 walkdir = "2.5.0"
+wax = "0.7.0"
 webpki-root-certs = "1.0.10"
 which = "8.0.6"
 winreg = "0.56.0"
