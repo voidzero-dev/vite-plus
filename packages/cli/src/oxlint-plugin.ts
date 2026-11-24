@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { definePlugin, defineRule } from '@oxlint/plugins';
 import type { Context, ESTree } from '@oxlint/plugins';
+import { definePlugin, defineRule } from '@oxlint/plugins';
 
 import cliPackage from '../package.json' with { type: 'json' };
 import {

@@ -264,19 +264,15 @@ jobs:
               vp test
           - name: vinext
             node-version: 24
-            # better-sqlite3 12.6.2 does not compile against the Node 26 headers.
             vp-node-version: 24.22.1
             # The full vinext suite (~7000 tests) outgrew a 15-minute budget
             # on 4-core runners, so run one shard of the unit project here;
             # the rest of the suite is covered by vinext's own CI.
             timeout: 20
             command: |
-              # vp migrate's auto-install passes --ignore-scripts on pnpm v11
-              # (vinext pins pnpm 11), which skips vinext's approved
-              # better-sqlite3 build, and the follow-up `vp install` never
-              # re-runs it. Rebuild it so the better-auth fixture works.
-              vp rebuild -- -r better-sqlite3
-              vp run build
+              # Migration skips postinstall on pnpm 11. Run it to build vinext
+              # and generate the workspace types for the check below.
+              vp run postinstall
               vp check --fix
               vp run check
               vp test run --project unit --shard=1/3

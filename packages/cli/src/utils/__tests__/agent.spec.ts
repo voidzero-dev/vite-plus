@@ -48,9 +48,9 @@ class InMemoryFs {
 
   lstatSync(filePath: fs.PathLike): fs.Stats {
     const node = this.getNode(filePath);
-    return {
-      isSymbolicLink: () => node.kind === 'symlink',
-    } as fs.Stats;
+    const stats = Object.create(fs.Stats.prototype) as fs.Stats;
+    stats.isSymbolicLink = () => node.kind === 'symlink';
+    return stats;
   }
 
   async lstat(filePath: fs.PathLike): Promise<fs.Stats> {

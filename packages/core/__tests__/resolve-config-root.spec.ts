@@ -5,10 +5,10 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test';
 
+import type { InlineConfig, ResolvedConfig } from '../dist/vite/node/index.js';
 // Import the built core directly: a source-only test cannot detect a missing
 // branding patch or a CLI running against an older core artifact.
 import { normalizePath, resolveConfig } from '../dist/vite/node/index.js';
-import type { InlineConfig, ResolvedConfig } from '../dist/vite/node/index.js';
 
 const resolveWithOptions = resolveConfig as (
   config: InlineConfig,
