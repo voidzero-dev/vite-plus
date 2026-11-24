@@ -24,10 +24,11 @@ import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs } from '../detector.ts';
 import type { MigrationReport } from '../report.ts';
-import { rewriteScriptMap } from './shared.ts';
 import {
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
+  rewritePackageScriptFields,
+  rewriteScriptMap,
   warnMigration,
 } from './shared.ts';
 
@@ -480,21 +481,8 @@ export function rewriteEslintPackageJson(
         delete pkg[field];
       }
     }
-    if (pkg.scripts) {
-      const updated = rewriteScriptMap(pkg.scripts, rewriteEslint);
-      if (updated) {
-        pkg.scripts = updated;
-        changed = true;
-      }
-    }
-    if (pkg['lint-staged']) {
-      const updated = rewriteScriptMap(pkg['lint-staged'], rewriteEslint);
-      if (updated) {
-        pkg['lint-staged'] = updated;
-        changed = true;
-      }
-    }
-    return changed ? pkg : undefined;
+    const scriptsChanged = rewritePackageScriptFields(pkg, rewriteEslint);
+    return changed || scriptsChanged ? pkg : undefined;
   });
 }
 

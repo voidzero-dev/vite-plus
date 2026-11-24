@@ -59,9 +59,7 @@ function localDevVersion(): string {
 }
 
 // Get repo root from script location (packages/tools/src/install-global-cli.ts -> repo root)
-// oxlint-disable-next-line no-underscore-dangle
-const __dirname = import.meta.dirname;
-const repoRoot = path.resolve(__dirname, '../../..');
+const repoRoot = path.resolve(import.meta.dirname, '../../..');
 
 export function installGlobalCli() {
   // Detect if running directly or via tools dispatcher
@@ -268,9 +266,7 @@ function removeWindowsPath(targetPath: string) {
   try {
     stat = lstatSync(targetPath);
   } catch (error) {
-    if (
-      (typeof error === 'object' && error !== null && 'code' in error && error.code) === 'ENOENT'
-    ) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
       return;
     }
     throw error;

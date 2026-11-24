@@ -17,7 +17,7 @@ import {
   VITEST_VERSION,
 } from '../../utils/constants.js';
 import type { JsonObject } from '../../utils/json.ts';
-import { readJsonFile } from '../../utils/json.ts';
+import { readJsonFile as readJson } from '../../utils/json.ts';
 import type { RetainedImportDependencies } from '../migrator/shared.ts';
 import { DISABLED_IMPORT_RULE_CONFIG } from '../migrator/shared.ts';
 import { createMigrationReport } from '../report.js';
@@ -1418,8 +1418,7 @@ describe('setPackageManager', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  const readPkg = () =>
-    fixtureObject(JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')));
+  const readPkg = () => readJson(path.join(tmpDir, 'package.json'));
 
   it('writes devEngines.packageManager when neither field exists', () => {
     fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'x' }, null, 2));
@@ -1727,10 +1726,6 @@ function checkBootstrapPass(workspace: WorkspaceInfo, expectedChange: boolean): 
   );
   expect(pending).toBe(expectedChange);
   expect(ensureVitePlusBootstrap(workspace).changed).toBe(expectedChange);
-}
-
-function readJson(filePath: string): JsonObject {
-  return readJsonFile(filePath);
 }
 
 describe('first migration preserves pnpm workspace membership', () => {
@@ -2543,9 +2538,10 @@ describe('ensureVitePlusBootstrap', () => {
     expect(result.changed).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     expect(pkg).toHaveProperty(['overrides', 'vite'], 'npm:@voidzero-dev/vite-plus-core@latest');
-    expect(fixtureObject(pkg, 'overrides').vitest).toBeUndefined();
-    expect(fixtureObject(pkg, 'overrides')['@vitest/expect']).toBeUndefined();
-    expect(fixtureObject(pkg, 'overrides')['@vitest/coverage-v8']).toBeUndefined();
+    const overrides = fixtureObject(pkg, 'overrides');
+    expect(overrides.vitest).toBeUndefined();
+    expect(overrides['@vitest/expect']).toBeUndefined();
+    expect(overrides['@vitest/coverage-v8']).toBeUndefined();
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
   });
 
@@ -2790,8 +2786,9 @@ describe('ensureVitePlusBootstrap', () => {
     ).not.toThrow();
 
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml'));
-    expect(fixtureObject(workspace, 'peerDependencyRules').allowAny).toContain('react');
-    expect(fixtureObject(workspace, 'peerDependencyRules').allowAny).toContain('vite');
+    const allowAny = fixtureObject(workspace, 'peerDependencyRules').allowAny;
+    expect(allowAny).toContain('react');
+    expect(allowAny).toContain('vite');
     expect(workspace).toHaveProperty(['peerDependencyRules', 'allowedVersions', 'vite'], '*');
   });
 
@@ -2866,18 +2863,20 @@ describe('ensureVitePlusBootstrap', () => {
     ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
-    expect(fixtureObject(pkg, 'devDependencies').oxfmt).toBeUndefined();
-    expect(fixtureObject(pkg, 'devDependencies').oxlint).toBeUndefined();
-    expect(fixtureObject(pkg, 'devDependencies')['oxlint-tsgolint']).toBeUndefined();
-    expect(fixtureObject(pkg, 'devDependencies').tsdown).toBeUndefined();
+    const devDependencies = fixtureObject(pkg, 'devDependencies');
+    expect(devDependencies.oxfmt).toBeUndefined();
+    expect(devDependencies.oxlint).toBeUndefined();
+    expect(devDependencies['oxlint-tsgolint']).toBeUndefined();
+    expect(devDependencies.tsdown).toBeUndefined();
     // vite-plus itself stays a managed catalog dependency.
     expect(pkg).toHaveProperty(['devDependencies', 'vite-plus'], 'catalog:');
 
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml'));
-    expect(fixtureObject(workspace, 'catalog').oxfmt).toBeUndefined();
-    expect(fixtureObject(workspace, 'catalog').oxlint).toBeUndefined();
-    expect(fixtureObject(workspace, 'catalog')['oxlint-tsgolint']).toBeUndefined();
-    expect(fixtureObject(workspace, 'catalog').tsdown).toBeUndefined();
+    const catalog = fixtureObject(workspace, 'catalog');
+    expect(catalog.oxfmt).toBeUndefined();
+    expect(catalog.oxlint).toBeUndefined();
+    expect(catalog['oxlint-tsgolint']).toBeUndefined();
+    expect(catalog.tsdown).toBeUndefined();
   });
 
   it('reconciles stale pnpm-workspace.yaml overrides when package.json has an empty pnpm field (urllib shape)', () => {
@@ -3185,7 +3184,7 @@ describe('ensureVitePlusBootstrap', () => {
     const cliPkg = readJson(path.join(cliDir, 'package.json'));
     // vite-plus stays catalog: (not inlined to the concrete toolchain version).
     expect(cliPkg).toHaveProperty(['dependencies', 'vite-plus'], 'catalog:');
-    expect(fixtureObject(fixtureObject(cliPkg).devDependencies ?? {}).vite).toBeUndefined();
+    expect(fixtureObject(cliPkg.devDependencies ?? {}).vite).toBeUndefined();
   });
 
   it('keeps toolchain catalog: refs on a pnpm 9.5-10.6.1 catalog project (varlet-import-resolver #10)', () => {
@@ -4298,7 +4297,7 @@ describe('ensureVitePlusBootstrap', () => {
     // vite-plus was declared in `dependencies`, so it is normalized in place
     // (to `catalog:`) and not duplicated into `devDependencies`.
     expect(pkg).toHaveProperty(['dependencies', 'vite-plus'], 'catalog:');
-    expect(fixtureObject(fixtureObject(pkg).devDependencies ?? {})['vite-plus']).toBeUndefined();
+    expect(fixtureObject(pkg.devDependencies ?? {})['vite-plus']).toBeUndefined();
     expect(pkg.pnpm).toBeUndefined();
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml'));
     expect(workspace).toHaveProperty(['catalog', 'vite-plus'], 'latest');
@@ -4470,7 +4469,7 @@ describe('ensureVitePlusBootstrap', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     // vite-plus already lives in `dependencies` (and `optionalDependencies`), so
     // it is kept in place and not duplicated into `devDependencies`.
-    expect(fixtureObject(fixtureObject(pkg).devDependencies ?? {})['vite-plus']).toBeUndefined();
+    expect(fixtureObject(pkg.devDependencies ?? {})['vite-plus']).toBeUndefined();
     expect(pkg).toHaveProperty(['dependencies', 'vite-plus'], 'catalog:');
     expect(pkg).toHaveProperty(['optionalDependencies', 'vite-plus'], 'catalog:');
     expect(pkg.pnpm).toBeUndefined();
@@ -4499,7 +4498,7 @@ describe('ensureVitePlusBootstrap', () => {
     // vite-plus was declared in `dependencies`, so it is normalized in place
     // (to `catalog:`) and not duplicated into `devDependencies`.
     expect(pkg).toHaveProperty(['dependencies', 'vite-plus'], 'catalog:');
-    expect(fixtureObject(fixtureObject(pkg).devDependencies ?? {})['vite-plus']).toBeUndefined();
+    expect(fixtureObject(pkg.devDependencies ?? {})['vite-plus']).toBeUndefined();
     expect(pkg.pnpm).toBeUndefined();
   });
 
@@ -5626,16 +5625,17 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // vite-plus.
     expect(fixtureObject(yaml, 'overrides')[PNPM_VITEST_OVERRIDE_KEY]).toBeUndefined();
     expect(fixtureObject(yaml, 'overrides').vitest).toBeUndefined();
-    expect(fixtureObject(fixtureObject(yaml).catalog ?? {}).vitest).toBeUndefined();
+    expect(fixtureObject(yaml.catalog ?? {}).vitest).toBeUndefined();
     expect(yaml).toHaveProperty(
       ['catalogs', 'vite7', 'vite'],
       'npm:@voidzero-dev/vite-plus-core@latest',
     );
     expect(yaml).toHaveProperty(['catalogs', 'vite7', 'react'], '^18.0.0');
     expect(yaml).toHaveProperty(['catalogs', 'vite7', 'vite-plus'], 'latest');
-    expect(fixtureObject(yaml, 'catalogs', 'test').vitest).toBeUndefined();
-    expect(fixtureObject(yaml, 'catalogs', 'test').tsdown).toBeUndefined();
-    expect(fixtureObject(yaml, 'catalogs', 'test')['vite-plus']).toBeUndefined();
+    const testCatalog = fixtureObject(yaml, 'catalogs', 'test');
+    expect(testCatalog.vitest).toBeUndefined();
+    expect(testCatalog.tsdown).toBeUndefined();
+    expect(testCatalog['vite-plus']).toBeUndefined();
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     expect(pkg).toHaveProperty(['devDependencies', 'vite'], 'catalog:vite7');
@@ -9141,7 +9141,7 @@ describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
 });
 
 function ruleIds(yaml: string): Array<unknown> {
-  return parseAllDocuments(yaml).map((document) => fixtureObject(document.toJS())?.id);
+  return parseAllDocuments(yaml).map((document) => fixtureObject(document.toJS()).id);
 }
 
 describe('script rules YAML', () => {

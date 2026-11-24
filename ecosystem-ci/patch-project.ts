@@ -7,9 +7,9 @@ import {
   VITEST_VERSION,
   VITE_PLUS_CORE_ALIAS_PREFIX,
 } from '../packages/cli/src/utils/constants.ts';
-import { isJsonObject, parseJsonValue } from '../packages/cli/src/utils/json-value.ts';
+import { isObjectValue, parseJsonObject } from '../packages/cli/src/utils/json-value.ts';
+import { hasOwnKey } from '../packages/cli/src/utils/object.ts';
 import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
-import { requireJsonObject } from '../scripts/json.ts';
 import { patchNpmxVitestConfig } from './npmx.ts';
 import { ecosystemCiDir, tgzDir, vitePlusCoreTgzVersion, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
@@ -17,12 +17,12 @@ import { prepareWebdriverioProject } from './webdriverio.ts';
 
 const project = process.argv[2];
 
-const repoConfig = Object.entries(repos).find(([name]) => name === project)?.[1];
-if (!repoConfig) {
+if (!hasOwnKey(repos, project)) {
   console.error(`Project ${project} is not defined in repo.json`);
   process.exit(1);
 }
 
+const repoConfig = repos[project];
 const repoRoot = join(ecosystemCiDir, project);
 // Migrate and install always run at the clone root: `vp migrate` rejects
 // workspace member targets (#2229). The workflow's `directory` matrix value
@@ -57,41 +57,30 @@ const registryServer = spawn(
     detached: true,
   },
 );
-const registryInfo = await new Promise<{ registry: string; env: Record<string, string> }>(
-  (resolve, reject) => {
-    let buffered = '';
-    registryServer.stdout.on('data', (chunk: Buffer) => {
-      buffered += chunk.toString();
-      const newline = buffered.indexOf('\n');
-      if (newline !== -1) {
-        try {
-          const info = requireJsonObject(
-            parseJsonValue(buffered.slice(0, newline)),
-            'registry handshake',
-          );
-          if (typeof info.registry !== 'string' || !isJsonObject(info.env)) {
-            throw new Error('Invalid registry handshake');
-          }
-          const env: Record<string, string> = {};
-          for (const [key, value] of Object.entries(info.env)) {
-            if (typeof value !== 'string') {
-              throw new Error(`Invalid registry environment variable ${key}`);
-            }
-            env[key] = value;
-          }
-          resolve({ registry: info.registry, env });
-        } catch (error) {
-          reject(error);
-        }
-      }
-    });
-    registryServer.on('error', reject);
-    registryServer.on('exit', (code) => reject(new Error(`registry exited early (${code})`)));
-  },
-);
-console.log(
-  `Serving local Vite+ packages at ${registryInfo.registry} (vite-plus@${vitePlusVersion})`,
-);
+const handshake = await new Promise<string>((resolve, reject) => {
+  let buffered = '';
+  registryServer.stdout.on('data', (chunk: Buffer) => {
+    buffered += chunk.toString();
+    const newline = buffered.indexOf('\n');
+    if (newline !== -1) {
+      resolve(buffered.slice(0, newline));
+    }
+  });
+  registryServer.on('error', reject);
+  registryServer.on('exit', (code) => reject(new Error(`registry exited early (${code})`)));
+});
+const { registry, env } = parseJsonObject(handshake, 'registry handshake');
+if (typeof registry !== 'string' || !isObjectValue(env)) {
+  throw new Error('Invalid registry handshake');
+}
+const registryEnv: Record<string, string> = {};
+for (const [key, value] of Object.entries(env)) {
+  if (typeof value !== 'string') {
+    throw new Error(`Invalid registry environment variable ${key}`);
+  }
+  registryEnv[key] = value;
+}
+console.log(`Serving local Vite+ packages at ${registry} (vite-plus@${vitePlusVersion})`);
 // The server prints nothing after the handshake; release the pipe and the
 // process handle so they don't keep this script's event loop alive after the
 // installs below finish.
@@ -100,7 +89,7 @@ registryServer.unref();
 
 if (process.env.GITHUB_ENV) {
   // Keep the registry reachable for the workflow's later steps.
-  const lines = Object.entries(registryInfo.env)
+  const lines = Object.entries(registryEnv)
     .map(([key, value]) => `${key}=${value}\n`)
     .join('');
   await appendFile(process.env.GITHUB_ENV, lines);
@@ -114,8 +103,8 @@ if (project === 'npmx.dev') {
   // The pinned workspace enables strict peer checks. Supply devframe's optional
   // cac peer explicitly so migration satisfies its ^7.0.0 requirement.
   const packagePath = join(repoRoot, 'package.json');
-  const pkg = requireJsonObject(parseJsonValue(await readFile(packagePath, 'utf8')), packagePath);
-  if (!isJsonObject(pkg.devDependencies)) {
+  const pkg = parseJsonObject(await readFile(packagePath, 'utf8'), packagePath);
+  if (!isObjectValue(pkg.devDependencies)) {
     throw new Error('Expected npmx.dev to have devDependencies');
   }
   pkg.devDependencies.cac = '7.0.0';
@@ -271,7 +260,7 @@ const releaseAgeEnv = timeBasedResolution
 
 const migrateEnv: NodeJS.ProcessEnv = {
   ...process.env,
-  ...registryInfo.env,
+  ...registryEnv,
   VP_OVERRIDE_PACKAGES: JSON.stringify({
     vite: `${VITE_PLUS_CORE_ALIAS_PREFIX}${vitePlusCoreVersion}`,
     ...vitestOverrides,
@@ -352,21 +341,17 @@ if (project === 'bun-vite-template') {
   // Vitest runtime, but allowJs: false excludes that file from type checking.
   // Apply the migration report's manual type-entry repair for this fixture.
   const tsconfigPath = join(repoRoot, 'tsconfig.json');
-  const tsconfig = requireJsonObject(
-    parseJsonValue(await readFile(tsconfigPath, 'utf8')),
-    tsconfigPath,
-  );
+  const tsconfig = parseJsonObject(await readFile(tsconfigPath, 'utf8'), tsconfigPath);
   const options = tsconfig.compilerOptions;
-  const types = isJsonObject(options) ? options.types : undefined;
   if (
-    !isJsonObject(options) ||
-    !Array.isArray(types) ||
-    !types.includes('vitest/globals') ||
-    !types.includes('@testing-library/jest-dom')
+    !isObjectValue(options) ||
+    !Array.isArray(options.types) ||
+    !options.types.includes('vitest/globals') ||
+    !options.types.includes('@testing-library/jest-dom')
   ) {
     throw new Error('bun-vite-template patch: expected the pinned Jest DOM type configuration');
   }
-  options.types = types.map((type) =>
+  options.types = options.types.map((type) =>
     type === '@testing-library/jest-dom' ? '@testing-library/jest-dom/vitest' : type,
   );
   await writeFile(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`);
@@ -378,5 +363,5 @@ if (project === 'bun-vite-template') {
 execSync(`${cli} install --no-frozen-lockfile`, {
   cwd: repoRoot,
   stdio: 'inherit',
-  env: { ...process.env, ...registryInfo.env, ...releaseAgeEnv },
+  env: { ...process.env, ...registryEnv, ...releaseAgeEnv },
 });

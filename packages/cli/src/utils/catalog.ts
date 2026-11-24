@@ -128,12 +128,15 @@ export function getBunCatalogConfig(pkg: {
   catalog?: Record<string, string>;
   catalogs?: Record<string, Record<string, string>>;
 }) {
-  const nested = pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
-  // Bun uses the nested catalog configuration as a whole, without falling back to root entries.
-  return (nested?.catalog !== null && nested?.catalog !== undefined) ||
-    (nested?.catalogs !== null && nested?.catalogs !== undefined)
-    ? nested
-    : pkg;
+  const { workspaces } = pkg;
+  if (workspaces && !Array.isArray(workspaces)) {
+    // Bun uses the nested catalog configuration as a whole, without falling back to root entries.
+    const catalog = workspaces.catalog ?? workspaces.catalogs;
+    if (catalog !== undefined && catalog !== null) {
+      return workspaces;
+    }
+  }
+  return pkg;
 }
 
 export function readBunCatalogDependencyResolver(

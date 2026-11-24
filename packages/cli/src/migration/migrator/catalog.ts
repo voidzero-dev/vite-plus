@@ -464,7 +464,7 @@ export function rewritePnpmWorkspaceYaml(
     allowAny.items = allowAny.items.filter(
       (n) => !(isScalar(n) && typeof n.value === 'string' && stalePeerRuleKeys.includes(n.value)),
     );
-    const existing = new Set(allowAny.items.map((n) => (isScalar(n) ? n.value : n)));
+    const existing = yamlSequenceValues(allowAny);
     for (const key of peerRuleKeys.managed) {
       if (!existing.has(key)) {
         allowAny.add(scalarString(key));
@@ -501,9 +501,7 @@ export function rewritePnpmWorkspaceYaml(
         throw new Error('pnpm-workspace.yaml: minimumReleaseAgeExclude must be a sequence');
       }
       const minimumReleaseAgeExclude = isSeq(existingExclude) ? existingExclude : new YAMLSeq();
-      const existing = new Set(
-        minimumReleaseAgeExclude.items.map((n) => (isScalar(n) ? n.value : n)),
-      );
+      const existing = yamlSequenceValues(minimumReleaseAgeExclude);
       for (const exclude of PNPM_MINIMUM_RELEASE_AGE_EXCLUDES) {
         if (!existing.has(exclude)) {
           minimumReleaseAgeExclude.add(scalarString(exclude));
@@ -613,7 +611,7 @@ function applyBuildAllowanceToWorkspaceYaml(
   } else if (shouldAllow) {
     const node = doc.getIn(['onlyBuiltDependencies']);
     const onlyBuiltDependencies = isSeq(node) ? node : new YAMLSeq();
-    const existing = new Set(onlyBuiltDependencies.items.map((n) => (isScalar(n) ? n.value : n)));
+    const existing = yamlSequenceValues(onlyBuiltDependencies);
     for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
       if (!existing.has(name)) {
         onlyBuiltDependencies.add(scalarString(name));
@@ -817,6 +815,10 @@ export function createCatalogDependencyResolver(
     );
   }
   return undefined;
+}
+
+function yamlSequenceValues(sequence: YAMLSeq): Set<unknown> {
+  return new Set(sequence.items.map((item) => (isScalar(item) ? item.value : item)));
 }
 
 function getYamlMapScalarStringValue(map: unknown, key: string): string | undefined {
@@ -1478,7 +1480,7 @@ function hasVitePeerDependencyRule(projectPath: string): boolean {
   }
   const pkg = readPackageJsonIfExists(path.join(projectPath, 'package.json'));
   const pnpm = pkg && 'pnpm' in pkg && isJsonObject(pkg.pnpm) ? pkg.pnpm : undefined;
-  const rules = isObjectValue(pnpm) ? pnpm.peerDependencyRules : undefined;
+  const rules = pnpm?.peerDependencyRules;
   return peerDependencyRulesHaveStaleEntry(isObjectValue(rules) ? rules : undefined, ['vite']);
 }
 

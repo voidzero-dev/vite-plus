@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { hasOwnKey } from '../packages/cli/src/utils/object.ts';
 import { ecosystemCiDir } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 
@@ -52,12 +53,12 @@ function checkoutHash(dir: string, hash: string): void {
 }
 
 function cloneProject(repoName: string): void {
-  const repo = Object.entries(repos).find(([name]) => name === repoName)?.[1];
-  if (!repo) {
+  if (!hasOwnKey(repos, repoName)) {
     console.error(`Project ${repoName} is not defined in repo.json`);
     process.exit(1);
   }
 
+  const repo = repos[repoName];
   const targetDir = join(ecosystemCiDir, repoName);
 
   if (existsSync(targetDir)) {

@@ -11,23 +11,10 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib';
 
+import { isObjectValue, parseJsonValue } from '../../cli/src/utils/json-value.ts';
+
 function hasErrorCode(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
-}
-
-function parseCacheHeader(text: string) {
-  const value: unknown = JSON.parse(text);
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('status' in value) ||
-    typeof value.status !== 'number' ||
-    !('contentType' in value) ||
-    typeof value.contentType !== 'string'
-  ) {
-    throw new Error('Invalid registry response cache header');
-  }
-  return { status: value.status, contentType: value.contentType };
 }
 
 interface Response {
@@ -156,22 +143,41 @@ export class RegistryCache {
     }
   }
 
+  private async readCachedResponse(file: string, url: string): Promise<Response | undefined> {
+    try {
+      const bytes = await readFile(file);
+      const separator = bytes.indexOf(10);
+      const header = parseJsonValue(bytes.subarray(0, separator).toString());
+      if (
+        !isObjectValue(header) ||
+        typeof header.status !== 'number' ||
+        typeof header.contentType !== 'string'
+      ) {
+        throw new Error('Invalid registry response cache header');
+      }
+      this.record('hit', url);
+      return {
+        status: header.status,
+        contentType: header.contentType,
+        body: bytes.subarray(separator + 1),
+      };
+    } catch (error) {
+      if (hasErrorCode(error, 'ENOENT')) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
   private async load(key: string, url: string, accept: string): Promise<Response> {
     await mkdir(this.directory, { recursive: true });
     const file = path.join(this.directory, key);
     const lock = `${file}.lock`;
     const deadline = Date.now() + 120_000;
     for (;;) {
-      try {
-        const bytes = await readFile(file);
-        const separator = bytes.indexOf(10);
-        const header = parseCacheHeader(bytes.subarray(0, separator).toString());
-        this.record('hit', url);
-        return { ...header, body: bytes.subarray(separator + 1) };
-      } catch (error) {
-        if (!hasErrorCode(error, 'ENOENT')) {
-          throw error;
-        }
+      const cached = await this.readCachedResponse(file, url);
+      if (cached) {
+        return cached;
       }
       try {
         await mkdir(lock);
@@ -189,16 +195,9 @@ export class RegistryCache {
     const temporary = `${file}.${randomUUID()}.tmp`;
     try {
       // Another worker may have published between our read and mkdir.
-      try {
-        const bytes = await readFile(file);
-        const separator = bytes.indexOf(10);
-        const header = parseCacheHeader(bytes.subarray(0, separator).toString());
-        this.record('hit', url);
-        return { ...header, body: bytes.subarray(separator + 1) };
-      } catch (error) {
-        if (!hasErrorCode(error, 'ENOENT')) {
-          throw error;
-        }
+      const cached = await this.readCachedResponse(file, url);
+      if (cached) {
+        return cached;
       }
       const response = await this.download(url, accept);
       if (response.status === 200) {

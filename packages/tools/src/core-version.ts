@@ -199,10 +199,13 @@ export function nextCoreVersion({
   return `${base}-${PRERELEASE_TAG}.${k}`;
 }
 
-interface CoreManifest {
+interface CoreReleaseMetadata {
+  vitePlusVersion?: string;
+}
+
+interface CoreManifest extends CoreReleaseMetadata {
   version: string;
   bundledVersions?: { vite?: string };
-  vitePlusVersion?: string;
 }
 
 /**
@@ -283,22 +286,24 @@ export function assertCoreVersionUnclaimed(
 
 const CORE_MANIFEST_URL = new URL('../../core/package.json', import.meta.url);
 
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
+function isReleaseMetadata(value: unknown): value is CoreReleaseMetadata {
+  return (
+    isObject(value) && (!('vitePlusVersion' in value) || typeof value.vitePlusVersion === 'string')
+  );
+}
+
 function isCoreManifest(value: unknown): value is CoreManifest {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('version' in value) ||
-    typeof value.version !== 'string'
-  ) {
+  if (!isReleaseMetadata(value) || !('version' in value) || typeof value.version !== 'string') {
     return false;
   }
   const bundled = 'bundledVersions' in value ? value.bundledVersions : undefined;
   return (
-    (bundled === undefined ||
-      (bundled !== null &&
-        typeof bundled === 'object' &&
-        (!('vite' in bundled) || typeof bundled.vite === 'string'))) &&
-    (!('vitePlusVersion' in value) || typeof value.vitePlusVersion === 'string')
+    bundled === undefined ||
+    (isObject(bundled) && (!('vite' in bundled) || typeof bundled.vite === 'string'))
   );
 }
 
@@ -313,7 +318,7 @@ function readManifest(url: URL): CoreManifest {
 const DEFAULT_NPM_REGISTRY = 'https://registry.npmjs.org';
 
 export interface CorePackument {
-  versions?: Record<string, { vitePlusVersion?: string }>;
+  versions?: Record<string, CoreReleaseMetadata>;
   time?: Record<string, string | { versions?: Array<string> }> & {
     unpublished?: { versions?: Array<string> };
   };
@@ -343,37 +348,33 @@ export function usedVersionNumbers(packument: CorePackument): Array<string> {
   return [...used];
 }
 
+function isUnpublishedMetadata(value: unknown): boolean {
+  return (
+    isObject(value) &&
+    (!('versions' in value) ||
+      (Array.isArray(value.versions) &&
+        value.versions.every((version) => typeof version === 'string')))
+  );
+}
+
 function isCorePackument(value: unknown): value is CorePackument {
-  if (value === null || typeof value !== 'object') {
+  if (!isObject(value)) {
     return false;
   }
   if (
     'versions' in value &&
-    (value.versions === null ||
-      typeof value.versions !== 'object' ||
-      !Object.values(value.versions).every(
-        (entry: unknown) =>
-          entry !== null &&
-          typeof entry === 'object' &&
-          (!('vitePlusVersion' in entry) || typeof entry.vitePlusVersion === 'string'),
-      ))
+    (!isObject(value.versions) || !Object.values(value.versions).every(isReleaseMetadata))
   ) {
     return false;
   }
   if (!('time' in value)) {
     return true;
   }
-  if (value.time === null || typeof value.time !== 'object') {
-    return false;
-  }
-  return Object.entries(value.time).every(([key, raw]: [string, unknown]) =>
-    key === 'unpublished'
-      ? typeof raw === 'object' &&
-        raw !== null &&
-        (!('versions' in raw) ||
-          (Array.isArray(raw.versions) &&
-            raw.versions.every((version: unknown) => typeof version === 'string')))
-      : typeof raw === 'string',
+  return (
+    isObject(value.time) &&
+    Object.entries(value.time).every(([key, entry]: [string, unknown]) =>
+      key === 'unpublished' ? isUnpublishedMetadata(entry) : typeof entry === 'string',
+    )
   );
 }
 

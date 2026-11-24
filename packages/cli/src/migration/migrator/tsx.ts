@@ -11,6 +11,7 @@ import {
 
 import { parseSync } from '../../../binding/index.js';
 import type { WorkspacePackage } from '../../types/index.ts';
+import { errorCode } from '../../utils/error.ts';
 import { readNearestPackageJson } from '../../utils/package.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { SCRIPT_EXTENSIONS, WATCH_OPTIONS_WITH_VALUE } from '../../vpx-script.ts';
@@ -217,7 +218,7 @@ export function typescriptScriptKeepReason(
     source = fs.readFileSync(file, 'utf8');
   } catch (error) {
     // A file that an earlier command generates cannot be checked yet.
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+    return errorCode(error) === 'ENOENT'
       ? `\`${script}\` does not exist yet, so vp migrate cannot check it`
       : undefined;
   }

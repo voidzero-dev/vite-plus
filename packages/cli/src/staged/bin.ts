@@ -21,39 +21,24 @@ import { createStagedLogger } from './logger.ts';
 const args = unwrapCliParseOutcome(parseStagedArgs(process.argv.slice(3)));
 const options: Options = {};
 
-// Boolean flags — only include if explicitly set
-if (args.allowEmpty !== null && args.allowEmpty !== undefined) {
-  options.allowEmpty = args.allowEmpty;
-}
-if (args.debug !== null && args.debug !== undefined) {
-  options.debug = args.debug;
-}
-if (args.continueOnError !== null && args.continueOnError !== undefined) {
-  options.continueOnError = args.continueOnError;
-}
-if (args.failOnChanges !== null && args.failOnChanges !== undefined) {
-  options.failOnChanges = args.failOnChanges;
-}
-if (args.hidePartiallyStaged !== null && args.hidePartiallyStaged !== undefined) {
-  options.hidePartiallyStaged = args.hidePartiallyStaged;
-}
-if (args.hideUnstaged !== null && args.hideUnstaged !== undefined) {
-  options.hideUnstaged = args.hideUnstaged;
-}
-if (args.quiet !== null && args.quiet !== undefined) {
-  options.quiet = args.quiet;
-}
-if (args.relative !== null && args.relative !== undefined) {
-  options.relative = args.relative;
-}
-if (args.revert !== null && args.revert !== undefined) {
-  options.revert = args.revert;
-}
-if (args.stash !== null && args.stash !== undefined) {
-  options.stash = args.stash;
-}
-if (args.verbose !== null && args.verbose !== undefined) {
-  options.verbose = args.verbose;
+// Leave unspecified flags to lint-staged's defaults, and preserve explicit false.
+for (const flag of [
+  'allowEmpty',
+  'debug',
+  'continueOnError',
+  'failOnChanges',
+  'hidePartiallyStaged',
+  'hideUnstaged',
+  'quiet',
+  'relative',
+  'revert',
+  'stash',
+  'verbose',
+] as const) {
+  const value = args[flag];
+  if (value !== undefined && value !== null) {
+    options[flag] = value;
+  }
 }
 
 // Read "staged" from vite.config.ts and pass it as an inline config object to lint-staged.
@@ -80,14 +65,11 @@ if (stagedConfig) {
   log('  });');
   process.exit(1);
 }
-if (args.cwd !== null && args.cwd !== undefined) {
-  options.cwd = args.cwd;
-}
-if (args.diff !== null && args.diff !== undefined) {
-  options.diff = args.diff;
-}
-if (args.diffFilter !== null && args.diffFilter !== undefined) {
-  options.diffFilter = args.diffFilter;
+for (const flag of ['cwd', 'diff', 'diffFilter'] as const) {
+  const value = args[flag];
+  if (value !== undefined && value !== null) {
+    options[flag] = value;
+  }
 }
 if (args.concurrent !== null && args.concurrent !== undefined) {
   options.concurrent = args.concurrent;

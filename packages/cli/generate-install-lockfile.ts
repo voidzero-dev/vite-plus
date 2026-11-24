@@ -29,11 +29,6 @@ interface InstallManifest {
   dependencies: { 'vite-plus': string };
 }
 
-interface PackageResolution {
-  integrity?: string;
-  tarball?: string;
-}
-
 export function installManifest(version: string): InstallManifest {
   return {
     name: 'vp-global',
@@ -50,7 +45,7 @@ export function isCommitPreviewVersion(version: string): boolean {
 
 function hasValidTarball(
   packageKey: string,
-  resolution: PackageResolution | undefined,
+  resolution: z.infer<typeof resolutionSchema> | undefined,
   version: string,
 ): boolean {
   const tarball = resolution?.tarball;
@@ -87,20 +82,23 @@ const lockfileSchema = z.object({
   packages: z.record(z.string(), z.object({ resolution: resolutionSchema.optional() })),
 });
 
-export function validateInstallLockfile(content: string, version: string) {
+export function validateInstallLockfile(
+  content: string,
+  version: string,
+): z.infer<typeof lockfileSchema> {
   const parsed = lockfileSchema.safeParse(parse(content));
   if (!parsed.success) {
     throw new Error(`Invalid global installation lockfile for vite-plus@${version}`);
   }
   const lock = parsed.data;
-  const cli = lock?.importers?.['.']?.dependencies?.['vite-plus'];
-  const integrity = lock?.packages?.[`vite-plus@${version}`]?.resolution?.integrity;
+  const cli = lock.importers['.']?.dependencies?.['vite-plus'];
+  const integrity = lock.packages[`vite-plus@${version}`]?.resolution?.integrity;
   if (
-    String(lock?.lockfileVersion) !== '9.0' ||
+    String(lock.lockfileVersion) !== '9.0' ||
     cli?.specifier !== version ||
-    (cli.version !== version && !cli.version?.startsWith(`${version}(`)) ||
+    (cli.version !== version && !cli.version.startsWith(`${version}(`)) ||
     !integrity ||
-    !Object.entries(lock?.packages ?? {}).every(([key, entry]) =>
+    !Object.entries(lock.packages).every(([key, entry]) =>
       hasValidTarball(key, entry.resolution, version),
     )
   ) {

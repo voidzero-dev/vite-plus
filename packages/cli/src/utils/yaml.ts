@@ -12,10 +12,7 @@ export type { YamlMapping };
 export function readYamlFile(file: string): YamlMapping | null {
   const content = fs.readFileSync(file, 'utf8');
   const value: unknown = parseYaml(content);
-  if (value === null) {
-    return null;
-  }
-  if (!isYamlMapping(value)) {
+  if (value !== null && !isYamlMapping(value)) {
     throw new TypeError(`Expected a YAML mapping in ${file}`);
   }
   return value;

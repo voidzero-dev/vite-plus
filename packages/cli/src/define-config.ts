@@ -194,14 +194,14 @@ function getVitestAnchor(): string | null {
   return vitestAnchor;
 }
 
-// The bundled manifest is fixed for this module's lifetime. Share it across
-// browser entry points and project configs, just like the cached package path.
 function isAliasArray(
   value: ReadonlyArray<Alias> | Record<string, string> | undefined,
 ): value is ReadonlyArray<Alias> {
   return Array.isArray(value);
 }
 
+// The bundled manifest is fixed for this module's lifetime. Share it across
+// browser entry points and project configs, just like the cached package path.
 let vitestExports: JsonObject | undefined;
 function getVitestImportTarget(id: string): string {
   const anchor = getVitestAnchor();

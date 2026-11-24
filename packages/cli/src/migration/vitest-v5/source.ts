@@ -989,21 +989,15 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
           const props = declaration.id.properties;
           if (
             props.every(
-              (prop) =>
+              (prop): prop is BindingProperty =>
                 prop.type === 'Property' &&
                 !prop.computed &&
                 prop.value.type === 'Identifier' &&
                 ['viteConfig', 'vitestConfig'].includes(propertyName(prop.key) ?? ''),
             )
           ) {
-            const vite = props.find(
-              (prop): prop is BindingProperty =>
-                prop.type === 'Property' && propertyName(prop.key) === 'viteConfig',
-            );
-            const vitest = props.find(
-              (prop): prop is BindingProperty =>
-                prop.type === 'Property' && propertyName(prop.key) === 'vitestConfig',
-            );
+            const vite = props.find((prop) => propertyName(prop.key) === 'viteConfig');
+            const vitest = props.find((prop) => propertyName(prop.key) === 'vitestConfig');
             const local = vite ? editor.text(vite.value) : editor.uniqueName('viteConfig');
             editor.replace(declaration.id, local);
             if (vitest) {

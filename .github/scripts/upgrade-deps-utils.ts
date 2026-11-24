@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
-import { isJsonObject } from '../../packages/cli/src/utils/json-value.ts';
+import { isJsonObject, isObjectValue } from '../../packages/cli/src/utils/json-value.ts';
 import { readJsonObject } from '../../scripts/json.ts';
 
 type DependencyField = 'dependencies' | 'optionalDependencies';
@@ -17,30 +17,27 @@ export function getBundledDependencyRanges(
   const vitePath = join(root, 'vite/packages/vite/package.json');
   // These packages stay external in packages/core/build.ts. Follow their
   // bundled consumers rather than independently selecting the latest releases.
-  const sources: Array<{ path: string; field: DependencyField; names: Array<string> }> = [
-    { path: pluginPath, field: 'dependencies', names: ['yuku-parser'] },
-    { path: vitePath, field: 'dependencies', names: ['postcss'] },
-    { path: vitePath, field: 'optionalDependencies', names: ['fsevents'] },
+  const sources: Array<{ path: string; field: DependencyField; name: string }> = [
+    { path: pluginPath, field: 'dependencies', name: 'yuku-parser' },
+    { path: vitePath, field: 'dependencies', name: 'postcss' },
+    { path: vitePath, field: 'optionalDependencies', name: 'fsevents' },
   ];
-  return sources.flatMap(({ path, field, names }) => {
+  return sources.map(({ path, field, name }) => {
     const dependencies = readJsonObject(path)[field];
-    return names.map((name) => {
-      let range = isJsonObject(dependencies) ? dependencies[name] : undefined;
-      if (typeof range !== 'string' || range.trim() === '') {
-        throw new Error(`Missing ${field}.${name} in ${path}; review core's externals`);
+    let range = isObjectValue(dependencies) ? dependencies[name] : undefined;
+    if (typeof range !== 'string' || range.trim() === '') {
+      throw new Error(`Missing ${field}.${name} in ${path}; review core's externals`);
+    }
+    if (name === 'yuku-parser') {
+      // Pin the runtime parser to the exact version resolved by the bundled plugin.
+      const parserPath = createRequire(path).resolve('yuku-parser/package.json');
+      const { version } = readJsonObject(parserPath);
+      if (typeof version !== 'string' || version.trim() === '') {
+        throw new Error(`Missing version in ${parserPath}; review core's externals`);
       }
-      if (name === 'yuku-parser') {
-        // The AST helpers and codegen are bundled. Pin the runtime parser to
-        // the exact version resolved by the same plugin so it cannot drift.
-        const parserPath = createRequire(path).resolve('yuku-parser/package.json');
-        const { version } = readJsonObject(parserPath);
-        if (typeof version !== 'string' || version.trim() === '') {
-          throw new Error(`Missing version in ${parserPath}; review core's externals`);
-        }
-        range = version;
-      }
-      return { name, field, range };
-    });
+      range = version;
+    }
+    return { name, field, range };
   });
 }
 
@@ -136,7 +133,7 @@ export async function getPnpmInstallerIntegrity(version: string): Promise<string
   if (!isJsonObject(data) || data.version !== version) {
     throw new Error(`Invalid npm response for pnpm ${version}: version mismatch`);
   }
-  const integrity = isJsonObject(data.dist) ? data.dist.integrity : undefined;
+  const integrity = isObjectValue(data.dist) ? data.dist.integrity : undefined;
   const match = typeof integrity === 'string' && /^sha512-([A-Za-z0-9+/]{86}==)$/.exec(integrity);
   if (!match) {
     throw new Error(`Invalid npm response for pnpm ${version}: expected SHA-512 dist.integrity`);

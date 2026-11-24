@@ -1,15 +1,3 @@
-import fs from 'node:fs';
-import { createRequire } from 'node:module';
-import os from 'node:os';
-import path from 'node:path';
-import url from 'node:url';
-
-import { isStringLiteral } from 'typescript/unstable/ast';
-import type { Project } from 'typescript/unstable/sync';
-import { API } from 'typescript/unstable/sync';
-import { assert } from 'vitest';
-import { describe, expect, it } from 'vitest';
-
 /**
  * Regression tests for the generated package.json `exports` map.
  *
@@ -23,16 +11,29 @@ import { describe, expect, it } from 'vitest';
  * `require` BEFORE `default` and that runtime resolution returns the
  * expected file extension for each consumer.
  */
-import { isJsonObject } from '../utils/json-value.ts';
+
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import os from 'node:os';
+import path from 'node:path';
+import url from 'node:url';
+
+import { isStringLiteral } from 'typescript/unstable/ast';
+import type { Project } from 'typescript/unstable/sync';
+import { API } from 'typescript/unstable/sync';
+import { assert, describe, expect, it } from 'vitest';
+
+import type { JsonObject, JsonValue } from '../utils/json-value.ts';
+import { isObjectValue } from '../utils/json-value.ts';
 import { readJsonFile } from '../utils/json.ts';
 
 const cliPkgDir = path.resolve(import.meta.dirname, '../..');
 const cliPkgJsonPath = path.join(cliPkgDir, 'package.json');
 const requireFromHere = createRequire(import.meta.url);
 
-function readExports() {
+function readExports(): JsonObject {
   const { exports } = readJsonFile(cliPkgJsonPath);
-  assert(isJsonObject(exports), 'Expected package.json exports');
+  assert(isObjectValue(exports), 'Expected package.json exports');
   return exports;
 }
 
@@ -150,9 +151,8 @@ alias({ contextOptions: { reducedMotion: 'bogus' } });
   });
 
   it('keeps the reviewed Vitest v5 export surface', () => {
-    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
     expect(
-      Object.keys(pkg.exports)
+      Object.keys(readExports())
         .filter((key) => key === './test' || key.startsWith('./test/'))
         .toSorted(),
     ).toMatchSnapshot();
@@ -162,7 +162,7 @@ alias({ contextOptions: { reducedMotion: 'bogus' } });
     for (const [key, value] of Object.entries(readExports())) {
       if (
         !(key === './test' || key.startsWith('./test/')) ||
-        !isJsonObject(value) ||
+        !isObjectValue(value) ||
         (!value.default && !value.import)
       ) {
         continue;
@@ -176,8 +176,8 @@ alias({ contextOptions: { reducedMotion: 'bogus' } });
     const entries = Object.entries(readExports()).filter(
       ([key, entry]) =>
         (key === './test' || key.startsWith('./test/')) &&
-        isJsonObject(entry) &&
-        (entry.types || (isJsonObject(entry.import) && entry.import.types)),
+        isObjectValue(entry) &&
+        (entry.types || (isObjectValue(entry.import) && entry.import.types)),
     );
     const source =
       entries
@@ -268,8 +268,7 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
   it.each(['coverage', 'reporters', 'environments', 'snapshot'])(
     'does not publish the removed %s alias',
     (name) => {
-      const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
-      expect(pkg.exports).not.toHaveProperty(`./test/${name}`);
+      expect(readExports()).not.toHaveProperty(`./test/${name}`);
       expect(() => requireFromHere.resolve(`vite-plus/test/${name}`)).toThrow(
         expect.objectContaining({ code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' }),
       );
@@ -291,8 +290,8 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
 
     const offenders: Array<{ path: string; order: Array<string> }> = [];
 
-    function walk(subpath: string, value: unknown) {
-      if (!isJsonObject(value)) {
+    function walk(subpath: string, value: JsonValue | undefined) {
+      if (!isObjectValue(value)) {
         return;
       }
       const keys = Object.keys(value);
@@ -354,7 +353,7 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
     // Matches quoted relative module specifiers such as './node' and '../browser.js'.
     const relativeModuleSpecifier = /(['"])(\.\.?\/[^'"]+)\1/g;
     const entry = readExports()['./test/browser-playwright'];
-    assert(isJsonObject(entry));
+    assert(isObjectValue(entry));
     const { types } = entry;
     assert(typeof types === 'string');
     const source = fs.readFileSync(path.resolve(cliPkgDir, types), 'utf8');

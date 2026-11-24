@@ -6,7 +6,7 @@ import type { FormattingOptions, JSONPath, ModificationOptions } from 'jsonc-par
 import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
 
 import type { JsonObject, JsonValue } from './json-value.ts';
-import { isJsonObject, parseJsonValue } from './json-value.ts';
+import { isJsonObject, isObjectValue, parseJsonValue } from './json-value.ts';
 
 export { isJsonObject, parseJsonValue };
 export type { JsonObject, JsonValue };
@@ -75,7 +75,7 @@ export function readJsonValue(file: string, allowComments?: boolean): JsonValue 
 
 export function readJsonFile(file: string, allowComments?: boolean): JsonObject {
   const value = readJsonValue(file, allowComments);
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isObjectValue(value)) {
     throw new TypeError(`Expected a JSON object in ${file}`);
   }
   return value;

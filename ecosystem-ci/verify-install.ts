@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-import { isJsonObject } from '../packages/cli/src/utils/json-value.ts';
+import { isObjectValue } from '../packages/cli/src/utils/json-value.ts';
 import { readJsonObject } from '../scripts/json.ts';
 import { vitePlusTgzVersion } from './paths.ts';
 
@@ -27,8 +27,8 @@ try {
   const prod = projectPkg.dependencies;
   const dev = projectPkg.devDependencies;
   const vitePlusSpec =
-    (isJsonObject(prod) ? prod['vite-plus'] : undefined) ??
-    (isJsonObject(dev) ? dev['vite-plus'] : undefined);
+    (isObjectValue(prod) ? prod['vite-plus'] : undefined) ??
+    (isObjectValue(dev) ? dev['vite-plus'] : undefined);
 
   // The migration must pin the local version as a plain registry spec
   // (resolved through the local registry), exactly like a real migration,
@@ -51,7 +51,7 @@ try {
   const oxlintPkgPath = vitePlusRequire.resolve('oxlint/package.json');
   const oxlintPkg = readJsonObject(oxlintPkgPath);
   const expectedOxlint =
-    isJsonObject(pkg.dependencies) &&
+    isObjectValue(pkg.dependencies) &&
     typeof pkg.dependencies.oxlint === 'string' &&
     pkg.dependencies.oxlint.replace(/^[=^~]/, '');
   if (!expectedOxlint) {

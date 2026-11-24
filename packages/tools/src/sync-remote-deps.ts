@@ -13,7 +13,7 @@ import { isYamlMapping } from '../../cli/src/utils/yaml-value.ts';
 import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
 import { parseCargoOxcVersions, replaceCargoCrateVersion } from './cargo-toml.ts';
 import type { PackageManifest as PackageJson } from './package-manifest.ts';
-import { readPackageManifest } from './package-manifest.ts';
+import { dependencyFields, readPackageManifest } from './package-manifest.ts';
 import { OXC_NODE_DIR, patchOxcNode } from './patch-oxc-node.ts';
 import {
   alignVendoredVitestDependencies,
@@ -33,6 +33,11 @@ interface WorkspaceYaml {
   parse: typeof parse;
   parseDocument: typeof parseDocument;
   stringify: typeof stringify;
+}
+
+// The first sync may need to install these packages before it can read the workspaces.
+async function loadWorkspaceTools(): Promise<{ yaml: WorkspaceYaml; verkit: Verkit }> {
+  return { yaml: await import('yaml'), verkit: await import('verkit') };
 }
 
 interface PnpmWorkspace extends YamlMapping {
@@ -120,12 +125,7 @@ export function collectWorkspaceCatalogReferences(
   const references = new Set<string>();
   for (const file of new Set(['package.json', ...files])) {
     const pkg = readPackageManifest(join(rootDir, file));
-    for (const field of [
-      'dependencies',
-      'devDependencies',
-      'optionalDependencies',
-      'peerDependencies',
-    ] as const) {
+    for (const field of dependencyFields) {
       for (const [name, version] of Object.entries(pkg[field] ?? {})) {
         if (version === 'catalog:' || version === 'catalog:default') {
           references.add(name);
@@ -411,43 +411,28 @@ function mergePackageExports(
     }
   }
 
-  // Add rolldown exports
-  if (isObjectValue(rolldownPkg.exports)) {
-    for (const [path, value] of Object.entries(rolldownPkg.exports)) {
-      const [newPath, newValue] = transformRolldownExport(path, value);
+  const sources = [
+    [rolldownPkg, transformRolldownExport],
+    [pluginutilsPkg, transformPluginutilsExport],
+    [rolldownVitePkg, transformViteExport],
+  ] as const;
+  for (const [pkg, transform] of sources) {
+    if (!isObjectValue(pkg.exports)) {
+      continue;
+    }
+    for (const [path, value] of Object.entries(pkg.exports)) {
+      const [newPath, newValue] = transform(path, value);
       if (newPath && newValue !== null) {
         result[newPath] = newValue;
       }
     }
   }
 
-  // Add pluginutils exports
-  if (isObjectValue(pluginutilsPkg.exports)) {
-    for (const [path, value] of Object.entries(pluginutilsPkg.exports)) {
-      const [newPath, newValue] = transformPluginutilsExport(path, value);
-      if (newPath && newValue !== null) {
-        result[newPath] = newValue;
-      }
-    }
-  }
-
-  // Add vite exports
-  if (isObjectValue(rolldownVitePkg.exports)) {
-    for (const [path, value] of Object.entries(rolldownVitePkg.exports)) {
-      const [newPath, newValue] = transformViteExport(path, value);
-      if (newPath && newValue !== null) {
-        result[newPath] = newValue;
-      }
-    }
-  }
-
-  // Sort exports by key
-  return Object.keys(result)
-    .toSorted()
-    .reduce((sorted, key) => {
-      sorted[key] = result[key];
-      return sorted;
-    }, {} as JsonObject);
+  return Object.fromEntries(
+    Object.keys(result)
+      .toSorted()
+      .map((key) => [key, result[key]]),
+  );
 }
 
 export function syncViteDevtoolsDependencies(corePkg: PackageJson, vitePkg: PackageJson): void {
@@ -970,21 +955,12 @@ export async function syncRemote() {
     cloneOrResetRepo(repo, join(rootDir, dir), branch, hash);
   }
 
-  // Dynamically import dependencies after git clone. Capture the whole `yaml`
-  // module (we need `yaml.parseDocument` to preserve comments).
-  let yaml: WorkspaceYaml;
-  let verkit: Verkit;
-
-  try {
-    yaml = await import('yaml');
-    verkit = await import('verkit');
-  } catch {
+  const { yaml, verkit } = await loadWorkspaceTools().catch(() => {
     log('Dependencies not found, running pnpm install...');
     execCommand('pnpm install --no-frozen-lockfile', rootDir);
     log('Retrying imports...');
-    yaml = await import('yaml');
-    verkit = await import('verkit');
-  }
+    return loadWorkspaceTools();
+  });
 
   log('Reading pnpm-workspace.yaml files...');
 

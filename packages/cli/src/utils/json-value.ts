@@ -4,7 +4,7 @@ export interface JsonObject {
   [key: string]: JsonValue | undefined;
 }
 
-function isPlainObject(value: unknown): value is object {
+export function isPlainObject(value: unknown): value is object {
   if (value === null || typeof value !== 'object') {
     return false;
   }
@@ -50,10 +50,12 @@ export function isObjectValue(value: JsonValue | undefined): value is JsonObject
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function parseJsonObject(text: string): JsonObject {
+export function parseJsonObject(text: string, source?: string): JsonObject {
   const value = parseJsonValue(text);
   if (!isObjectValue(value)) {
-    throw new TypeError('Expected a JSON object');
+    throw new TypeError(
+      source === undefined ? 'Expected a JSON object' : `Expected a JSON object in ${source}`,
+    );
   }
   return value;
 }

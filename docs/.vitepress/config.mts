@@ -345,49 +345,26 @@ export default extendConfig(
           ],
         },
       },
-      transformHead({ page, pageData }) {
+      transformHead({ page, pageData: { frontmatter } }): Array<HeadConfig> {
         const url = 'https://viteplus.dev/' + page.replace(/\.md$/, '').replace(/index$/, '');
-
-        const canonicalUrlEntry: HeadConfig = [
-          'link',
-          {
-            rel: 'canonical',
-            href: url,
-          },
-        ];
-
-        const ogInfo: Array<HeadConfig> = [
-          [
-            'meta',
-            {
-              property: 'og:title',
-              content:
-                typeof pageData.frontmatter.title === 'string'
-                  ? pageData.frontmatter.title
-                  : 'Vite+',
-            },
-          ],
+        const title = typeof frontmatter.title === 'string' ? frontmatter.title : 'Vite+';
+        const description =
+          typeof frontmatter.description === 'string'
+            ? frontmatter.description
+            : 'The Unified Toolchain for the Web';
+        return [
+          ['meta', { property: 'og:title', content: title }],
           [
             'meta',
             {
               property: 'og:image',
-              content: `https://viteplus.dev/${pageData.frontmatter.cover ?? 'og.jpg'}`,
+              content: `https://viteplus.dev/${frontmatter.cover ?? 'og.jpg'}`,
             },
           ],
           ['meta', { property: 'og:url', content: url }],
-          [
-            'meta',
-            {
-              property: 'og:description',
-              content:
-                typeof pageData.frontmatter.description === 'string'
-                  ? pageData.frontmatter.description
-                  : 'The Unified Toolchain for the Web',
-            },
-          ],
+          ['meta', { property: 'og:description', content: description }],
+          ['link', { rel: 'canonical', href: url }],
         ];
-
-        return [...ogInfo, canonicalUrlEntry];
       },
       markdown: {
         config(md) {

@@ -8,8 +8,7 @@ import { parse as parseYaml } from 'yaml';
 import type { WorkspaceInfo } from '../../types/index.js';
 import { PackageManager } from '../../types/index.js';
 import { VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.js';
-import type { JsonObject } from '../../utils/json.ts';
-import { readJsonFile } from '../../utils/json.ts';
+import { readJsonFile as readJson } from '../../utils/json.ts';
 import type { PnpmPeerDependencyRules as PeerDependencyRules } from '../migrator/shared.js';
 import { createMigrationReport } from '../report.js';
 import { fixtureObject } from './fixture-json.ts';
@@ -53,10 +52,6 @@ function makeWorkspaceInfo(rootDir: string, version = '10.33.0'): WorkspaceInfo 
     },
     packages: [],
   };
-}
-
-function readJson(filePath: string): JsonObject {
-  return readJsonFile(filePath);
 }
 
 function readWorkspaceRules(projectPath: string) {

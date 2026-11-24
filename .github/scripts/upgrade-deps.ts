@@ -36,17 +36,8 @@ type LatestTagOptions = {
   stableOnly?: boolean;
 };
 
-type UpstreamVersions = {
-  rolldown: {
-    hash: string;
-  };
-  vite: {
-    hash: string;
-  };
-  'oxc-node': {
-    hash: string;
-  };
-};
+const upstreamNames = ['rolldown', 'vite', 'oxc-node'] as const;
+type UpstreamVersions = Record<(typeof upstreamNames)[number], { hash: string }>;
 
 type PnpmWorkspaceVersions = {
   vitest: string;
@@ -225,7 +216,7 @@ async function getNpmDependencyRange(packageName: string, dependencyName: string
 }
 
 function hasUpstreamHashes(data: JsonObject): data is JsonObject & UpstreamVersions {
-  return ['rolldown', 'vite', 'oxc-node'].every((name) => {
+  return upstreamNames.every((name) => {
     const upstream = data[name];
     return isObjectValue(upstream) && typeof upstream.hash === 'string';
   });
@@ -557,12 +548,11 @@ function syncBundledDependencies(): void {
   const pkg = readJsonObject(filePath);
   for (const { name, field, range } of ranges) {
     const dependencies = pkg[field];
-    const oldRange = isObjectValue(dependencies) ? dependencies[name] : undefined;
-    if (!isObjectValue(dependencies) || typeof oldRange !== 'string') {
+    if (!isObjectValue(dependencies) || typeof dependencies[name] !== 'string') {
       throw new Error(`Missing ${field}.${name} in ${filePath}`);
     }
     // Preserve the original version if synchronization runs again after fixups.
-    recordChange(name, changes.get(name)?.old ?? oldRange, range);
+    recordChange(name, changes.get(name)?.old ?? dependencies[name], range);
     dependencies[name] = range;
   }
   syncCoreVersion(pkg);

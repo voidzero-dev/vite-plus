@@ -1,7 +1,3 @@
-import { execFileSync, execSync } from 'node:child_process';
-import { existsSync, readdirSync, statSync } from 'node:fs';
-import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 /**
  * Build script for vite-plus CLI package
  *
@@ -21,6 +17,11 @@ import { createRequire } from 'node:module';
  * IMPORTANT: The core package must be built before running this script.
  * Native binding is built first because TypeScript may depend on generated binding types.
  */
+
+import { execFileSync, execSync } from 'node:child_process';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -1148,26 +1149,14 @@ function resolveUpstreamDtsPath(
   if (!isObjectValue(exportValue)) {
     return null;
   }
-  const value = exportValue;
-  if (condition === 'types') {
-    if (typeof value.types === 'string') {
-      return join(providerPkgRoot, value.types);
-    }
-    if (isObjectValue(value.import)) {
-      const types = value.import.types;
-      if (typeof types === 'string') {
-        return join(providerPkgRoot, types);
-      }
-    }
-  } else {
-    if (isObjectValue(value.require)) {
-      const types = value.require.types;
-      if (typeof types === 'string') {
-        return join(providerPkgRoot, types);
-      }
-    }
+  if (condition === 'types' && typeof exportValue.types === 'string') {
+    return join(providerPkgRoot, exportValue.types);
   }
-  return null;
+
+  const branch = condition === 'types' ? exportValue.import : exportValue.require;
+  return isObjectValue(branch) && typeof branch.types === 'string'
+    ? join(providerPkgRoot, branch.types)
+    : null;
 }
 
 async function writeShimDts(
@@ -1233,44 +1222,42 @@ async function createShimForExport(
     return { default: `./dist/test/${shimBaseName}.js` };
   }
 
-  if (isObjectValue(exportValue)) {
-    const value = exportValue;
-
-    // Check if it has import/require conditions (complex conditional export)
-    if ('import' in value || 'require' in value) {
-      return await createConditionalShim(
-        value,
-        testImportSpecifier,
-        shimDirForFile,
-        baseFileName,
-        shimBaseName,
-        distDir,
-        opts,
-      );
-    }
-
-    // Simple object with types/default
-    const result: ExportValue = {};
-
-    if (value.types && typeof value.types === 'string') {
-      const dtsPath = join(shimDirForFile, `${baseFileName}.d.ts`);
-      const upstream = opts.providerPkgRoot
-        ? resolveUpstreamDtsPath(opts.providerPkgRoot, value, 'types')
-        : null;
-      await writeShimDts(dtsPath, testImportSpecifier, upstream, distDir);
-      result.types = `./dist/test/${shimBaseName}.d.ts`;
-    }
-
-    if (value.default && typeof value.default === 'string') {
-      const jsPath = join(shimDirForFile, `${baseFileName}.js`);
-      await writeFile(jsPath, `export * from '${runtimeSpecifier}';\n`);
-      result.default = `./dist/test/${shimBaseName}.js`;
-    }
-
-    return Object.keys(result).length > 0 ? result : null;
+  if (!isObjectValue(exportValue)) {
+    return null;
   }
 
-  return null;
+  // Check if it has import/require conditions (complex conditional export)
+  if ('import' in exportValue || 'require' in exportValue) {
+    return await createConditionalShim(
+      exportValue,
+      testImportSpecifier,
+      shimDirForFile,
+      baseFileName,
+      shimBaseName,
+      distDir,
+      opts,
+    );
+  }
+
+  // Simple object with types/default
+  const result: ExportValue = {};
+
+  if (exportValue.types && typeof exportValue.types === 'string') {
+    const dtsPath = join(shimDirForFile, `${baseFileName}.d.ts`);
+    const upstream = opts.providerPkgRoot
+      ? resolveUpstreamDtsPath(opts.providerPkgRoot, exportValue, 'types')
+      : null;
+    await writeShimDts(dtsPath, testImportSpecifier, upstream, distDir);
+    result.types = `./dist/test/${shimBaseName}.d.ts`;
+  }
+
+  if (exportValue.default && typeof exportValue.default === 'string') {
+    const jsPath = join(shimDirForFile, `${baseFileName}.js`);
+    await writeFile(jsPath, `export * from '${runtimeSpecifier}';\n`);
+    result.default = `./dist/test/${shimBaseName}.js`;
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 /**

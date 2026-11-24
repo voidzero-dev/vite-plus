@@ -202,55 +202,44 @@ function findCreateRequireInStaticImports(ast: ParseResult): Array<RequireCall> 
   return calls;
 }
 
-// Helper to check if an expression is `process` or `globalThis.process`
 function isProcessExpression(expr: Expression): boolean {
-  // Check for `process`
-  if (expr.type === 'Identifier' && expr.name === 'process') {
-    return true;
+  if (expr.type === 'Identifier') {
+    return expr.name === 'process';
   }
-  // Check for `globalThis.process`
-  if (expr.type === 'MemberExpression' && !expr.computed) {
-    const memberExpr = expr;
-    return (
-      memberExpr.object.type === 'Identifier' &&
-      memberExpr.object.name === 'globalThis' &&
-      memberExpr.property.name === 'process'
-    );
-  }
-  return false;
+  return (
+    expr.type === 'MemberExpression' &&
+    !expr.computed &&
+    expr.object.type === 'Identifier' &&
+    expr.object.name === 'globalThis' &&
+    expr.property.name === 'process'
+  );
 }
 
-// Helper to check if a CallExpression is `[process|globalThis.process].getBuiltinModule("module")`
 function isGetBuiltinModuleCall(expr: Expression): boolean {
   if (expr.type !== 'CallExpression') {
     return false;
   }
-  const call = expr;
+  const {
+    callee,
+    arguments: [module],
+  } = expr;
+  return (
+    callee.type === 'MemberExpression' &&
+    !callee.computed &&
+    callee.property.name === 'getBuiltinModule' &&
+    isProcessExpression(callee.object) &&
+    module?.type === 'Literal' &&
+    (module.value === 'module' || module.value === 'node:module')
+  );
+}
 
-  // Check callee is a member expression with property `getBuiltinModule`
-  if (call.callee.type !== 'MemberExpression' || call.callee.computed) {
-    return false;
-  }
-  const callee = call.callee;
-  if (callee.property.name !== 'getBuiltinModule') {
-    return false;
-  }
-
-  // Check the object is `process` or `globalThis.process`
-  if (!isProcessExpression(callee.object)) {
-    return false;
-  }
-
-  // Check argument is "module" or "node:module"
-  if (call.arguments.length === 0) {
-    return false;
-  }
-  const arg = call.arguments[0];
-  if (arg.type !== 'Literal') {
-    return false;
-  }
-  const value = arg.value;
-  return value === 'module' || value === 'node:module';
+function isGlobalCreateRequireCall({ callee }: CallExpression): boolean {
+  return (
+    callee.type === 'MemberExpression' &&
+    !callee.computed &&
+    callee.property.name === 'createRequire' &&
+    isGetBuiltinModuleCall(callee.object)
+  );
 }
 
 /**
@@ -263,28 +252,11 @@ function findCreateRequireInGlobalModule(ast: ParseResult): Array<RequireCall> {
 
   const visitor = new Visitor({
     VariableDeclarator(node: VariableDeclarator) {
-      if (!node.init || node.init.type !== 'CallExpression') {
-        return;
-      }
-
-      const call = node.init;
-
-      // Check if callee is a MemberExpression with property `createRequire`
-      if (call.callee.type !== 'MemberExpression' || call.callee.computed) {
-        return;
-      }
-      const callee = call.callee;
-      if (callee.property.name !== 'createRequire') {
-        return;
-      }
-
-      // Check if the object is a getBuiltinModule("module") call
-      if (!isGetBuiltinModuleCall(callee.object)) {
-        return;
-      }
-
-      // Extract variable name
-      if (node.id.type === 'Identifier') {
+      if (
+        node.init?.type === 'CallExpression' &&
+        node.id.type === 'Identifier' &&
+        isGlobalCreateRequireCall(node.init)
+      ) {
         requireVarName = node.id.name;
       }
     },
@@ -293,15 +265,7 @@ function findCreateRequireInGlobalModule(ast: ParseResult): Array<RequireCall> {
   visitor.visit(ast.program);
 
   const calls = requireVarName ? findRequireCalls(ast, requireVarName) : [];
-  calls.push(
-    ...findDirectCreateRequireCalls(ast, (node) => {
-      if (node.callee.type !== 'MemberExpression' || node.callee.computed) {
-        return false;
-      }
-      const callee = node.callee;
-      return callee.property.name === 'createRequire' && isGetBuiltinModuleCall(callee.object);
-    }),
-  );
+  calls.push(...findDirectCreateRequireCalls(ast, isGlobalCreateRequireCall));
 
   return calls;
 }

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { JsonObject, JsonValue } from '../packages/cli/src/utils/json-value.ts';
-import { isJsonObject } from '../packages/cli/src/utils/json-value.ts';
+import { isObjectValue } from '../packages/cli/src/utils/json-value.ts';
 import { readJsonObject } from './json.ts';
 
 interface GenerateLicenseFileOptions {
@@ -408,7 +408,7 @@ function readDependencyInfo(packageRef: PackageReference): DependencyInfo | null
     }
   }
   const repository = pkgJson.repository;
-  const url = isJsonObject(repository) ? repository.url : repository;
+  const url = isObjectValue(repository) ? repository.url : repository;
   if (typeof url === 'string' && url) {
     dependency.repository = normalizeGitUrl(url);
   }
@@ -418,7 +418,7 @@ function readDependencyInfo(packageRef: PackageReference): DependencyInfo | null
 }
 
 function personName(person: JsonValue | undefined): string | undefined {
-  const name = isJsonObject(person) ? person.name : person;
+  const name = isObjectValue(person) ? person.name : person;
   return typeof name === 'string' ? name : undefined;
 }
 

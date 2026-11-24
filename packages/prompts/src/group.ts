@@ -39,16 +39,11 @@ export const group = async <T>(
     const prompt = prompts[name];
     const result = await prompt({ results });
 
-    // Pass the results to the onCancel function
-    // so the user can decide what to do with the results
-    // TODO: Switch to callback within core to avoid isCancel Fn
-    if (typeof opts?.onCancel === 'function' && isCancel(result)) {
-      Object.assign(results, { [name]: 'canceled' });
-      opts.onCancel({ results });
-      continue;
+    const canceled = typeof opts?.onCancel === 'function' && isCancel(result);
+    Object.assign(results, { [name]: canceled ? 'canceled' : result });
+    if (canceled) {
+      opts.onCancel?.({ results });
     }
-
-    Object.assign(results, { [name]: result });
   }
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Every prompt has now populated its corresponding result.

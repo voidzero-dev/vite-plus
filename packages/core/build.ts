@@ -34,7 +34,7 @@ import {
 import { rewriteRolldownBindingRequires } from './build-support/rewrite-rolldown-binding.js';
 import pkgJson from './package.json' with { type: 'json' };
 
-const projectDir = join(import.meta.filename, '..');
+const projectDir = import.meta.dirname;
 
 const rolldownPluginUtilsDir = resolve(
   projectDir,

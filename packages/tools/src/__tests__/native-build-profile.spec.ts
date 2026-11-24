@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, expect, test } from 'vitest';
 import { parse } from 'yaml';
 
+import { isYamlMapping } from '../../../cli/src/utils/yaml-value.ts';
+
 const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
 const temporaryDirs: Array<string> = [];
 // Native producers run on Linux and macOS, including Windows cross-builds.
@@ -17,23 +19,14 @@ function temporaryDir() {
   return dir;
 }
 
-function actionStep(action: string, name: string) {
+function actionStepScript(action: string, name: string): string {
   const file = path.join(repoRoot, '.github/actions', action, 'action.yml');
   const actionFile: unknown = parse(readFileSync(file, 'utf8'));
-  if (typeof actionFile === 'object' && actionFile !== null && 'runs' in actionFile) {
-    const { runs } = actionFile;
-    if (typeof runs === 'object' && runs !== null && 'steps' in runs && Array.isArray(runs.steps)) {
-      for (const step of runs.steps as Array<unknown>) {
-        if (
-          typeof step === 'object' &&
-          step !== null &&
-          'name' in step &&
-          step.name === name &&
-          'run' in step &&
-          typeof step.run === 'string'
-        ) {
-          return { run: step.run };
-        }
+  const runs = isYamlMapping(actionFile) ? actionFile.runs : undefined;
+  if (isYamlMapping(runs) && Array.isArray(runs.steps)) {
+    for (const step of runs.steps) {
+      if (isYamlMapping(step) && step.name === name && typeof step.run === 'string') {
+        return step.run;
       }
     }
   }
@@ -50,7 +43,7 @@ test.skipIf(process.platform === 'win32')(
   'native caches separate release and CI binaries with identical source inputs',
   () => {
     const dir = temporaryDir();
-    const { run } = actionStep(
+    const run = actionStepScript(
       'compute-native-cache-input-hash',
       'Compute native cache input hash',
     );
@@ -89,7 +82,7 @@ test.skipIf(process.platform === 'win32').each([
   }
   writeFileSync(path.join(releaseDir, 'vp-shim.exe'), 'release trampoline');
 
-  execFileSync('bash', ['-e', '-c', actionStep(action, 'Stage native CLI binaries').run], {
+  execFileSync('bash', ['-e', '-c', actionStepScript(action, 'Stage native CLI binaries')], {
     cwd: dir,
     env: {
       ...process.env,

@@ -1,17 +1,10 @@
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import lintStagedPackageJson from 'lint-staged/package.json' with { type: 'json' };
 import { defineConfig } from 'tsdown';
 
-const require = createRequire(import.meta.url);
-const lintStagedPackageJson: unknown = require('lint-staged/package.json');
-if (
-  !lintStagedPackageJson ||
-  typeof lintStagedPackageJson !== 'object' ||
-  !('version' in lintStagedPackageJson) ||
-  typeof lintStagedPackageJson.version !== 'string'
-) {
+if (typeof lintStagedPackageJson?.version !== 'string') {
   throw new Error('Expected lint-staged to have a package version');
 }
 

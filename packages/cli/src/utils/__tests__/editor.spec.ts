@@ -16,6 +16,7 @@ import {
   writeEditorConfigs,
 } from '../editor.js';
 import { isJsonObject } from '../json-value.ts';
+import { readJsonFile } from '../json.ts';
 
 function asSettings(value: unknown) {
   assert(isJsonObject(value));
@@ -200,9 +201,7 @@ describe('writeEditorConfigs', () => {
       silent: true,
     });
 
-    const settings = asSettings(
-      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
-    );
+    const settings = readJsonFile(path.join(projectRoot, '.vscode', 'settings.json'));
 
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.disableNestedConfig']).toBe(true);
@@ -225,9 +224,7 @@ describe('writeEditorConfigs', () => {
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
 
-    const settings = asSettings(
-      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
-    );
+    const settings = readJsonFile(path.join(projectRoot, '.vscode', 'settings.json'));
 
     expect(settings['npm.scriptRunner']).toBe('vp');
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
@@ -380,9 +377,7 @@ describe('writeEditorConfigs', () => {
       silent: true,
     });
 
-    const settings = asSettings(
-      parseJsonc(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
-    );
+    const settings = readJsonFile(path.join(projectRoot, '.vscode', 'settings.json'), true);
 
     expect(settings['editor.formatOnSave']).toBe(false);
     expect(settings['[typescript]']).toEqual({
@@ -413,9 +408,7 @@ describe('writeEditorConfigs', () => {
       silent: true,
     });
 
-    const settings = asSettings(
-      parseJsonc(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
-    );
+    const settings = readJsonFile(path.join(projectRoot, '.vscode', 'settings.json'), true);
 
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     const codeActions = asSettings(settings['editor.codeActionsOnSave']);
@@ -556,9 +549,7 @@ describe('writeEditorConfigs', () => {
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
 
-    const settings = asSettings(
-      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
-    );
+    const settings = readJsonFile(path.join(projectRoot, '.vscode', 'settings.json'));
 
     // deepMerge preserves existing keys — 'npm' is not overwritten by 'vp'
     expect(settings['npm.scriptRunner']).toBe('npm');
@@ -574,9 +565,7 @@ describe('writeEditorConfigs', () => {
       silent: true,
     });
 
-    const settings = asSettings(
-      JSON.parse(fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8')),
-    );
+    const settings = readJsonFile(path.join(projectRoot, '.zed', 'settings.json'));
 
     const lintPath = ['lsp', 'oxlint', 'initialization_options', 'settings'];
     expect(settings).toHaveProperty(lintPath);
@@ -599,15 +588,9 @@ describe('writeEditorConfigs', () => {
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
 
-    const vscodeSettings = asSettings(
-      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
-    );
-    const vscodeExtensions = asSettings(
-      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'extensions.json'), 'utf8')),
-    );
-    const zedSettings = asSettings(
-      JSON.parse(fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8')),
-    );
+    const vscodeSettings = readJsonFile(path.join(projectRoot, '.vscode', 'settings.json'));
+    const vscodeExtensions = readJsonFile(path.join(projectRoot, '.vscode', 'extensions.json'));
+    const zedSettings = readJsonFile(path.join(projectRoot, '.zed', 'settings.json'));
 
     expect(vscodeSettings['npm.scriptRunner']).toBe('vp');
     expect(vscodeExtensions.recommendations).toContain('VoidZero.vite-plus-extension-pack');

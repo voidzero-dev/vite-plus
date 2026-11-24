@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
-import { isJsonObject } from '../packages/cli/src/utils/json-value.ts';
+import { isObjectValue } from '../packages/cli/src/utils/json-value.ts';
 import { readJsonObject } from '../scripts/json.ts';
 
 const require = createRequire(`${process.cwd()}/`);
@@ -18,7 +18,7 @@ for (const name of ['@oxlint/plugins', 'oxlint']) {
   ]) {
     const dependencies = pkg[field];
     assert.equal(
-      isJsonObject(dependencies) ? dependencies[name] : undefined,
+      isObjectValue(dependencies) ? dependencies[name] : undefined,
       undefined,
       `${field} still contains ${name}`,
     );

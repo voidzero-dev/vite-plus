@@ -18,8 +18,7 @@ import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { PRETTIER_CONFIG_FILES, PRETTIER_PACKAGE_JSON_CONFIG, detectConfigs } from '../detector.ts';
 import { hasOnlyInjectedDefaults, rewriteToolLintStagedConfigFiles } from '../migrator.ts';
 import type { MigrationReport } from '../report.ts';
-import { rewriteScriptMap } from './shared.ts';
-import { warnMigration } from './shared.ts';
+import { rewritePackageScriptFields, warnMigration } from './shared.ts';
 
 export function detectPrettierProject(projectPath: string, packages?: Array<WorkspacePackage>) {
   const packageJsonPath = path.join(projectPath, 'package.json');
@@ -280,21 +279,8 @@ function rewritePrettierPackageJson(packageJsonPath: string): void {
         }
       }
     }
-    if (pkg.scripts) {
-      const updated = rewriteScriptMap(pkg.scripts, rewritePrettier);
-      if (updated) {
-        pkg.scripts = updated;
-        changed = true;
-      }
-    }
-    if (pkg['lint-staged']) {
-      const updated = rewriteScriptMap(pkg['lint-staged'], rewritePrettier);
-      if (updated) {
-        pkg['lint-staged'] = updated;
-        changed = true;
-      }
-    }
-    return changed ? pkg : undefined;
+    const scriptsChanged = rewritePackageScriptFields(pkg, rewritePrettier);
+    return changed || scriptsChanged ? pkg : undefined;
   });
 }
 

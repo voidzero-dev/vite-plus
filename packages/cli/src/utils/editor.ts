@@ -392,15 +392,17 @@ async function writeEditorConfig({
   await fsPromises.mkdir(targetDir, { recursive: true });
 
   for (const [fileName, baseIncoming] of Object.entries<EditorConfigValue>(editorConfig.files)) {
-    const incoming: EditorConfigValue =
+    let incoming = baseIncoming;
+    if (
       editorId === 'vscode' &&
       fileName === 'settings.json' &&
       extraVsCodeSettings &&
       typeof baseIncoming !== 'string'
-        ? { ...extraVsCodeSettings, ...baseIncoming }
-        : editorId === 'jetbrains' && fileName === 'workspace.xml'
-          ? jetbrainsWorkspaceConfig(packageManager)
-          : baseIncoming;
+    ) {
+      incoming = { ...extraVsCodeSettings, ...baseIncoming };
+    } else if (editorId === 'jetbrains' && fileName === 'workspace.xml') {
+      incoming = jetbrainsWorkspaceConfig(packageManager);
+    }
     const filePath = path.join(targetDir, fileName);
     const jsonFormat = isJsonLikeFile(fileName);
 

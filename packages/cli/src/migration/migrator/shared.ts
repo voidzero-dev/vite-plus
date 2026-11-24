@@ -535,3 +535,19 @@ export function rewriteScriptMap(
   const updated = rewrite(JSON.stringify(commands));
   return updated ? parseJsonObject(updated) : undefined;
 }
+
+/** Rewrite the command fields that both ESLint and Prettier can appear in. */
+export function rewritePackageScriptFields(
+  pkg: { scripts?: Scripts; 'lint-staged'?: StagedCommands },
+  rewrite: NativeScriptRewrite,
+): boolean {
+  const scripts = pkg.scripts && rewriteScriptMap(pkg.scripts, rewrite);
+  if (scripts) {
+    pkg.scripts = scripts;
+  }
+  const staged = pkg['lint-staged'] && rewriteScriptMap(pkg['lint-staged'], rewrite);
+  if (staged) {
+    pkg['lint-staged'] = staged;
+  }
+  return Boolean(scripts || staged);
+}

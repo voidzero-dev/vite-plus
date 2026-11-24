@@ -3,6 +3,13 @@ import { readFileSync } from 'node:fs';
 import type { JsonObject } from '../../cli/src/utils/json-value.ts';
 import { isObjectValue, parseJsonObject, isStringRecord } from '../../cli/src/utils/json-value.ts';
 
+export const dependencyFields = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+] as const;
+
 export interface PackageManifest extends JsonObject {
   name?: string;
   version?: string;
@@ -16,16 +23,13 @@ export interface PackageManifest extends JsonObject {
 
 function isPackageManifest(value: JsonObject): value is PackageManifest {
   return (
-    (value.name === undefined || typeof value.name === 'string') &&
-    (value.version === undefined || typeof value.version === 'string') &&
-    [
-      value.dependencies,
-      value.devDependencies,
-      value.optionalDependencies,
-      value.peerDependencies,
-    ].every((deps) => deps === undefined || isStringRecord(deps)) &&
-    (value.peerDependenciesMeta === undefined || isObjectValue(value.peerDependenciesMeta)) &&
-    (value.bundledVersions === undefined || isObjectValue(value.bundledVersions))
+    [value.name, value.version].every(
+      (field) => field === undefined || typeof field === 'string',
+    ) &&
+    dependencyFields.every((field) => value[field] === undefined || isStringRecord(value[field])) &&
+    [value.peerDependenciesMeta, value.bundledVersions].every(
+      (field) => field === undefined || isObjectValue(field),
+    )
   );
 }
 

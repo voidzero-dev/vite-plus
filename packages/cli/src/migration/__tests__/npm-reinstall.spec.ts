@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { readJsonFile } from '../../utils/json.ts';
 import { prepareNpmViteAliasReinstall } from '../npm-reinstall.ts';
 import { fixtureObject } from './fixture-json.ts';
 
@@ -62,14 +63,11 @@ describe('prepareNpmViteAliasReinstall', () => {
         .changed,
     ).toBe(true);
 
-    const lock = fixtureObject(
-      JSON.parse(fs.readFileSync(path.join(rootDir, 'package-lock.json'), 'utf8')),
-    );
-    expect(fixtureObject(lock, 'packages')['node_modules/vite']).toBeUndefined();
-    expect(
-      fixtureObject(lock, 'packages')['node_modules/consumer/node_modules/vite'],
-    ).toBeUndefined();
-    expect(fixtureObject(lock, 'packages')['packages/app/node_modules/vite']).toBeDefined();
+    const lock = readJsonFile(path.join(rootDir, 'package-lock.json'));
+    const packages = fixtureObject(lock, 'packages');
+    expect(packages['node_modules/vite']).toBeUndefined();
+    expect(packages['node_modules/consumer/node_modules/vite']).toBeUndefined();
+    expect(packages['packages/app/node_modules/vite']).toBeDefined();
     expect(fs.existsSync(staleRootVite)).toBe(false);
     expect(fs.existsSync(staleNestedVite)).toBe(false);
     expect(fs.existsSync(coreVite)).toBe(true);

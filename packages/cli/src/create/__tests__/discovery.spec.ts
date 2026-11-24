@@ -272,6 +272,13 @@ describe('expandCreateShorthand', () => {
   });
 });
 
+function standaloneWorkspace(): WorkspaceInfo {
+  const workspace = makeWorkspaceInfo('/tmp/workspace', { isMonorepo: false });
+  workspace.downloadPackageManager.binPrefix = '/tmp/bin';
+  workspace.downloadPackageManager.version = '10.0.0';
+  return workspace;
+}
+
 describe('GitHub template helpers', () => {
   it('should parse GitHub shorthand URLs', () => {
     expect(parseGitHubUrl('github:user/repo')).toBe('user/repo');
@@ -288,42 +295,18 @@ describe('GitHub template helpers', () => {
   });
 
   it('should resolve GitHub templates to degit without reusing the original URL as destination', () => {
-    const template = discoverTemplate('https://github.com/nkzw-tech/fate-template', ['my-app'], {
-      rootDir: '/tmp/workspace',
-      isMonorepo: false,
-      monorepoScope: '',
-      workspacePatterns: [],
-      parentDirs: [],
-      packageManager: 'pnpm',
-      packageManagerVersion: 'latest',
-      downloadPackageManager: {
-        ...makeWorkspaceInfo('/tmp/workspace').downloadPackageManager,
-        binPrefix: '/tmp/bin',
-        version: '10.0.0',
-      },
-      packages: [],
-    });
+    const template = discoverTemplate(
+      'https://github.com/nkzw-tech/fate-template',
+      ['my-app'],
+      standaloneWorkspace(),
+    );
 
     expect(template.command).toBe('degit');
     expect(template.args).toEqual(['nkzw-tech/fate-template', 'my-app']);
   });
 
   it('should keep manifest-resolved specifiers literal when skipShorthand=true', () => {
-    const workspace = {
-      rootDir: '/tmp/workspace',
-      isMonorepo: false,
-      monorepoScope: '',
-      workspacePatterns: [],
-      parentDirs: [],
-      packageManager: 'pnpm',
-      packageManagerVersion: 'latest',
-      downloadPackageManager: {
-        ...makeWorkspaceInfo('/tmp/workspace').downloadPackageManager,
-        binPrefix: '/tmp/bin',
-        version: '10.0.0',
-      },
-      packages: [],
-    } satisfies WorkspaceInfo;
+    const workspace = standaloneWorkspace();
 
     // A manifest entry like `{ template: '@your-org/template-web' }` must
     // NOT be rewritten into `@your-org/create-template-web` by the create

@@ -6,8 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkspaceInfo } from '../../types/index.js';
 import { PackageManager } from '../../types/index.js';
-import type { JsonObject } from '../../utils/json.ts';
-import { readJsonFile } from '../../utils/json.ts';
+import { readJsonFile as readJson } from '../../utils/json.ts';
 import { fixtureObject } from './fixture-json.ts';
 
 // Mock with file: protocol paths (simulating VP_OVERRIDE_PACKAGES in CI)
@@ -44,10 +43,6 @@ function makeWorkspaceInfo(rootDir: string, packageManager: PackageManager): Wor
     },
     packages: [],
   };
-}
-
-function readJson(filePath: string): JsonObject {
-  return readJsonFile(filePath);
 }
 
 describe('rewriteMonorepo bun catalog with file: protocol', () => {
@@ -112,8 +107,10 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
-    expect(fixtureObject(fixtureObject(pkg, 'workspaces').catalog ?? {}).vite).toBeUndefined();
-    expect(fixtureObject(fixtureObject(pkg, 'workspaces').catalog ?? {}).vitest).toBeUndefined();
+    const workspaces = fixtureObject(pkg, 'workspaces');
+    const catalog = fixtureObject(workspaces.catalog ?? {});
+    expect(catalog.vite).toBeUndefined();
+    expect(catalog.vitest).toBeUndefined();
     expect(pkg).toHaveProperty(['workspaces', 'catalogs', 'build', 'vite'], '^7.0.0');
     expect(pkg).toHaveProperty(['workspaces', 'catalogs', 'build', 'vitest'], '^4.0.0');
     expect(fixtureObject(pkg, 'workspaces', 'catalogs', 'build').tsdown).toBeUndefined();

@@ -118,13 +118,15 @@ export function validateTemplateEntry(
   if (!entry || typeof entry !== 'object') {
     throw makeError(`${label}[${index}] must be an object`);
   }
-  const requireString = (field: string, value: unknown): string => {
+  const fields: { name?: unknown; description?: unknown; template?: unknown } = entry;
+  const requireString = (field: keyof CreateTemplateEntry): string => {
+    const value = field in fields ? fields[field] : undefined;
     if (typeof value !== 'string' || value.length === 0) {
       throw makeError(`${label}[${index}].${field} must be a non-empty string`);
     }
     return value;
   };
-  const name = requireString('name', 'name' in entry ? entry.name : undefined);
+  const name = requireString('name');
   // `__vp_` is reserved for internal sentinel values (e.g. the
   // org-picker's escape-hatch nonce in `org-picker.ts`). Reject the
   // prefix at schema time so an entry can never collide with those
@@ -132,11 +134,8 @@ export function validateTemplateEntry(
   if (name.startsWith('__vp_')) {
     throw makeError(`${label}[${index}].name uses the reserved \`__vp_\` prefix`);
   }
-  const description = requireString(
-    'description',
-    'description' in entry ? entry.description : undefined,
-  );
-  const template = requireString('template', 'template' in entry ? entry.template : undefined);
+  const description = requireString('description');
+  const template = requireString('template');
 
   if (isRelativePath(template)) {
     // Defense-in-depth only: `resolveBundledPath` enforces the authoritative
@@ -188,14 +187,14 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
 }
 
 function validateManifest(raw: unknown, packageName: string): Array<OrgTemplateEntry> | null {
-  if (!raw || typeof raw !== 'object') {
+  if (!raw || typeof raw !== 'object' || !('createConfig' in raw)) {
     return null;
   }
-  const createConfig = 'createConfig' in raw ? raw.createConfig : undefined;
-  if (!createConfig || typeof createConfig !== 'object') {
+  const { createConfig } = raw;
+  if (!createConfig || typeof createConfig !== 'object' || !('templates' in createConfig)) {
     return null;
   }
-  const templates = 'templates' in createConfig ? createConfig.templates : undefined;
+  const { templates } = createConfig;
   if (templates === undefined) {
     return null;
   }
