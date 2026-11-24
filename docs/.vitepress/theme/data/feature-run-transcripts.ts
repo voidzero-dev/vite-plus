@@ -1,6 +1,6 @@
 import type { TerminalTranscript } from './terminal-transcripts';
 
-export const featureRunTranscripts: TerminalTranscript[] = [
+export const featureRunTranscripts: Array<TerminalTranscript> = [
   {
     id: 'cold',
     label: 'Cold Cache',

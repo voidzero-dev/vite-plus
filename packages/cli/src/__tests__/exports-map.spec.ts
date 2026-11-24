@@ -1,3 +1,15 @@
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import os from 'node:os';
+import path from 'node:path';
+import url from 'node:url';
+
+import { isStringLiteral } from 'typescript/unstable/ast';
+import type { Project } from 'typescript/unstable/sync';
+import { API } from 'typescript/unstable/sync';
+import { assert } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 /**
  * Regression tests for the generated package.json `exports` map.
  *
@@ -11,34 +23,32 @@
  * `require` BEFORE `default` and that runtime resolution returns the
  * expected file extension for each consumer.
  */
-import fs from 'node:fs';
-import { createRequire } from 'node:module';
-import os from 'node:os';
-import path from 'node:path';
-import url from 'node:url';
+import { isJsonObject } from '../utils/json-value.ts';
+import { readJsonFile } from '../utils/json.ts';
 
-import { isStringLiteral } from 'typescript/unstable/ast';
-import { API, type Project } from 'typescript/unstable/sync';
-import { describe, expect, it } from 'vitest';
-
-const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');
+const cliPkgDir = path.resolve(import.meta.dirname, '../..');
 const cliPkgJsonPath = path.join(cliPkgDir, 'package.json');
 const requireFromHere = createRequire(import.meta.url);
 
-type ExportConditions = Record<string, unknown>;
-
-function isConditionObject(value: unknown): value is ExportConditions {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function readExports() {
+  const { exports } = readJsonFile(cliPkgJsonPath);
+  assert(isJsonObject(exports), 'Expected package.json exports');
+  return exports;
 }
 
 // `default` is a module-shape artifact, not a named export migration cares
 // about; only the named bindings need to survive the `vitest/config` rewrite.
-function namedValueExports(mod: Record<string, unknown>): string[] {
-  return Object.keys(mod).filter((key) => key !== 'default');
+function namedValueExports(keys: Array<string>): Array<string> {
+  return keys.filter((key) => key !== 'default');
+}
+
+function missingExports(names: Array<string>, entries: Array<[string, unknown]>) {
+  const available = new Map(entries);
+  return names.filter((name) => available.get(name) === undefined);
 }
 
 function withTypeProject<T>(
-  files: string[],
+  files: Array<string>,
   check: (project: Project) => T,
   sources: Record<string, string> = {},
 ): T {
@@ -72,7 +82,7 @@ function withTypeProject<T>(
   }
 }
 
-function projectDiagnostics({ program }: Project): string[] {
+function projectDiagnostics({ program }: Project): Array<string> {
   return [
     ...program.getConfigFileParsingDiagnostics(),
     ...program.getProgramDiagnostics(),
@@ -82,7 +92,7 @@ function projectDiagnostics({ program }: Project): string[] {
   ].map((diagnostic) => diagnostic.text);
 }
 
-function typeDiagnostics(source: string, separator: string = path.sep): string[] {
+function typeDiagnostics(source: string, separator: string = path.sep): Array<string> {
   const filename = path.join(cliPkgDir, '__test_exports__.mts').replaceAll(/[\\/]/g, separator);
   return withTypeProject([filename], projectDiagnostics, {
     [filename.replaceAll('\\', '/')]: source,
@@ -149,9 +159,12 @@ alias({ contextOptions: { reducedMotion: 'bogus' } });
   });
 
   it('resolves every runtime test export under Node ESM conditions', () => {
-    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
-    for (const [key, value] of Object.entries(pkg.exports as Record<string, ExportConditions>)) {
-      if (!(key === './test' || key.startsWith('./test/')) || (!value.default && !value.import)) {
+    for (const [key, value] of Object.entries(readExports())) {
+      if (
+        !(key === './test' || key.startsWith('./test/')) ||
+        !isJsonObject(value) ||
+        (!value.default && !value.import)
+      ) {
         continue;
       }
       const resolved = import.meta.resolve(`vite-plus${key.slice(1)}`);
@@ -160,11 +173,11 @@ alias({ contextOptions: { reducedMotion: 'bogus' } });
   });
 
   it.each(['/', '\\'])('compiles all typed test exports with %s path separators', (separator) => {
-    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf8'));
-    const entries = Object.entries(pkg.exports as Record<string, ExportConditions>).filter(
+    const entries = Object.entries(readExports()).filter(
       ([key, entry]) =>
         (key === './test' || key.startsWith('./test/')) &&
-        (entry.types || (isConditionObject(entry.import) && entry.import.types)),
+        isJsonObject(entry) &&
+        (entry.types || (isJsonObject(entry.import) && entry.import.types)),
     );
     const source =
       entries
@@ -240,12 +253,13 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
         const source = program.getSourceFile(file);
         expect(source, file).toBeDefined();
         for (const specifier of source!.imports) {
-          if (isStringLiteral(specifier) && specifier.text.startsWith('.')) {
-            expect(
-              checker.getSymbolAtLocation(specifier)?.declarations?.length,
-              `${path.relative(directory, file)}: ${specifier.text}`,
-            ).toBeGreaterThan(0);
+          if (!isStringLiteral(specifier) || !specifier.text.startsWith('.')) {
+            continue;
           }
+          expect(
+            checker.getSymbolAtLocation(specifier)?.declarations?.length,
+            `${path.relative(directory, file)}: ${specifier.text}`,
+          ).toBeGreaterThan(0);
         }
       }
     });
@@ -273,13 +287,12 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
   });
 
   it('every dual-condition entry emits `require` before `default`', () => {
-    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
-    const exports = pkg.exports as Record<string, unknown>;
+    const exports = readExports();
 
-    const offenders: Array<{ path: string; order: string[] }> = [];
+    const offenders: Array<{ path: string; order: Array<string> }> = [];
 
     function walk(subpath: string, value: unknown) {
-      if (!isConditionObject(value)) {
+      if (!isJsonObject(value)) {
         return;
       }
       const keys = Object.keys(value);
@@ -340,13 +353,11 @@ const invalidClick: UserEventClickOptions = { force: 'yes' };
   it('browser-playwright declaration uses NodeNext-compatible relative specifiers', () => {
     // Matches quoted relative module specifiers such as './node' and '../browser.js'.
     const relativeModuleSpecifier = /(['"])(\.\.?\/[^'"]+)\1/g;
-    const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
-    const entry = (pkg.exports as Record<string, unknown>)['./test/browser-playwright'];
-    expect(isConditionObject(entry)).toBe(true);
-    const types = (entry as ExportConditions).types;
-    expect(types).toBeTypeOf('string');
-
-    const source = fs.readFileSync(path.resolve(cliPkgDir, types as string), 'utf-8');
+    const entry = readExports()['./test/browser-playwright'];
+    assert(isJsonObject(entry));
+    const { types } = entry;
+    assert(typeof types === 'string');
+    const source = fs.readFileSync(path.resolve(cliPkgDir, types), 'utf8');
     const relativeSpecifiers = Array.from(
       source.matchAll(relativeModuleSpecifier),
       (match) => match[2],
@@ -369,13 +380,11 @@ describe('Oxlint JS-plugin authoring entrypoints', () => {
       import('vite-plus/lint/plugins'),
       import('@oxlint/plugins'),
     ]);
-    const expected = namedValueExports(oxlintPlugins);
+    const expected = namedValueExports(Object.keys(oxlintPlugins));
     expect(expected.length, 'sanity: @oxlint/plugins should expose value exports').toBeGreaterThan(
       0,
     );
-    const missing = expected.filter(
-      (key) => !(key in lintPlugins) || (lintPlugins as Record<string, unknown>)[key] === undefined,
-    );
+    const missing = missingExports(expected, Object.entries(lintPlugins));
     expect(missing, '@oxlint/plugins value exports missing from vite-plus/lint/plugins').toEqual(
       [],
     );
@@ -385,7 +394,7 @@ describe('Oxlint JS-plugin authoring entrypoints', () => {
     // A `.cts` plugin, or a `.ts` one compiled with `module: commonjs`, emits
     // its import as `require()`. `@oxlint/plugins` ships CJS, so the shim does
     // too. `plugins-dev` instead exposes its ESM entry to both module systems.
-    const plugins = requireFromHere('vite-plus/lint/plugins') as Record<string, unknown>;
+    const plugins = requireFromHere('vite-plus/lint/plugins');
     expect(plugins.defineRule).toBeTypeOf('function');
     expect(plugins.definePlugin).toBeTypeOf('function');
   });
@@ -397,8 +406,8 @@ describe('Oxlint JS-plugin authoring entrypoints', () => {
 
   it('serves the same RuleTester to CommonJS', async () => {
     // Static imports in .cts files compile to require() after migration.
-    const ruleTester = requireFromHere('vite-plus/lint/plugins-dev') as Record<string, unknown>;
-    const upstream = requireFromHere('oxlint/plugins-dev') as Record<string, unknown>;
+    const ruleTester = requireFromHere('vite-plus/lint/plugins-dev');
+    const upstream = requireFromHere('oxlint/plugins-dev');
     const esm = await import('vite-plus/lint/plugins-dev');
     expect(ruleTester.RuleTester).toBeTypeOf('function');
     expect(ruleTester.RuleTester).toBe(upstream.RuleTester);
@@ -431,22 +440,20 @@ describe('vite-plus root re-exports the full vitest/config surface', () => {
       import('vite-plus'),
       import('vitest/config'),
     ]);
-    const expected = namedValueExports(vitestConfig);
+    const expected = namedValueExports(Object.keys(vitestConfig));
     expect(expected.length, 'sanity: vitest/config should expose value exports').toBeGreaterThan(0);
-    const missing = expected.filter(
-      (key) => !(key in vitePlus) || (vitePlus as Record<string, unknown>)[key] === undefined,
-    );
+    const missing = missingExports(expected, Object.entries(vitePlus));
     expect(missing, 'vitest/config value exports missing from the ESM vite-plus root').toEqual([]);
   });
 
   it('exposes every vitest/config value export on the CJS vite-plus root', () => {
     // `require('vitest/config')` -> `require('vite-plus')` resolves the package
     // root's `require` condition (the index.cts build), a separate manual list.
-    const vitePlus = requireFromHere('vite-plus') as Record<string, unknown>;
-    const vitestConfig = requireFromHere('vitest/config') as Record<string, unknown>;
-    const expected = namedValueExports(vitestConfig);
+    const vitePlus = requireFromHere('vite-plus');
+    const vitestConfig = requireFromHere('vitest/config');
+    const expected = namedValueExports(Object.keys(vitestConfig));
     expect(expected.length, 'sanity: vitest/config should expose value exports').toBeGreaterThan(0);
-    const missing = expected.filter((key) => !(key in vitePlus) || vitePlus[key] === undefined);
+    const missing = missingExports(expected, Object.entries(vitePlus));
     expect(missing, 'vitest/config value exports missing from the CJS vite-plus root').toEqual([]);
   });
 });

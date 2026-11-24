@@ -2,6 +2,8 @@ import path from 'node:path';
 
 import { normalize } from 'verkit';
 
+import type { JsonObject } from '../utils/json-value.ts';
+import { isJsonObject, isObjectValue, isStringRecord } from '../utils/json-value.ts';
 import { fetchNpmResource, getNpmRegistry } from '../utils/npm-config.ts';
 import { readPackageJsonFromTarball } from './org-tarball.ts';
 
@@ -33,7 +35,7 @@ export interface OrgManifest {
   version: string;
   tarballUrl: string;
   integrity?: string;
-  templates: OrgTemplateEntry[];
+  templates: Array<OrgTemplateEntry>;
 }
 
 /**
@@ -116,15 +118,13 @@ export function validateTemplateEntry(
   if (!entry || typeof entry !== 'object') {
     throw makeError(`${label}[${index}] must be an object`);
   }
-  const raw = entry as Record<string, unknown>;
-  const requireString = (field: string): string => {
-    const value = raw[field];
+  const requireString = (field: string, value: unknown): string => {
     if (typeof value !== 'string' || value.length === 0) {
       throw makeError(`${label}[${index}].${field} must be a non-empty string`);
     }
     return value;
   };
-  const name = requireString('name');
+  const name = requireString('name', 'name' in entry ? entry.name : undefined);
   // `__vp_` is reserved for internal sentinel values (e.g. the
   // org-picker's escape-hatch nonce in `org-picker.ts`). Reject the
   // prefix at schema time so an entry can never collide with those
@@ -132,8 +132,11 @@ export function validateTemplateEntry(
   if (name.startsWith('__vp_')) {
     throw makeError(`${label}[${index}].name uses the reserved \`__vp_\` prefix`);
   }
-  const description = requireString('description');
-  const template = requireString('template');
+  const description = requireString(
+    'description',
+    'description' in entry ? entry.description : undefined,
+  );
+  const template = requireString('template', 'template' in entry ? entry.template : undefined);
 
   if (isRelativePath(template)) {
     // Defense-in-depth only: `resolveBundledPath` enforces the authoritative
@@ -153,12 +156,12 @@ export function validateTemplateEntry(
  * manifests and local `create.templates`.
  */
 export function validateTemplateEntries<T extends CreateTemplateEntry>(
-  templates: readonly unknown[],
+  templates: ReadonlyArray<unknown>,
   label: string,
   makeError: (message: string) => Error,
   validateOne: (entry: unknown, index: number) => T,
-): T[] {
-  const entries: T[] = [];
+): Array<T> {
+  const entries: Array<T> = [];
   const seen = new Set<string>();
   for (let index = 0; index < templates.length; index += 1) {
     const entry = validateOne(templates[index], index);
@@ -175,27 +178,24 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
   const makeError = (message: string) => new OrgManifestSchemaError(message, packageName);
   const base = validateTemplateEntry(entry, index, 'createConfig.templates', makeError);
 
-  let monorepo: boolean | undefined;
-  const raw = entry as Record<string, unknown>;
-  if (raw.monorepo !== undefined) {
-    if (typeof raw.monorepo !== 'boolean') {
+  if (entry && typeof entry === 'object' && 'monorepo' in entry && entry.monorepo !== undefined) {
+    if (typeof entry.monorepo !== 'boolean') {
       throw makeError(`createConfig.templates[${index}].monorepo must be a boolean`);
     }
-    monorepo = raw.monorepo;
+    return { ...base, monorepo: entry.monorepo };
   }
-
-  return { ...base, ...(monorepo !== undefined ? { monorepo } : {}) };
+  return base;
 }
 
-function validateManifest(raw: unknown, packageName: string): OrgTemplateEntry[] | null {
+function validateManifest(raw: unknown, packageName: string): Array<OrgTemplateEntry> | null {
   if (!raw || typeof raw !== 'object') {
     return null;
   }
-  const createConfig = (raw as { createConfig?: unknown }).createConfig;
+  const createConfig = 'createConfig' in raw ? raw.createConfig : undefined;
   if (!createConfig || typeof createConfig !== 'object') {
     return null;
   }
-  const templates = (createConfig as { templates?: unknown }).templates;
+  const templates = 'templates' in createConfig ? createConfig.templates : undefined;
   if (templates === undefined) {
     return null;
   }
@@ -232,7 +232,7 @@ const makeCreateConfigError = (message: string) => new CreateConfigSchemaError(m
  * is absent or an empty array; throws {@link CreateConfigSchemaError} when present
  * but malformed.
  */
-export function validateCreateTemplates(templates: unknown): CreateTemplateEntry[] {
+export function validateCreateTemplates(templates: unknown): Array<CreateTemplateEntry> {
   if (templates === undefined) {
     return [];
   }
@@ -263,25 +263,7 @@ export function validateCreateTemplates(templates: unknown): CreateTemplateEntry
   );
 }
 
-interface RegistryPackument {
-  name?: string;
-  'dist-tags'?: Record<string, string>;
-  versions?: Record<string, RegistryVersionMeta>;
-}
-
-interface RegistryVersionMeta {
-  version?: string;
-  createConfig?: unknown;
-  dist?: {
-    tarball?: string;
-    integrity?: string;
-  };
-}
-
-async function fetchPackument(
-  scope: string,
-  packageName: string,
-): Promise<RegistryPackument | null> {
+async function fetchPackument(scope: string, packageName: string): Promise<JsonObject | null> {
   // npm's registry URLs keep `@` and `/` unencoded
   // (`https://registry.npmjs.org/@scope/name`). Match that — private
   // registries often route on the literal path.
@@ -296,7 +278,8 @@ async function fetchPackument(
   if (!response.ok) {
     throw new Error(`npm registry responded with ${response.status} for ${packageName}`);
   }
-  return (await response.json()) as RegistryPackument;
+  const value: unknown = await response.json();
+  return isJsonObject(value) ? value : null;
 }
 
 /**
@@ -331,19 +314,20 @@ export async function readOrgManifest(
   if (!packument) {
     return null;
   }
+  const tags = isStringRecord(packument['dist-tags']) ? packument['dist-tags'] : undefined;
+  const versions = isObjectValue(packument.versions) ? packument.versions : undefined;
   let resolvedVersion: string | undefined;
   if (requestedVersion) {
     resolvedVersion =
-      packument['dist-tags']?.[requestedVersion] ??
-      (packument.versions?.[requestedVersion] ? requestedVersion : undefined);
+      tags?.[requestedVersion] ?? (versions?.[requestedVersion] ? requestedVersion : undefined);
     if (!resolvedVersion) {
       throw new OrgManifestSchemaError(
-        `version "${requestedVersion}" not found (known tags: ${Object.keys(packument['dist-tags'] ?? {}).join(', ') || 'none'})`,
+        `version "${requestedVersion}" not found (known tags: ${Object.keys(tags ?? {}).join(', ') || 'none'})`,
         packageName,
       );
     }
   } else {
-    resolvedVersion = packument['dist-tags']?.latest;
+    resolvedVersion = tags?.latest;
     if (!resolvedVersion) {
       return null;
     }
@@ -356,12 +340,15 @@ export async function readOrgManifest(
       packageName,
     );
   }
-  const meta = packument.versions?.[resolvedVersion];
-  if (!meta) {
+  const meta = versions?.[resolvedVersion];
+  if (!isObjectValue(meta)) {
     return null;
   }
+  const dist = isObjectValue(meta.dist) ? meta.dist : undefined;
+  const tarball = typeof dist?.tarball === 'string' ? dist.tarball : undefined;
+  const integrity = typeof dist?.integrity === 'string' ? dist.integrity : undefined;
   let templates = validateManifest(meta, packageName);
-  if (!templates && meta.createConfig === undefined && meta.dist?.tarball) {
+  if (!templates && meta.createConfig === undefined && tarball) {
     // `createConfig` absent (not merely empty) means the registry either
     // stripped it from the version metadata or the package has no manifest;
     // probe the published tarball to tell the two apart (see
@@ -370,24 +357,21 @@ export async function readOrgManifest(
     // `@scope/create` package still reaches the passthrough path. A manifest
     // that IS present but malformed still throws, because `validateManifest`
     // runs outside the catch.
-    const packageJson = await readPackageJsonFromTarball(
-      meta.dist.tarball,
-      meta.dist.integrity,
-    ).catch(() => null);
+    const packageJson = await readPackageJsonFromTarball(tarball, integrity).catch(() => null);
     templates = validateManifest(packageJson, packageName);
   }
   if (!templates) {
     return null;
   }
-  if (!meta.dist?.tarball) {
+  if (!tarball) {
     throw new OrgManifestSchemaError(`missing dist.tarball for ${resolvedVersion}`, packageName);
   }
   return {
     scope,
     packageName,
     version: resolvedVersion,
-    tarballUrl: meta.dist.tarball,
-    integrity: meta.dist.integrity,
+    tarballUrl: tarball,
+    integrity,
     templates,
   };
 }
@@ -398,9 +382,9 @@ export async function readOrgManifest(
  * existing monorepo, mirroring `initial-template-options.ts:9-31`.
  */
 export function filterManifestForContext(
-  templates: readonly OrgTemplateEntry[],
+  templates: ReadonlyArray<OrgTemplateEntry>,
   isMonorepo: boolean,
-): OrgTemplateEntry[] {
+): Array<OrgTemplateEntry> {
   if (!isMonorepo) {
     return [...templates];
   }

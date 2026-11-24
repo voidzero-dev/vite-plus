@@ -2,6 +2,9 @@ import { resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
+import type { JsonValue } from '../../packages/cli/src/utils/json-value.ts';
+import { isJsonObject, isObjectValue } from '../../packages/cli/src/utils/json-value.ts';
+
 /** The registry used by the release workflow. */
 export const DEFAULT_NPM_REGISTRY = 'https://registry.npmjs.org';
 
@@ -16,14 +19,10 @@ export type NpmPackageVersion = {
   version: string;
 };
 
-interface AbbreviatedPackument {
-  versions?: Record<string, { dist?: { tarball?: string } }>;
-}
-
 export type FetchLike = (
   url: string,
   init?: { method?: string; headers?: Record<string, string>; signal?: AbortSignal },
-) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+) => Promise<{ ok: boolean; status: number; json: Response['json'] }>;
 
 export interface WaitForNpmPackagesOptions {
   registry: string;
@@ -43,22 +42,25 @@ type NpmRegistryRequestOptions = Pick<WaitForNpmPackagesOptions, 'registry' | 'f
   signal?: AbortSignal;
 };
 
-async function fetchNpmPackument(
-  name: string,
+async function fetchNpmVersion(
+  pkg: NpmPackageVersion,
   options: NpmRegistryRequestOptions,
-): Promise<AbbreviatedPackument | null> {
+): Promise<JsonValue | undefined> {
   const registry = options.registry.replace(/\/+$/, '');
-  const response = await options.fetchImpl(`${registry}/${name.replace('/', '%2f')}`, {
+  const response = await options.fetchImpl(`${registry}/${pkg.name.replace('/', '%2f')}`, {
     headers: { accept: ABBREVIATED_PACKUMENT_ACCEPT },
     signal: options.signal,
   });
   if (response.status === 404) {
-    return null;
+    return undefined;
   }
   if (!response.ok) {
     throw new Error(`registry returned HTTP ${response.status}`);
   }
-  return (await response.json()) as AbbreviatedPackument;
+  const data: unknown = await response.json();
+  return isJsonObject(data) && isObjectValue(data.versions)
+    ? data.versions[pkg.version]
+    : undefined;
 }
 
 /** Checks whether npm has made an immutable package version visible. */
@@ -66,8 +68,7 @@ export async function isNpmPackagePublished(
   pkg: NpmPackageVersion,
   options: NpmRegistryRequestOptions,
 ): Promise<boolean> {
-  const packument = await fetchNpmPackument(pkg.name, options);
-  return packument?.versions?.[pkg.version] !== undefined;
+  return (await fetchNpmVersion(pkg, options)) !== undefined;
 }
 
 /**
@@ -78,9 +79,10 @@ export async function isNpmPackageAvailable(
   pkg: NpmPackageVersion,
   options: NpmRegistryRequestOptions,
 ): Promise<boolean> {
-  const packument = await fetchNpmPackument(pkg.name, options);
-  const tarball = packument?.versions?.[pkg.version]?.dist?.tarball;
-  if (!tarball) {
+  const version = await fetchNpmVersion(pkg, options);
+  const tarball =
+    isObjectValue(version) && isObjectValue(version.dist) ? version.dist.tarball : undefined;
+  if (typeof tarball !== 'string' || !tarball) {
     return false;
   }
 
@@ -109,7 +111,7 @@ function propagationTimeoutError(
  * on to a package that pins it as a dependency.
  */
 export async function waitForNpmPackages(
-  packages: readonly NpmPackageVersion[],
+  packages: ReadonlyArray<NpmPackageVersion>,
   options: WaitForNpmPackagesOptions,
 ): Promise<void> {
   if (packages.length === 0) {
@@ -204,7 +206,7 @@ function readNonNegativeInteger(name: string, fallback: number): number {
 
 /** Uses the release workflow's propagation settings. */
 export async function waitForNpmPackagesFromEnv(
-  packages: readonly NpmPackageVersion[],
+  packages: ReadonlyArray<NpmPackageVersion>,
 ): Promise<void> {
   if (process.env.PUBLISH_SKIP_PROPAGATION_WAIT === 'true') {
     console.log('Skipping npm propagation wait.');
@@ -234,7 +236,7 @@ async function main(): Promise<void> {
 
 const invokedPath = process.argv[1];
 if (invokedPath && pathToFileURL(resolve(invokedPath)).href === import.meta.url) {
-  main().catch((error: unknown) => {
+  await main().catch((error: unknown) => {
     console.error(`::error::${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
   });

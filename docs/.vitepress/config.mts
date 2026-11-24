@@ -2,7 +2,8 @@ import { resolve } from 'node:path';
 
 import type { VoidZeroThemeConfig } from '@voidzero-dev/vitepress-theme';
 import { extendConfig } from '@voidzero-dev/vitepress-theme/config';
-import { defineConfig, type HeadConfig } from 'vitepress';
+import type { HeadConfig } from 'vitepress';
+import { defineConfig } from 'vitepress';
 import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons';
 import llmstxt from 'vitepress-plugin-llms';
 import { withMermaid } from 'vitepress-plugin-mermaid';
@@ -355,8 +356,17 @@ export default extendConfig(
           },
         ];
 
-        const ogInfo: HeadConfig[] = [
-          ['meta', { property: 'og:title', content: pageData.frontmatter.title ?? 'Vite+' }],
+        const ogInfo: Array<HeadConfig> = [
+          [
+            'meta',
+            {
+              property: 'og:title',
+              content:
+                typeof pageData.frontmatter.title === 'string'
+                  ? pageData.frontmatter.title
+                  : 'Vite+',
+            },
+          ],
           [
             'meta',
             {
@@ -369,7 +379,10 @@ export default extendConfig(
             'meta',
             {
               property: 'og:description',
-              content: pageData.frontmatter.description ?? 'The Unified Toolchain for the Web',
+              content:
+                typeof pageData.frontmatter.description === 'string'
+                  ? pageData.frontmatter.description
+                  : 'The Unified Toolchain for the Web',
             },
           ],
         ];

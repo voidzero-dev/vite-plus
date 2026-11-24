@@ -2,15 +2,20 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import type { WorkspaceInfo } from '../../types/index.ts';
+import type { runCommand as runCommandImplementation } from '../../utils/command.ts';
 import { runCommandSilently } from '../../utils/command.ts';
 import { runRemoteTemplateCommand } from '../templates/remote.ts';
 import type { TemplateInfo } from '../templates/types.ts';
+import { makeWorkspaceInfo } from './workspace-fixture.ts';
 
-vi.mock('../../utils/command.ts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../utils/command.ts')>()),
-  runCommand: vi.fn(),
-  runCommandSilently: vi.fn(async () => ({ exitCode: 0 })),
+vi.mock(import('../../utils/command.ts'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runCommand: vi.fn<typeof runCommandImplementation>(),
+  runCommandSilently: vi.fn<typeof runCommandSilently>(async () => ({
+    exitCode: 0,
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
+  })),
 }));
 
 describe('runRemoteTemplateCommand', () => {
@@ -18,15 +23,16 @@ describe('runRemoteTemplateCommand', () => {
   // An older global `vp` in VP_CLI_BIN must not run it, so this package's CLI runs on the current Node.js.
   it("runs the template through this package's vp dlx with the selected package manager", async () => {
     vi.stubEnv('VP_CLI_BIN', '/old/global/vp');
-    const workspaceInfo = {
+    const workspaceInfo = makeWorkspaceInfo('/workspace', {
       packageManager: 'pnpm',
       packageManagerVersion: '10.32.0',
-    } as unknown as WorkspaceInfo;
+    });
     const templateInfo = {
       command: 'create-foo',
       args: ['app'],
       envs: {},
-    } as unknown as TemplateInfo;
+      type: 'remote',
+    } satisfies TemplateInfo;
 
     await runRemoteTemplateCommand(workspaceInfo, '/workspace', templateInfo, false, true);
     vi.unstubAllEnvs();
@@ -41,16 +47,17 @@ describe('runRemoteTemplateCommand', () => {
 
   // The generator may run inside the new workspace, whose registry could resolve a tag differently.
   it('forwards the resolved override instead of the tag the user gave', async () => {
-    const workspaceInfo = {
+    const workspaceInfo = makeWorkspaceInfo('/workspace', {
       packageManager: 'pnpm',
       packageManagerVersion: '10.18.0',
       packageManagerOverride: 'pnpm@10.18.0+sha512.abc',
-    } as unknown as WorkspaceInfo;
+    });
     const templateInfo = {
       command: 'create-foo',
       args: [],
       envs: { VP_PACKAGE_MANAGER: 'pnpm@latest+sha512.abc' },
-    } as unknown as TemplateInfo;
+      type: 'remote',
+    } satisfies TemplateInfo;
 
     await runRemoteTemplateCommand(workspaceInfo, '/workspace', templateInfo, false, true);
 

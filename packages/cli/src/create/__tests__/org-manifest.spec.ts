@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { createTarGzip } from 'nanotar';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { JsonObject } from '../../utils/json-value.ts';
+import type { OrgTemplateEntry } from '../org-manifest.js';
 import {
   CreateConfigSchemaError,
   filterManifestForContext,
@@ -10,7 +12,6 @@ import {
   parseOrgScopedSpec,
   readOrgManifest,
   validateCreateTemplates,
-  type OrgTemplateEntry,
 } from '../org-manifest.js';
 
 describe('validateCreateTemplates', () => {
@@ -125,7 +126,7 @@ describe('parseOrgScopedSpec', () => {
 });
 
 describe('filterManifestForContext', () => {
-  const templates: OrgTemplateEntry[] = [
+  const templates: Array<OrgTemplateEntry> = [
     { name: 'monorepo', description: 'root', template: './m', monorepo: true },
     { name: 'web', description: 'web', template: './w' },
     { name: 'library', description: 'lib', template: './l' },
@@ -143,11 +144,7 @@ describe('filterManifestForContext', () => {
 
 const TARBALL_URL = 'https://registry.npmjs.org/@your-org/create/-/create-1.0.0.tgz';
 
-function packument(
-  vpTemplates: unknown,
-  extra: Record<string, unknown> = {},
-  extraVersions: Record<string, unknown> = {},
-) {
+function packument(vpTemplates: unknown, extra: JsonObject = {}, extraVersions: JsonObject = {}) {
   return {
     name: '@your-org/create',
     'dist-tags': { latest: '1.0.0' },
@@ -166,19 +163,13 @@ function packument(
   };
 }
 
-function mockFetchJson(body: unknown, status = 200): ReturnType<typeof vi.spyOn> {
-  return vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-    status,
-    ok: status >= 200 && status < 300,
-    async json() {
-      return body;
-    },
-  } as unknown as Response);
+function mockFetchJson(body: unknown, status = 200) {
+  return vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(body, { status }));
 }
 
 /** Resolve the requested URL from any of `fetch`'s accepted input shapes. */
 function requestUrl(input: string | URL | Request): string {
-  return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  return typeof input === 'string' ? input : 'href' in input ? input.href : input.url;
 }
 
 /** A real npm-pack-shaped tarball containing only a package.json. */
@@ -195,10 +186,7 @@ async function tarballWith(packageJson: unknown): Promise<Uint8Array> {
  * Mock fetch to serve the packument for the registry URL and a real tarball
  * `Response` (with a streamable body) for the `.tgz` URL.
  */
-function mockFetchPackumentAndTarball(
-  packumentBody: unknown,
-  tarBytes: Uint8Array,
-): ReturnType<typeof vi.spyOn> {
+function mockFetchPackumentAndTarball(packumentBody: unknown, tarBytes: Uint8Array) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     if (requestUrl(input).endsWith('.tgz')) {
       return new Response(tarBytes.slice().buffer, { status: 200 });
@@ -213,7 +201,7 @@ describe('readOrgManifest', () => {
   });
 
   it('returns null on 404', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ status: 404, ok: false } as Response);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
     expect(await readOrgManifest('@your-org')).toBeNull();
   });
 
@@ -342,10 +330,7 @@ describe('readOrgManifest', () => {
   });
 
   it('throws when the registry responds with a non-404 error', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      status: 500,
-      ok: false,
-    } as Response);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 500 }));
     await expect(readOrgManifest('@your-org')).rejects.toThrow(/500/);
   });
 
@@ -405,24 +390,14 @@ describe('readOrgManifest', () => {
       const body = packument([{ name: 'a', description: 'a', template: '@a/a' }]);
       const mockFetch = vi
         .spyOn(globalThis, 'fetch')
-        .mockResolvedValueOnce({ status: 401, ok: false } as Response)
-        .mockResolvedValueOnce({
-          status: 200,
-          ok: true,
-          async json() {
-            return body;
-          },
-        } as unknown as Response);
+        .mockResolvedValueOnce(new Response(null, { status: 401 }))
+        .mockResolvedValueOnce(Response.json(body));
       await readOrgManifest('@your-org');
       expect(mockFetch).toHaveBeenCalledTimes(2);
-      const [, firstInit] = mockFetch.mock.calls[0] as [string, RequestInit];
-      expect(
-        (firstInit.headers as Record<string, string> | undefined)?.authorization,
-      ).toBeUndefined();
-      const [, secondInit] = mockFetch.mock.calls[1] as [string, RequestInit];
-      expect((secondInit.headers as Record<string, string>).authorization).toBe(
-        'Bearer SECRET-TOKEN',
-      );
+      const [, firstInit] = mockFetch.mock.calls[0];
+      expect(new Headers(firstInit?.headers).get('authorization')).toBeNull();
+      const [, secondInit] = mockFetch.mock.calls[1];
+      expect(new Headers(secondInit?.headers).get('authorization')).toBe('Bearer SECRET-TOKEN');
     } finally {
       for (const [k, v] of Object.entries(originals)) {
         if (v === undefined) {
@@ -438,8 +413,8 @@ describe('readOrgManifest', () => {
     const mockFetch = mockFetchJson(packument([{ name: 'a', description: 'a', template: '@a/a' }]));
     await readOrgManifest('@your-org');
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect((init.headers as Record<string, string>).authorization).toBeUndefined();
+    const [, init] = mockFetch.mock.calls[0];
+    expect(new Headers(init?.headers).has('authorization')).toBe(false);
   });
 
   it('resolves a pinned version instead of dist-tags.latest', async () => {

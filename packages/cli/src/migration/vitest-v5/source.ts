@@ -1,4 +1,9 @@
-import type * as t from '@oxc-project/types';
+import type {
+  BindingProperty,
+  CallExpression,
+  Node,
+  TSInterfaceDeclaration,
+} from '@oxc-project/types';
 
 import entryPoints from '../../vitest-v5-entry-points.json' with { type: 'json' };
 import {
@@ -10,6 +15,8 @@ import {
   isBoolean,
   isRegExp,
 } from '../ast-utils.ts';
+import { lookupSetting } from '../migrator/shared.ts';
+import type { RewriteResult, SourceOptions } from './ast.ts';
 import {
   NODE_SOURCES,
   ROOT_TEST_SOURCES,
@@ -17,12 +24,10 @@ import {
   importedName,
   testApiName,
   isImportMetaVitest,
-  type RewriteResult,
-  type SourceOptions,
 } from './ast.ts';
 import { migrateBenchmarks } from './benchmarks.ts';
 
-const RUNNER_SYMBOLS: Record<string, string> = {
+const RUNNER_SYMBOLS = {
   test: 'test',
   it: 'it',
   describe: 'describe',
@@ -39,7 +44,7 @@ const RUNNER_SYMBOLS: Record<string, string> = {
   VitestRunner: 'VitestTestRunner',
   VitestRunnerConfig: 'TestRunnerConfig',
 };
-const RUNNER_METHODS: Record<string, string> = {
+const RUNNER_METHODS = {
   getCurrentSuite: 'getCurrentSuite',
   getCurrentTest: 'getCurrentTest',
   createTaskCollector: 'createTaskCollector',
@@ -120,14 +125,14 @@ const ASSERTION_SOURCES = new Set(['vitest', 'vite-plus/test', ...EXPECT_SOURCES
  * populateGlobal. A map merely named `originals` is not a Vitest API. */
 function globalRestorationOrigin(
   editor: SourceEditor,
-  node: t.Node,
-  seen = new Set<t.Node>(),
+  node: Node,
+  seen = new Set<Node>(),
 ): 'result' | 'originals' | 'value' | undefined {
   if (seen.has(node)) {
     return undefined;
   }
   seen.add(node);
-  const origin = (value: t.Node) => globalRestorationOrigin(editor, value, seen);
+  const origin = (value: Node) => globalRestorationOrigin(editor, value, seen);
   if (node.type === 'CallExpression') {
     if (importedName(editor, node.callee, ENVIRONMENT_SOURCES) === 'populateGlobal') {
       return 'result';
@@ -196,7 +201,7 @@ function globalRestorationOrigin(
   return undefined;
 }
 
-function assertionTypeName(editor: SourceEditor, node: t.Node): string | undefined {
+function assertionTypeName(editor: SourceEditor, node: Node): string | undefined {
   if (node.type === 'TSQualifiedName') {
     if (
       node.left.type === 'Identifier' &&
@@ -226,7 +231,7 @@ function assertionTypeName(editor: SourceEditor, node: t.Node): string | undefin
   return node.name;
 }
 
-function isJestMatchers(editor: SourceEditor, node: t.TSInterfaceDeclaration): boolean {
+function isJestMatchers(editor: SourceEditor, node: TSInterfaceDeclaration): boolean {
   let block = editor.parent(node);
   if (block?.type === 'ExportNamedDeclaration') {
     block = editor.parent(block);
@@ -242,7 +247,7 @@ function isJestMatchers(editor: SourceEditor, node: t.TSInterfaceDeclaration): b
 
 function replacementImport(source: string, name: string): string | undefined {
   if (RUNNER_SOURCES.has(source)) {
-    return RUNNER_SYMBOLS[name];
+    return lookupSetting(RUNNER_SYMBOLS, name);
   }
   if (RUNNERS_SOURCES.has(source) && name === 'VitestTestRunner') {
     return 'TestRunner';
@@ -253,7 +258,7 @@ function replacementImport(source: string, name: string): string | undefined {
   return undefined;
 }
 
-function processApiName(editor: SourceEditor, node: t.Node): string | undefined {
+function processApiName(editor: SourceEditor, node: Node): string | undefined {
   const imported = importedName(editor, node, CHILD_PROCESS_SOURCES);
   if (imported) {
     return imported;
@@ -305,7 +310,7 @@ export function hasVitestV5SourceUsage(file: string, source: string): boolean {
       source.slice(start, end),
     ),
   );
-  const moduleReference = (node: t.Node | null | undefined) => {
+  const moduleReference = (node: Node | null | undefined) => {
     if (
       isString(node) &&
       /^(?:vitest(?:\/|$)|@vitest\/|vite-plus\/test(?:\/|$))/.test(node.value)
@@ -355,7 +360,7 @@ export function hasVitestV5SourceUsage(file: string, source: string): boolean {
   return used;
 }
 
-function looksLikeConstructorMock(editor: SourceEditor, node: t.CallExpression): boolean {
+function looksLikeConstructorMock(editor: SourceEditor, node: CallExpression): boolean {
   if (
     node.arguments.some(
       (argument) => argument.type === 'ClassExpression' || argument.type === 'FunctionExpression',
@@ -382,7 +387,7 @@ function looksLikeConstructorMock(editor: SourceEditor, node: t.CallExpression):
   return false;
 }
 
-function unwrapTypeExpression(node: t.Node): t.Node {
+function unwrapTypeExpression(node: Node): Node {
   while (
     node.type === 'TSAsExpression' ||
     node.type === 'TSSatisfiesExpression' ||
@@ -396,8 +401,8 @@ function unwrapTypeExpression(node: t.Node): t.Node {
 
 /** Recognize a local promise consumed by a later statement without crossing
  * control flow or function boundaries. Ambiguous paths still need review. */
-function isAssertionBindingHandled(editor: SourceEditor, node: t.CallExpression): boolean {
-  let initializer: t.Node = node;
+function isAssertionBindingHandled(editor: SourceEditor, node: CallExpression): boolean {
+  let initializer: Node = node;
   let declarator = editor.parent(initializer);
   while (declarator && unwrapTypeExpression(declarator) === node) {
     initializer = declarator;
@@ -470,12 +475,9 @@ function isAssertionBindingHandled(editor: SourceEditor, node: t.CallExpression)
   return false;
 }
 
-function chain(
-  node: t.Node,
-  isApi: (node: t.Node) => boolean,
-): { root: t.Node; members: string[]; calls: t.CallExpression[] } {
-  const members: string[] = [];
-  const calls: t.CallExpression[] = [];
+function chain(node: Node, isApi: (node: Node) => boolean) {
+  const members: Array<string> = [];
+  const calls: Array<CallExpression> = [];
   while (node.type === 'MemberExpression' || node.type === 'CallExpression') {
     if (node.optional) {
       break;
@@ -539,17 +541,17 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
   const editor = new SourceEditor(file, source);
   const reviewV4 = options.preserveV4 || options.reviewV4;
   const benchmarks = migrateBenchmarks(editor, options.globals);
-  const runnerAliases: string[] = [];
-  const asyncFunctions = new Set<t.Node>();
+  const runnerAliases: Array<string> = [];
+  const asyncFunctions = new Set<Node>();
   // Import edits are offset-based, so bindings still refer to the old module
   // while this traversal visits the assertions that must migrate with them.
-  function apiName(node: t.Node): string | undefined {
+  function apiName(node: Node): string | undefined {
     return (
       testApiName(editor, node, options.globals) ??
       (importedName(editor, node, EXPECT_SOURCES) === 'expect' ? 'expect' : undefined)
     );
   }
-  function canAwait(node: t.Node): boolean {
+  function canAwait(node: Node): boolean {
     const fn = editor.functionParent(node);
     if (!fn) {
       return false;
@@ -579,7 +581,7 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
     return true;
   }
 
-  function unsupported(node: t.Node, source: string, symbol: string, typeOnly: boolean) {
+  function unsupported(node: Node, source: string, symbol: string, typeOnly: boolean) {
     editor.report(
       node,
       'removed-api',
@@ -588,7 +590,7 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
     );
   }
 
-  function dynamicImport(node: t.Node, source: string): void {
+  function dynamicImport(node: Node, source: string): void {
     if (LEGACY_API_SOURCES.has(source)) {
       unsupported(node, source, 'dynamic/CommonJS import', false);
     }
@@ -615,38 +617,43 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
           }
         }
       }
-      if (source in entryPoints) {
-        editor.replace(
-          node.source,
-          JSON.stringify(entryPoints[source as keyof typeof entryPoints]),
-        );
+      const entryPoint = lookupSetting(entryPoints, source);
+      if (entryPoint !== undefined) {
+        editor.replace(node.source, JSON.stringify(entryPoint));
         return;
       }
       if (!LEGACY_API_SOURCES.has(source)) {
         return;
       }
-      const imports: string[] = [];
-      const constants: string[] = [];
-      const remaining: string[] = [];
+      const imports: Array<string> = [];
+      const constants: Array<string> = [];
+      const remaining: Array<string> = [];
       let runnerName: string | undefined;
       for (const specifier of node.specifiers) {
         const typeOnly =
           node.importKind === 'type' ||
           (specifier.type === 'ImportSpecifier' && specifier.importKind === 'type');
-        const name = specifier.type === 'ImportSpecifier' ? propertyName(specifier.imported)! : '*';
+        const name =
+          specifier.type === 'ImportSpecifier'
+            ? specifier.imported.type === 'Identifier'
+              ? specifier.imported.name
+              : specifier.imported.value
+            : '*';
         const target = replacementImport(source, name);
         if (target) {
           imports.push(
             `${typeOnly ? 'type ' : ''}${target}${specifier.local.name === target ? '' : ` as ${specifier.local.name}`}`,
           );
-        } else if (RUNNER_SOURCES.has(source) && RUNNER_METHODS[name] && !typeOnly) {
+        } else if (RUNNER_SOURCES.has(source) && lookupSetting(RUNNER_METHODS, name) && !typeOnly) {
           if (!runnerName) {
             runnerName = editor.uniqueName('VitestTestRunner');
             imports.push(`TestRunner as ${runnerName}`);
           }
           // Static fields are the original functions, so aliases retain function
           // identity and also work as callback values (not only direct calls).
-          constants.push(`const ${specifier.local.name} = ${runnerName}.${RUNNER_METHODS[name]};`);
+          constants.push(
+            `const ${specifier.local.name} = ${runnerName}.${lookupSetting(RUNNER_METHODS, name)};`,
+          );
         } else {
           unsupported(specifier, source, name, typeOnly);
           remaining.push(editor.text(specifier));
@@ -669,15 +676,13 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
       }
     },
     ExportNamedDeclaration(node) {
-      const source = node.source?.value;
-      if (!source) {
+      if (!node.source?.value) {
         return;
       }
-      if (source in entryPoints) {
-        editor.replace(
-          node.source!,
-          JSON.stringify(entryPoints[source as keyof typeof entryPoints]),
-        );
+      const source = node.source.value;
+      const entryPoint = lookupSetting(entryPoints, source);
+      if (entryPoint !== undefined) {
+        editor.replace(node.source, JSON.stringify(entryPoint));
       } else if (LEGACY_API_SOURCES.has(source)) {
         // Re-exports can expose a library contract. Do not silently replace it.
         for (const specifier of node.specifiers) {
@@ -883,11 +888,15 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
         ) {
           editor.replace(first, '/^$/');
         }
-        if (reviewV4 && matcher === 'toHaveTextContent') {
+        if (
+          reviewV4 &&
+          node.callee.type === 'MemberExpression' &&
+          matcher === 'toHaveTextContent'
+        ) {
           const browserAssertion = members.includes('element') || options.browser === true;
           const literal = isString(first) || isRegExp(first);
           if (options.preserveV4 && browserAssertion && literal) {
-            const callee = node.callee as t.MemberExpression;
+            const callee = node.callee;
             editor.replace(
               callee.property,
               callee.computed ? JSON.stringify('toMatchTextContent') : 'toMatchTextContent',
@@ -988,11 +997,13 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
             )
           ) {
             const vite = props.find(
-              (prop) => prop.type === 'Property' && propertyName(prop.key) === 'viteConfig',
-            ) as t.BindingProperty | undefined;
+              (prop): prop is BindingProperty =>
+                prop.type === 'Property' && propertyName(prop.key) === 'viteConfig',
+            );
             const vitest = props.find(
-              (prop) => prop.type === 'Property' && propertyName(prop.key) === 'vitestConfig',
-            ) as t.BindingProperty | undefined;
+              (prop): prop is BindingProperty =>
+                prop.type === 'Property' && propertyName(prop.key) === 'vitestConfig',
+            );
             const local = vite ? editor.text(vite.value) : editor.uniqueName('viteConfig');
             editor.replace(declaration.id, local);
             if (vitest) {
@@ -1018,8 +1029,8 @@ function rewriteSource(file: string, source: string, options: SourceOptions): Re
         }
       }
 
-      if (memberName(node.callee) === 'collect') {
-        const object = (node.callee as t.MemberExpression).object;
+      if (node.callee.type === 'MemberExpression' && memberName(node.callee) === 'collect') {
+        const object = node.callee.object;
         const binding = editor.binding(object);
         let initializer =
           binding?.declaration.type === 'VariableDeclarator' ? binding.declaration.init : undefined;

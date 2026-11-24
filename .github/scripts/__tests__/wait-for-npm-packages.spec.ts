@@ -2,9 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type { FetchLike, WaitForNpmPackagesOptions } from '../wait-for-npm-packages.ts';
 import {
-  type FetchLike,
-  type WaitForNpmPackagesOptions,
   isNpmPackageAvailable,
   parseNpmPackageSpec,
   waitForNpmPackages,
@@ -29,11 +28,14 @@ function options(
     minSeconds: 0,
     timeoutSeconds: 5,
     pollSeconds: 1,
-    sleep: vi.fn(
-      (milliseconds) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)),
+    sleep: vi.fn<WaitForNpmPackagesOptions['sleep']>(
+      (milliseconds) =>
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, milliseconds);
+        }),
     ),
     now: Date.now,
-    log: vi.fn(),
+    log: vi.fn<WaitForNpmPackagesOptions['log']>(),
     ...overrides,
   };
 }
@@ -93,7 +95,7 @@ describe('waitForNpmPackages', () => {
     await result;
 
     expect(waitOptions.sleep).toHaveBeenCalledTimes(2);
-    expect(waitOptions.sleep).toHaveBeenNthCalledWith(1, 5_000);
+    expect(waitOptions.sleep).toHaveBeenNthCalledWith(1, 5000);
     expect(waitOptions.sleep).toHaveBeenNthCalledWith(2, 60_000);
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -101,21 +103,21 @@ describe('waitForNpmPackages', () => {
   test('retries transient read failures until the timeout', async () => {
     const fetchImpl = vi.fn<FetchLike>().mockRejectedValue(new Error('temporary failure'));
     const waitOptions = options(fetchImpl, { pollSeconds: 2 });
-    const result = expect(waitForNpmPackages([pkg], waitOptions)).rejects.toThrow(
-      'Timed out after 5s waiting for npm propagation: pkg@1.2.3',
-    );
-
-    await vi.advanceTimersByTimeAsync(5_000);
-    await result;
+    await Promise.all([
+      expect(waitForNpmPackages([pkg], waitOptions)).rejects.toThrow(
+        'Timed out after 5s waiting for npm propagation: pkg@1.2.3',
+      ),
+      vi.advanceTimersByTimeAsync(5000),
+    ]);
 
     expect(fetchImpl).toHaveBeenCalledTimes(3);
-    expect(waitOptions.sleep).toHaveBeenLastCalledWith(1_000);
+    expect(waitOptions.sleep).toHaveBeenLastCalledWith(1000);
     expect(vi.getTimerCount()).toBe(0);
   });
 
   test('checks the deadline before each package', async () => {
     const fetchImpl = vi.fn<FetchLike>(async () => {
-      vi.setSystemTime(Date.now() + 5_000);
+      vi.setSystemTime(Date.now() + 5000);
       return response(404);
     });
 
@@ -128,13 +130,13 @@ describe('waitForNpmPackages', () => {
   });
 
   test('aborts a stalled request at the deadline and skips later packages', async () => {
-    const fetchImpl = vi.fn(stalledFetch);
-    const result = expect(waitForNpmPackages(pendingPackages, options(fetchImpl))).rejects.toThrow(
-      'Timed out after 5s waiting for npm propagation: first@1.2.3, second@1.2.3',
-    );
-
-    await vi.advanceTimersByTimeAsync(5_000);
-    await result;
+    const fetchImpl = vi.fn<FetchLike>(stalledFetch);
+    await Promise.all([
+      expect(waitForNpmPackages(pendingPackages, options(fetchImpl))).rejects.toThrow(
+        'Timed out after 5s waiting for npm propagation: first@1.2.3, second@1.2.3',
+      ),
+      vi.advanceTimersByTimeAsync(5000),
+    ]);
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);

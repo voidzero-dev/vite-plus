@@ -1,7 +1,9 @@
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+// oxlint-disable-next-line import/no-namespace -- The spies replace individual exports on the prompt module.
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -13,8 +15,14 @@ import {
   selectEditors,
   writeEditorConfigs,
 } from '../editor.js';
+import { isJsonObject } from '../json-value.ts';
 
-const tempDirs: string[] = [];
+function asSettings(value: unknown) {
+  assert(isJsonObject(value));
+  return value;
+}
+
+const tempDirs: Array<string> = [];
 
 function createTempDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-editor-config-'));
@@ -36,7 +44,7 @@ describe('selectEditors', () => {
     await expect(
       selectEditors({
         interactive: true,
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toEqual(['vscode', 'zed']);
 
@@ -67,7 +75,7 @@ describe('selectEditors', () => {
     await expect(
       selectEditors({
         interactive: true,
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toBeUndefined();
   });
@@ -77,7 +85,7 @@ describe('selectEditors', () => {
       selectEditors({
         interactive: false,
         editor: 'zed',
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toEqual(['zed']);
   });
@@ -89,7 +97,7 @@ describe('selectEditors', () => {
       selectEditors({
         interactive: false,
         editor: 'intellij',
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toEqual(['jetbrains']);
 
@@ -107,7 +115,7 @@ describe('selectEditors', () => {
       selectEditors({
         interactive: false,
         editor: 'webstorm',
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toEqual(['jetbrains']);
 
@@ -123,7 +131,7 @@ describe('selectEditors', () => {
 
     await selectEditors({
       interactive: true,
-      onCancel: vi.fn(),
+      onCancel: vi.fn<() => void>(),
     });
 
     expect(multiselectSpy).toHaveBeenCalledWith(
@@ -145,7 +153,7 @@ describe('selectEditor', () => {
       selectEditor({
         interactive: false,
         editor: 'intellij',
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toBe('jetbrains');
 
@@ -192,9 +200,9 @@ describe('writeEditorConfigs', () => {
       silent: true,
     });
 
-    const settings = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
-    ) as Record<string, unknown>;
+    const settings = asSettings(
+      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
+    );
 
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.disableNestedConfig']).toBe(true);
@@ -217,9 +225,9 @@ describe('writeEditorConfigs', () => {
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
 
-    const settings = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
-    ) as Record<string, unknown>;
+    const settings = asSettings(
+      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
+    );
 
     expect(settings['npm.scriptRunner']).toBe('vp');
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
@@ -261,7 +269,7 @@ describe('writeEditorConfigs', () => {
     expect(resultText).toContain('// JSONC comment');
     expect(resultText).toContain('// preserve existing key');
 
-    const settings = parseJsonc(resultText) as Record<string, unknown>;
+    const settings = asSettings(parseJsonc(resultText));
 
     // Existing key is preserved (merge never overwrites)
     expect(settings['editor.formatOnSave']).toBe(false);
@@ -278,7 +286,7 @@ describe('writeEditorConfigs', () => {
       expect(settings[lang]).toEqual({ 'editor.defaultFormatter': 'oxc.oxc-vscode' });
     }
 
-    const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
+    const codeActions = asSettings(settings['editor.codeActionsOnSave']);
     expect(codeActions['source.organizeImports']).toBe('explicit');
     expect(codeActions['source.fixAll.oxc']).toBe('explicit');
   });
@@ -309,7 +317,7 @@ describe('writeEditorConfigs', () => {
 
     expect(resultText).toContain("// Use the project's typescript version");
 
-    const settings = parseJsonc(resultText) as Record<string, unknown>;
+    const settings = asSettings(parseJsonc(resultText));
     expect(settings['typescript.tsdk']).toBe('node_modules/typescript/lib');
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
   });
@@ -342,8 +350,8 @@ describe('writeEditorConfigs', () => {
 
     expect(resultText).toContain('// keep my organize imports');
 
-    const settings = parseJsonc(resultText) as Record<string, unknown>;
-    const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
+    const settings = asSettings(parseJsonc(resultText));
+    const codeActions = asSettings(settings['editor.codeActionsOnSave']);
     expect(codeActions['source.organizeImports']).toBe('explicit');
     expect(codeActions['source.fixAll.oxc']).toBe('explicit');
   });
@@ -372,9 +380,9 @@ describe('writeEditorConfigs', () => {
       silent: true,
     });
 
-    const settings = parseJsonc(
-      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
-    ) as Record<string, unknown>;
+    const settings = asSettings(
+      parseJsonc(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
+    );
 
     expect(settings['editor.formatOnSave']).toBe(false);
     expect(settings['[typescript]']).toEqual({
@@ -405,12 +413,12 @@ describe('writeEditorConfigs', () => {
       silent: true,
     });
 
-    const settings = parseJsonc(
-      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
-    ) as Record<string, unknown>;
+    const settings = asSettings(
+      parseJsonc(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
+    );
 
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
-    const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
+    const codeActions = asSettings(settings['editor.codeActionsOnSave']);
     expect(codeActions['source.organizeImports']).toBe('explicit');
     expect(codeActions['source.fixAll.oxc']).toBe('explicit');
   });
@@ -446,7 +454,8 @@ describe('writeEditorConfigs', () => {
 
     expect(resultText).toContain('// keep my favorite extension');
 
-    const extensions = parseJsonc(resultText) as { recommendations: string[] };
+    const extensions = asSettings(parseJsonc(resultText));
+    assert(Array.isArray(extensions.recommendations));
     expect(extensions.recommendations).toContain('dbaeumer.vscode-eslint');
     expect(
       extensions.recommendations.filter((r) => r === 'VoidZero.vite-plus-extension-pack'),
@@ -521,10 +530,9 @@ describe('writeEditorConfigs', () => {
     expect(resultText).toContain('// my zed settings');
     expect(resultText).toContain('// keep this comment');
 
-    const settings = parseJsonc(resultText) as {
-      lsp?: { oxfmt?: { initialization_options?: { settings?: Record<string, unknown> } } };
-    };
-    expect(settings.lsp?.oxfmt?.initialization_options?.settings?.['fmt.configPath']).toBe(
+    const settings = asSettings(parseJsonc(resultText));
+    expect(settings).toHaveProperty(
+      ['lsp', 'oxfmt', 'initialization_options', 'settings', 'fmt.configPath'],
       './vite.config.ts',
     );
   });
@@ -548,9 +556,9 @@ describe('writeEditorConfigs', () => {
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
 
-    const settings = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
-    ) as Record<string, unknown>;
+    const settings = asSettings(
+      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
+    );
 
     // deepMerge preserves existing keys — 'npm' is not overwritten by 'vp'
     expect(settings['npm.scriptRunner']).toBe('npm');
@@ -566,30 +574,16 @@ describe('writeEditorConfigs', () => {
       silent: true,
     });
 
-    const settings = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8'),
-    ) as {
-      lsp?: {
-        oxlint?: {
-          initialization_options?: {
-            settings?: Record<string, unknown>;
-          };
-        };
-        oxfmt?: {
-          initialization_options?: {
-            settings?: {
-              'fmt.configPath'?: string;
-            };
-          };
-        };
-      };
-    };
+    const settings = asSettings(
+      JSON.parse(fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8')),
+    );
 
-    const lintSettings = settings.lsp?.oxlint?.initialization_options?.settings;
-    expect(lintSettings).toBeDefined();
-    expect(lintSettings).not.toHaveProperty('typeAware');
-    expect(lintSettings).not.toHaveProperty('unusedDisableDirectives');
-    expect(settings.lsp?.oxfmt?.initialization_options?.settings?.['fmt.configPath']).toBe(
+    const lintPath = ['lsp', 'oxlint', 'initialization_options', 'settings'];
+    expect(settings).toHaveProperty(lintPath);
+    expect(settings).not.toHaveProperty([...lintPath, 'typeAware']);
+    expect(settings).not.toHaveProperty([...lintPath, 'unusedDisableDirectives']);
+    expect(settings).toHaveProperty(
+      ['lsp', 'oxfmt', 'initialization_options', 'settings', 'fmt.configPath'],
       './vite.config.ts',
     );
   });
@@ -605,15 +599,15 @@ describe('writeEditorConfigs', () => {
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
 
-    const vscodeSettings = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
-    ) as Record<string, unknown>;
-    const vscodeExtensions = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, '.vscode', 'extensions.json'), 'utf8'),
-    ) as Record<string, unknown>;
-    const zedSettings = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8'),
-    ) as Record<string, unknown>;
+    const vscodeSettings = asSettings(
+      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8')),
+    );
+    const vscodeExtensions = asSettings(
+      JSON.parse(fs.readFileSync(path.join(projectRoot, '.vscode', 'extensions.json'), 'utf8')),
+    );
+    const zedSettings = asSettings(
+      JSON.parse(fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8')),
+    );
 
     expect(vscodeSettings['npm.scriptRunner']).toBe('vp');
     expect(vscodeExtensions.recommendations).toContain('VoidZero.vite-plus-extension-pack');

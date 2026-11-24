@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { isCancel, log, text } from '@voidzero-dev/vite-plus-prompts';
 
 import { createCatalogDependencyResolver, supportsCatalog } from '../../migration/migrator.ts';
 import type { WorkspaceInfo } from '../../types/index.ts';
+import { isStringRecord, isObjectValue } from '../../utils/json-value.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import { templatesDir } from '../../utils/path.ts';
 import { readYamlFile } from '../../utils/yaml.ts';
@@ -19,18 +20,18 @@ export async function executeGeneratorScaffold(
   options?: { silent?: boolean },
 ): Promise<ExecutionWithProjectDir> {
   if (!options?.silent) {
-    prompts.log.step('Creating generator scaffold...');
+    log.step('Creating generator scaffold...');
   }
   let description: string | undefined;
   if (templateInfo.interactive) {
     const defaultDescription = 'Generate new components for our monorepo';
-    const descPrompt = await prompts.text({
+    const descPrompt = await text({
       message: 'Description:',
       placeholder: defaultDescription,
       defaultValue: defaultDescription,
     });
 
-    if (!prompts.isCancel(descPrompt)) {
+    if (!isCancel(descPrompt)) {
       description = descPrompt;
     }
   }
@@ -51,14 +52,18 @@ export async function executeGeneratorScaffold(
         workspaceInfo.downloadPackageManager.version,
       )
     : undefined;
-  const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml')) as {
-    catalog: Record<string, string>;
-  };
+  const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml')) ?? {};
+  if (!isStringRecord(catalog)) {
+    throw new TypeError('Expected the monorepo template to define a package catalog');
+  }
   editJsonFile(path.join(fullPath, 'package.json'), (pkg) => {
     pkg.name = templateInfo.packageName;
     // Keep catalog references only when the target workspace can resolve them.
     // Missing entries use the same ranges as the bundled monorepo template.
-    const devDependencies = pkg.devDependencies as Record<string, string>;
+    const devDependencies = pkg.devDependencies;
+    if (!isObjectValue(devDependencies)) {
+      throw new TypeError('Invalid generator template devDependencies');
+    }
     for (const [name, spec] of Object.entries(devDependencies)) {
       if (spec === 'catalog:' && catalogResolver?.(spec, name) === undefined && catalog[name]) {
         devDependencies[name] = catalog[name];
@@ -71,7 +76,7 @@ export async function executeGeneratorScaffold(
   });
 
   if (!options?.silent) {
-    prompts.log.success('Generator scaffold created');
+    log.success('Generator scaffold created');
   }
   return { exitCode: 0, projectDir: templateInfo.targetDir };
 }

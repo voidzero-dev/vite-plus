@@ -10,16 +10,16 @@ import { PackageManager } from '../../types/index.ts';
 import { applyVitestV5Migration, planVitestV5Migration } from '../migrator.ts';
 
 vi.mock('yaml', async (importOriginal) => {
-  const yaml = await importOriginal<typeof import('yaml')>();
-  return { ...yaml, parseDocument: vi.fn(yaml.parseDocument) };
+  const yaml = await importOriginal<{ parseDocument: typeof parseDocument }>();
+  return { ...yaml, parseDocument: vi.fn<typeof yaml.parseDocument>(yaml.parseDocument) };
 });
 
-vi.mock('jsonc-parser', async (importOriginal) => {
-  const jsonc = await importOriginal<typeof import('jsonc-parser')>();
-  return { ...jsonc, parse: vi.fn(jsonc.parse) };
+vi.mock(import('jsonc-parser'), async (importOriginal) => {
+  const jsonc = await importOriginal();
+  return { ...jsonc, parse: vi.fn<typeof jsonc.parse>(jsonc.parse) };
 });
 
-const directories: string[] = [];
+const directories: Array<string> = [];
 afterEach(() => {
   vi.clearAllMocks();
   vi.restoreAllMocks();
@@ -107,6 +107,22 @@ describe('Vitest source versions from lockfiles', () => {
       expect(project(format, spec).plan().projects[0].sourceVersion).toBe('4.1.11');
     },
   );
+
+  it('resolves a pnpm importer alongside unrelated YAML aliases', () => {
+    const fixture = project('pnpm');
+    fs.writeFileSync(
+      fixture.file,
+      `lockfileVersion: '9.0'
+importers:
+  '.':
+    devDependencies:
+      vitest: { specifier: '^4 || ^5', version: 4.1.11 }
+metadata: &metadata
+  reference: *metadata
+`,
+    );
+    expect(fixture.plan().projects[0].sourceVersion).toBe('4.1.11');
+  });
 
   it.each(formats)('rejects stale %s importer/descriptor edges', (format) => {
     const plan = project(format, '^4 || ^5', '4.1.11', '^4.0.0').plan();
@@ -225,15 +241,13 @@ describe('Vitest source versions from lockfiles', () => {
     expect(plan.projects.map(({ sourceVersion }) => sourceVersion)).toEqual(['4.1.11', '4.1.11']);
     // One read captures the input snapshot and one parses the lockfile.
     expect(reads.mock.calls.filter(([file]) => file === fixture.file)).toHaveLength(2);
-    if (fixture.manager === PackageManager.npm) {
-      expect(json.mock.calls.filter(([source]) => source === before)).toHaveLength(1);
-    } else if (format === 'bun') {
-      expect(vi.mocked(parseJsonc).mock.calls.filter(([source]) => source === before)).toHaveLength(
-        1,
-      );
-    } else {
-      expect(parseDocument).toHaveBeenCalledTimes(1);
-    }
+    const parses =
+      fixture.manager === PackageManager.npm
+        ? json.mock.calls.filter(([source]) => source === before)
+        : format === 'bun'
+          ? vi.mocked(parseJsonc).mock.calls.filter(([source]) => source === before)
+          : vi.mocked(parseDocument).mock.calls;
+    expect(parses).toHaveLength(1);
 
     const after = before.replaceAll('4.1.11', '5.0.0');
     fs.writeFileSync(fixture.file, after);

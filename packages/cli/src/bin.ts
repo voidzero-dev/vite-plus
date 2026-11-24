@@ -9,12 +9,12 @@
  * vite-plus installation using oxc_resolver and runs its dist/bin.js directly.
  * If no local installation is found, this global dist/bin.js is used as fallback.
  */
-
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { isMainThread } from 'node:worker_threads';
 
-import { type DevCommand, ensureBlockingStdio, run } from '../binding/index.js';
+import type { DevCommand } from '../binding/index.js';
+import { ensureBlockingStdio, run } from '../binding/index.js';
 import { maybePrintCommandHelp } from './help.ts';
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.ts';
 import { doc } from './resolve-doc.ts';
@@ -23,6 +23,8 @@ import { lint } from './resolve-lint.ts';
 import { pack } from './resolve-pack.ts';
 import { test } from './resolve-test.ts';
 import { vite } from './resolve-vite.ts';
+import { errorMessage } from './utils/error.ts';
+import { setBlocking } from './utils/stdio.ts';
 import { accent, errorMsg, log } from './utils/terminal.ts';
 import { setUserAgent } from './utils/user-agent.ts';
 
@@ -30,13 +32,8 @@ setUserAgent();
 
 // Node.js sets O_NONBLOCK when pipe-backed stdio is first accessed. Materialize
 // the output streams before restoring the blocking semantics expected by Rust.
-Reflect.get(process, 'stdout');
-Reflect.get(process, 'stderr');
+const { stdout, stderr } = process;
 ensureBlockingStdio();
-
-interface StdioStream {
-  _handle?: { setBlocking?: (blocking: boolean) => number };
-}
 
 /**
  * Loading a config through Vite imports `node:process` as ESM, and building that
@@ -50,20 +47,7 @@ function restoreBlockingStdin(): void {
   if (process.platform === 'win32') {
     return;
   }
-  /* oxlint-disable-next-line no-underscore-dangle -- Node.js has no public API for this */
-  (process.stdin as StdioStream)._handle?.setBlocking?.(true);
-}
-
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-
-  if (typeof err === 'object' && err && 'message' in err && typeof err.message === 'string') {
-    return err.message;
-  }
-
-  return String(err);
+  setBlocking(process.stdin, true);
 }
 
 /**
@@ -78,10 +62,9 @@ async function runInProcess(command: DevCommand): Promise<void> {
   // Vite writes through this process's stdio. Let pipe writes queue, as they
   // do when Vite opens its own stdio, so a slow reader cannot stall the server.
   if (process.platform !== 'win32') {
-    for (const stream of [process.stdout, process.stderr]) {
+    for (const stream of [stdout, stderr]) {
       if (!stream.isTTY) {
-        /* oxlint-disable-next-line no-underscore-dangle -- Node.js has no public API for this */
-        (stream as StdioStream)._handle?.setBlocking?.(false);
+        setBlocking(stream, false);
       }
     }
   }
@@ -114,12 +97,13 @@ if (args[0]?.startsWith('-C')) {
   // through one catchable path.
   try {
     process.chdir(target);
-  } catch (err) {
-    const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined;
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       errorMsg(`directory not found: ${dir}`);
     } else {
-      errorMsg(`cannot change directory to ${dir}: ${getErrorMessage(err)}`);
+      errorMsg(`cannot change directory to ${dir}: ${errorMessage(error)}`);
     }
     process.exit(1);
   }
@@ -153,7 +137,7 @@ if (args[0] === 'help' && args[1]) {
 }
 
 const command = args[0];
-const cliDistDir = path.dirname(fileURLToPath(import.meta.url));
+const cliDistDir = import.meta.dirname;
 const vitePlusPackagePath = path.dirname(cliDistDir);
 
 if (maybePrintCommandHelp(args)) {
@@ -240,8 +224,8 @@ if (maybePrintCommandHelp(args)) {
             `Skipped initialization: '${accent(result.configKey)}' already exists in '${accent(path.basename(result.viteConfigPath))}'.`,
           );
         }
-      } catch (err) {
-        console.error('[Vite+] Failed to initialize config in vite.config.ts:', err);
+      } catch (error) {
+        console.error('[Vite+] Failed to initialize config in vite.config.ts:', error);
         finalExitCode = 1;
       }
     }
@@ -252,8 +236,8 @@ if (maybePrintCommandHelp(args)) {
     } else {
       process.exit(finalExitCode);
     }
-  } catch (err) {
-    errorMsg(getErrorMessage(err));
+  } catch (error) {
+    errorMsg(errorMessage(error));
     process.exit(1);
   }
 }

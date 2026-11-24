@@ -10,8 +10,10 @@ import { gunzipSync } from 'node:zlib';
 import { parseTriple } from '@napi-rs/cli';
 import { parseTar } from 'nanotar';
 import { parse } from 'yaml';
+import { z } from 'zod';
 
 import pkg from './package.json' with { type: 'json' };
+import { errorCode } from './src/utils/error.ts';
 
 export const INSTALL_LOCKFILE = 'vp-install-lock.yaml';
 // Keep in sync with the global installer in crates/vp_setup/src/install.rs.
@@ -68,15 +70,29 @@ function hasValidTarball(
   return tarball.startsWith(prefix) && /^[a-f0-9]{40}\.tgz$/.test(tarball.slice(prefix.length));
 }
 
-export function validateInstallLockfile(content: string, version: string): void {
-  const lock = parse(content) as {
-    lockfileVersion?: string;
-    importers?: Record<
-      string,
-      { dependencies?: Record<string, { specifier: string; version: string }> }
-    >;
-    packages?: Record<string, { resolution?: PackageResolution }>;
-  } | null;
+const resolutionSchema = z.object({
+  integrity: z.string().optional(),
+  tarball: z.string().optional(),
+});
+const lockfileSchema = z.object({
+  lockfileVersion: z.union([z.string(), z.number()]),
+  importers: z.record(
+    z.string(),
+    z.object({
+      dependencies: z
+        .record(z.string(), z.object({ specifier: z.string(), version: z.string() }))
+        .optional(),
+    }),
+  ),
+  packages: z.record(z.string(), z.object({ resolution: resolutionSchema.optional() })),
+});
+
+export function validateInstallLockfile(content: string, version: string) {
+  const parsed = lockfileSchema.safeParse(parse(content));
+  if (!parsed.success) {
+    throw new Error(`Invalid global installation lockfile for vite-plus@${version}`);
+  }
+  const lock = parsed.data;
   const cli = lock?.importers?.['.']?.dependencies?.['vite-plus'];
   const integrity = lock?.packages?.[`vite-plus@${version}`]?.resolution?.integrity;
   if (
@@ -90,13 +106,14 @@ export function validateInstallLockfile(content: string, version: string): void 
   ) {
     throw new Error(`Invalid global installation lockfile for vite-plus@${version}`);
   }
+  return lock;
 }
 
 /** Reuse the first published platform's lockfile after a partial release failure. */
 export async function publishedInstallLockfile(
   version: string,
   registry: string,
-  platformPackages: string[],
+  platformPackages: Array<string>,
   fetchImpl: typeof fetch = fetch,
 ): Promise<string | undefined> {
   for (const name of platformPackages) {
@@ -109,21 +126,19 @@ export async function publishedInstallLockfile(
     if (!response.ok) {
       throw new Error(`Could not check ${name}@${version}: HTTP ${response.status}`);
     }
-    const metadata = (await response.json()) as {
-      vpInstallLockfile?: boolean;
-      dist: { tarball: string; integrity: string };
-    };
+    const metadata = z
+      .object({ vpInstallLockfile: z.boolean().optional(), dist: z.unknown().optional() })
+      .parse(await response.json());
     if (!metadata.vpInstallLockfile) {
       throw new Error(`${name}@${version} was published without an installation lockfile`);
     }
-    const archive = await fetchImpl(metadata.dist.tarball, { signal: AbortSignal.timeout(60_000) });
+    const dist = z.object({ tarball: z.string(), integrity: z.string() }).parse(metadata.dist);
+    const archive = await fetchImpl(dist.tarball, { signal: AbortSignal.timeout(60_000) });
     if (!archive.ok) {
       throw new Error(`Could not download ${name}@${version}: HTTP ${archive.status}`);
     }
     const bytes = Buffer.from(await archive.arrayBuffer());
-    if (
-      `sha512-${createHash('sha512').update(bytes).digest('base64')}` !== metadata.dist.integrity
-    ) {
+    if (`sha512-${createHash('sha512').update(bytes).digest('base64')}` !== dist.integrity) {
       throw new Error(`Integrity mismatch for ${name}@${version}`);
     }
     const files = parseTar(new Uint8Array(gunzipSync(bytes)));
@@ -138,7 +153,11 @@ export async function publishedInstallLockfile(
   return undefined;
 }
 
-async function runPnpm(directory: string, args: string[], env: NodeJS.ProcessEnv): Promise<void> {
+async function runPnpm(
+  directory: string,
+  args: Array<string>,
+  env: NodeJS.ProcessEnv,
+): Promise<void> {
   await exec(
     'npm',
     ['exec', '--yes', `--package=pnpm@${INSTALL_PNPM_VERSION}`, '--', 'pnpm', ...args],
@@ -226,7 +245,7 @@ async function main(): Promise<void> {
   try {
     content = await readFile(join(directory, INSTALL_LOCKFILE), 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+    if (errorCode(error) !== 'ENOENT') {
       throw error;
     }
   }
@@ -242,7 +261,7 @@ async function main(): Promise<void> {
 
 const invokedPath = process.argv[1];
 if (invokedPath && pathToFileURL(resolve(invokedPath)).href === import.meta.url) {
-  main().catch((error: unknown) => {
+  await main().catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;
   });

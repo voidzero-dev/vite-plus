@@ -19,6 +19,7 @@ import {
   resolveApproveBuildTargets,
   stripPackageVersion,
 } from '../approve-builds.ts';
+import type { JsonObject } from '../json-value.ts';
 
 describe('isPnpmIgnoredBuildsError', () => {
   it('detects the pnpm >= 11 hard-error token', () => {
@@ -340,8 +341,8 @@ describe('resolveApproveBuildTargets', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  function writePkg(pkg: Record<string, unknown>) {
-    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg), 'utf-8');
+  function writePkg(pkg: JsonObject) {
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg), 'utf8');
   }
 
   it.each([PackageManager.pnpm, PackageManager.bun, PackageManager.yarn, PackageManager.npm])(
@@ -372,7 +373,7 @@ describe('resolveApproveBuildTargets', () => {
 
 describe('addYarnBuiltDependenciesMeta', () => {
   it('adds dependenciesMeta[pkg].built=true, creating the container', () => {
-    const pkg: Record<string, unknown> = { name: 'app' };
+    const pkg: JsonObject = { name: 'app' };
     addYarnBuiltDependenciesMeta(pkg, ['core-js', '@scope/native']);
     expect(pkg.dependenciesMeta).toEqual({
       'core-js': { built: true },
@@ -381,7 +382,7 @@ describe('addYarnBuiltDependenciesMeta', () => {
   });
 
   it('preserves existing per-package metadata', () => {
-    const pkg: Record<string, unknown> = {
+    const pkg: JsonObject = {
       dependenciesMeta: { 'core-js': { optional: true }, other: { built: false } },
     };
     addYarnBuiltDependenciesMeta(pkg, ['core-js']);
@@ -393,13 +394,13 @@ describe('addYarnBuiltDependenciesMeta', () => {
 
   it('does not corrupt a non-object existing entry (replaces it cleanly)', () => {
     // A hand-authored scalar value must not be spread into indexed-char keys.
-    const pkg: Record<string, unknown> = { dependenciesMeta: { 'core-js': 'oops' } };
+    const pkg: JsonObject = { dependenciesMeta: { 'core-js': 'oops' } };
     addYarnBuiltDependenciesMeta(pkg, ['core-js']);
     expect(pkg.dependenciesMeta).toEqual({ 'core-js': { built: true } });
   });
 
   it('ignores a non-object dependenciesMeta container', () => {
-    const pkg: Record<string, unknown> = { dependenciesMeta: 'nope' };
+    const pkg: JsonObject = { dependenciesMeta: 'nope' };
     addYarnBuiltDependenciesMeta(pkg, ['core-js']);
     expect(pkg.dependenciesMeta).toEqual({ 'core-js': { built: true } });
   });

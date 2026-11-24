@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { WorkspaceInfo, WorkspaceInfoOptional } from '../../types/index.js';
+import type { JsonObject } from '../../utils/json-value.ts';
 import {
   discoverTemplate,
   expandCreateShorthand,
@@ -12,6 +13,7 @@ import {
   inferParentDir,
   parseGitHubUrl,
 } from '../discovery.js';
+import { makeWorkspaceInfo } from './workspace-fixture.ts';
 
 // The local-package branch only engages for a resolved create.templates entry.
 function discoverLocal(workspaceInfo: WorkspaceInfo) {
@@ -27,20 +29,18 @@ describe('discoverTemplate', () => {
     }
   });
 
-  function createWorkspaceWithPackage(packageJson: Record<string, unknown>): WorkspaceInfo {
+  function createWorkspaceWithPackage(packageJson: JsonObject): WorkspaceInfo {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-discovery-spec-'));
     const packageDir = path.join(rootDir, 'tools/my-template');
     fs.mkdirSync(packageDir, { recursive: true });
     fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(packageJson));
-    return {
-      rootDir,
+    return makeWorkspaceInfo(rootDir, {
       isMonorepo: true,
       monorepoScope: '',
       workspacePatterns: ['tools/*'],
       parentDirs: ['tools'],
-      downloadPackageManager: { binPrefix: '' },
       packages: [{ name: 'my-template', path: 'tools/my-template' }],
-    } as unknown as WorkspaceInfo;
+    });
   }
 
   it('runs a local bingo template through its bin entry', () => {
@@ -162,10 +162,10 @@ describe('discoverTemplate', () => {
 
 // inferParentDir only reads parentDirs and packages off the workspace.
 function inferParentDirWorkspace(
-  parentDirs: string[],
+  parentDirs: Array<string>,
   packages: WorkspaceInfoOptional['packages'] = [],
 ): WorkspaceInfoOptional {
-  return { parentDirs, packages } as unknown as WorkspaceInfoOptional;
+  return makeWorkspaceInfo('/workspace', { parentDirs, packages });
 }
 
 describe('inferParentDir', () => {
@@ -297,9 +297,10 @@ describe('GitHub template helpers', () => {
       packageManager: 'pnpm',
       packageManagerVersion: 'latest',
       downloadPackageManager: {
+        ...makeWorkspaceInfo('/tmp/workspace').downloadPackageManager,
         binPrefix: '/tmp/bin',
         version: '10.0.0',
-      } as never,
+      },
       packages: [],
     });
 
@@ -316,9 +317,13 @@ describe('GitHub template helpers', () => {
       parentDirs: [],
       packageManager: 'pnpm',
       packageManagerVersion: 'latest',
-      downloadPackageManager: { binPrefix: '/tmp/bin', version: '10.0.0' } as never,
+      downloadPackageManager: {
+        ...makeWorkspaceInfo('/tmp/workspace').downloadPackageManager,
+        binPrefix: '/tmp/bin',
+        version: '10.0.0',
+      },
       packages: [],
-    } as never;
+    } satisfies WorkspaceInfo;
 
     // A manifest entry like `{ template: '@your-org/template-web' }` must
     // NOT be rewritten into `@your-org/create-template-web` by the create

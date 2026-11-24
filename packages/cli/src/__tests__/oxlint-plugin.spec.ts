@@ -190,7 +190,7 @@ describe('rewriteVitePlusImportSpecifier', () => {
   });
 });
 
-function checkImports(filename: string, preservedSpecifiers: readonly string[]): void {
+function checkImports(filename: string, preservedSpecifiers: ReadonlyArray<string>): void {
   const tests: RuleTester.TestCases = { valid: [], invalid: [] };
   for (const [specifier, binding, replacement] of [
     ['vitest', 'expect', 'vite-plus/test'],

@@ -5,7 +5,7 @@ import spawn from 'cross-spawn';
 
 export interface RunCommandOptions {
   command: string;
-  args: string[];
+  args: Array<string>;
   cwd: string;
   envs: NodeJS.ProcessEnv;
   /**
@@ -26,7 +26,7 @@ export interface RunCommandResult extends ExecutionResult {
 
 /** Run this CLI version even when a package-manager launcher does not expose `vp` on PATH. */
 export function getVpCommand(
-  args: string[],
+  args: Array<string>,
   command = process.env.VP_CLI_BIN,
 ): Pick<RunCommandOptions, 'command' | 'args'> {
   if (command !== undefined) {
@@ -36,7 +36,9 @@ export function getVpCommand(
 }
 
 /** Run this `vite-plus` package with the current Node.js, even when an older global `vp` launched it. */
-export function getLocalVpCommand(args: string[]): Pick<RunCommandOptions, 'command' | 'args'> {
+export function getLocalVpCommand(
+  args: Array<string>,
+): Pick<RunCommandOptions, 'command' | 'args'> {
   return {
     command: process.execPath,
     args: [fileURLToPath(import.meta.resolve('vite-plus/bin')), ...args],
@@ -61,8 +63,8 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     env: options.envs,
   });
   const promise = new Promise<RunCommandResult>((resolve, reject) => {
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
+    const stdout: Array<Buffer> = [];
+    const stderr: Array<Buffer> = [];
     let timedOut = false;
     // SIGKILL rather than SIGTERM: the timeout exists for children wedged in
     // arbitrary user code, which a catchable signal may never interrupt.
@@ -74,10 +76,10 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
             child.kill('SIGKILL');
           }, options.timeoutMs);
     timer?.unref();
-    child.stdout?.on('data', (data) => {
+    child.stdout?.on('data', (data: Buffer) => {
       stdout.push(data);
     });
-    child.stderr?.on('data', (data) => {
+    child.stderr?.on('data', (data: Buffer) => {
       stderr.push(data);
     });
     child.on('close', (code, signal) => {

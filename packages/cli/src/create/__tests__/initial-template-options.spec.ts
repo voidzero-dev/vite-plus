@@ -40,7 +40,7 @@ describe('getInitialTemplateOptions', () => {
   });
 
   it('lists local create.templates entries inside a monorepo, by name', () => {
-    const templates: CreateTemplateEntry[] = [
+    const templates: Array<CreateTemplateEntry> = [
       {
         name: 'component',
         description: 'Internal UI component',
@@ -65,7 +65,7 @@ describe('getInitialTemplateOptions', () => {
   });
 
   it('does not include local templates outside a monorepo', () => {
-    const templates: CreateTemplateEntry[] = [
+    const templates: Array<CreateTemplateEntry> = [
       { name: 'component', description: 'Internal UI component', template: 'component-generator' },
     ];
 

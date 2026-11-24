@@ -2,7 +2,9 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 import { documentationUrl as nativeDocumentationUrl } from '../../../binding/index.js';
 
-vi.mock('../../../binding/index.js', () => ({ documentationUrl: vi.fn() }));
+vi.mock('../../../binding/index.js', () => ({
+  documentationUrl: vi.fn<(path: string) => string>(),
+}));
 
 afterEach(() => {
   vi.resetAllMocks();

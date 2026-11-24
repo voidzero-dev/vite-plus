@@ -3,21 +3,25 @@ import os from 'node:os';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  confirm as promptConfirm,
+  isCancel,
+  log as promptLog,
+} from '@voidzero-dev/vite-plus-prompts';
 
 import { parseSync } from '../../../binding/index.js';
-import { type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
 import { readNearestPackageJson } from '../../utils/package.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { SCRIPT_EXTENSIONS, WATCH_OPTIONS_WITH_VALUE } from '../../vpx-script.ts';
+import type { ScriptRunnerCommandRewrite, ScriptRunnerMigration } from '../migrator.ts';
 import {
   detectScriptRunnerProject,
   migrateScriptRunnerToVpx,
   rewriteScriptRunnerCommand,
-  type ScriptRunnerCommandRewrite,
-  type ScriptRunnerMigration,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
+import { lookupSetting } from './shared.ts';
 
 // tsx in command position: `tsx a.ts`, `npx tsx`, `--import tsx`, `--import=tsx`,
 // `-r tsx/cjs`, `node_modules\.bin\tsx.cmd`, or inside a quoted command, in any case, as
@@ -121,7 +125,7 @@ const EXPORT_ASSIGNMENT = /(?:^|;)\s*export\s*=/m;
 // A relative `require()` of a JavaScript path, which tsx also resolves to TypeScript.
 const RELATIVE_REQUIRE =
   /(?<![.\w$])require\s*\(\s*['"`](\.{1,2}\/[^'"`]+?)\.(js|cjs|mjs|jsx)['"`]/g;
-const TYPESCRIPT_EXTENSIONS: Record<string, readonly string[]> = {
+const TYPESCRIPT_EXTENSIONS = {
   js: ['ts', 'tsx'],
   cjs: ['cts'],
   mjs: ['mts'],
@@ -153,15 +157,18 @@ export function rewriteTsxCommand(command: string, cwd?: string): TsxCommandRewr
   return rewriteScriptRunnerCommand(TSX_RUNNER, command, cwd);
 }
 
-export function detectTsxProject(rootDir: string, packages?: readonly WorkspacePackage[]): boolean {
+export function detectTsxProject(
+  rootDir: string,
+  packages?: ReadonlyArray<WorkspacePackage>,
+): boolean {
   return detectScriptRunnerProject(TSX_RUNNER, rootDir, packages);
 }
 
 export function migrateTsxToVpx(
   rootDir: string,
-  packages?: readonly WorkspacePackage[],
+  packages?: ReadonlyArray<WorkspacePackage>,
   report?: MigrationReport,
-): { changed: boolean; dependencyRemoved: boolean } {
+) {
   const result = migrateScriptRunnerToVpx(TSX_RUNNER, rootDir, packages, report);
   if (report && result.scriptsChanged) {
     report.tsxMigrated = true;
@@ -173,7 +180,7 @@ export function migrateTsxToVpx(
  * Why environment assignments keep tsx for the command they apply to, or undefined.
  * Names match in any case, as on Windows.
  */
-function envKeepReason(assignments: readonly string[]): string | undefined {
+function envKeepReason(assignments: ReadonlyArray<string>): string | undefined {
   if (
     assignments.some((value) => /^NODE_OPTIONS=/i.test(value) && TSX_COMMAND.test(value.slice(13)))
   ) {
@@ -210,7 +217,7 @@ export function typescriptScriptKeepReason(
     source = fs.readFileSync(file, 'utf8');
   } catch (error) {
     // A file that an earlier command generates cannot be checked yet.
-    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
       ? `\`${script}\` does not exist yet, so vp migrate cannot check it`
       : undefined;
   }
@@ -219,7 +226,9 @@ export function typescriptScriptKeepReason(
       const resolve = (ext: string) => path.resolve(path.dirname(file), `${base}.${ext}`);
       const typescript = fs.existsSync(resolve(extension))
         ? undefined
-        : TYPESCRIPT_EXTENSIONS[extension].find((ext) => fs.existsSync(resolve(ext)));
+        : lookupSetting(TYPESCRIPT_EXTENSIONS, extension)?.find((ext) =>
+            fs.existsSync(resolve(ext)),
+          );
       if (typescript) {
         return `\`${script}\` requires \`${base}.${extension}\`, which only ${runner} resolves to \`${base}.${typescript}\`; write the TypeScript extension`;
       }
@@ -409,7 +418,7 @@ function codeUsesTsx(content: string, file: string): boolean {
 
 export async function confirmTsxMigration(interactive: boolean): Promise<boolean> {
   if (interactive) {
-    const confirmed = await prompts.confirm({
+    const confirmed = await promptConfirm({
       message:
         'Migrate tsx scripts to Vite+?\n  ' +
         styleText(
@@ -418,11 +427,11 @@ export async function confirmTsxMigration(interactive: boolean): Promise<boolean
         ),
       initialValue: true,
     });
-    if (prompts.isCancel(confirmed)) {
+    if (isCancel(confirmed)) {
       cancelAndExit();
     }
     return confirmed;
   }
-  prompts.log.info('tsx scripts detected. Auto-migrating to Vite+...');
+  promptLog.info('tsx scripts detected. Auto-migrating to Vite+...');
   return true;
 }

@@ -3,9 +3,11 @@ import path from 'node:path';
 
 import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
 import { coerce, isLessThan } from 'verkit';
-import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
+import { isMap, isScalar, isSeq, Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
-import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   bunSupportsMergedDefaultCatalogs,
   createCatalogDependencyResolverFromCatalogs,
@@ -14,7 +16,6 @@ import {
   readBunCatalogDependencyResolver,
   selectPreferredCatalogSpec,
   versionAtLeast,
-  type CatalogDependencyResolver,
 } from '../../utils/catalog.ts';
 import {
   VITEST_AGE_GATE_EXEMPT_PACKAGES,
@@ -24,9 +25,15 @@ import {
   VITE_PLUS_VERSION,
   isForceOverrideMode,
 } from '../../utils/constants.ts';
+import { isObjectValue } from '../../utils/json-value.ts';
+import type { JsonObject, JsonValue } from '../../utils/json.ts';
+import { isJsonObject } from '../../utils/json.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
-import { type NpmWorkspaces } from '../../utils/workspace.ts';
-import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../../utils/yaml.ts';
+import type { NpmWorkspaces } from '../../utils/workspace.ts';
+import type { YamlMapping } from '../../utils/yaml-value.ts';
+import { isYamlMapping } from '../../utils/yaml-value.ts';
+import type { YamlDocument } from '../../utils/yaml.ts';
+import { editYamlFile, readYamlFile, scalarString } from '../../utils/yaml.ts';
 import {
   dropRemovePackageOverrideKeys,
   ensurePackageJsonOverrides,
@@ -46,22 +53,25 @@ import {
   pnpmPeerDependencyRuleKeys,
   workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
+import type {
+  PreparedOxlintConfigs,
+  RetainedImportDependencies,
+  PackageJsonDependencyField,
+  PnpmPackageJsonSettings,
+} from './shared.ts';
+import { lookupSetting } from './shared.ts';
 import {
-  type PreparedOxlintConfigs,
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
   PROVIDER_OVERRIDE_DROP_NAMES,
   OPT_IN_BROWSER_PROVIDERS,
   bundledPackagesToRemove,
-  type RetainedImportDependencies,
   VITEST_IS_MANAGED_OVERRIDE,
   isPlainRecord,
   pinnedPackageManagerVersion,
   pnpmOverrideKey,
   readPackageJsonIfExists,
   vitePeerDependencyRuleRequired,
-  type PackageJsonDependencyField,
-  type PnpmPackageJsonSettings,
 } from './shared.ts';
 
 // Transitive packages with postinstall scripts that vite-plus's deps drag in
@@ -71,7 +81,7 @@ import {
 // webdriverio), allow when the user actually depends on webdriverio.
 const BROWSER_PROVIDER_POSTINSTALL_PACKAGES = ['edgedriver', 'geckodriver'] as const;
 
-const PUBLIC_PEER_DEPENDENCY_FALLBACKS: Record<string, string> = {
+const PUBLIC_PEER_DEPENDENCY_FALLBACKS = {
   vite: '*',
   vitest: '*',
 };
@@ -101,7 +111,7 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
 // https://github.com/oxc-project/tsrs/issues/945
 const PNPM_TSRS_TRUST_POLICY_EXCLUDE = `tsrs@${tsrsPkg.version}`;
 
-function hasTsrsTrustPolicyException(excludes: readonly unknown[]): boolean {
+function hasTsrsTrustPolicyException(excludes: ReadonlyArray<unknown>): boolean {
   return excludes.includes('tsrs') || excludes.includes(PNPM_TSRS_TRUST_POLICY_EXCLUDE);
 }
 
@@ -175,7 +185,7 @@ const BUN_TOP_LEVEL_CATALOG_MIN_VERSION = '1.2.21';
 // resolve", so the toolchain edges must stay concrete.
 export function bunSupportsCatalog(pkg: { workspaces?: NpmWorkspaces }, version: string): boolean {
   const { workspaces } = pkg;
-  if (workspaces == null) {
+  if (workspaces === undefined || workspaces === null) {
     return false;
   }
   const writesNestedCatalog = getBunCatalogConfig(pkg) !== pkg;
@@ -257,11 +267,11 @@ export function pnpmPackageJsonSettingsPending(pkg: { pnpm?: PnpmPackageJsonSett
 
 export function takePnpmWorkspaceSettings(pkg: {
   pnpm?: PnpmPackageJsonSettings;
-}): Record<string, unknown> | undefined {
+}): JsonObject | undefined {
   if (!pkg.pnpm) {
     return undefined;
   }
-  const settings: Record<string, unknown> = {};
+  const settings: JsonObject = {};
   for (const key of PNPM_WORKSPACE_SETTING_KEYS) {
     if (!Object.hasOwn(pkg.pnpm, key)) {
       continue;
@@ -281,10 +291,11 @@ export function takePnpmWorkspaceSettings(pkg: {
  * while objects merge recursively and arrays retain unique entries from both
  * locations.
  */
-function mergePnpmWorkspaceSetting(existing: unknown, incoming: unknown): unknown {
+function mergePnpmWorkspaceSetting(existing: unknown, incoming: JsonValue | undefined) {
   if (Array.isArray(existing) && Array.isArray(incoming)) {
     const seen = new Set<string | undefined>();
-    return [...existing, ...incoming].filter((value) => {
+    const current: Array<unknown> = existing;
+    return [...current, ...incoming].filter((value) => {
       const key = JSON.stringify(value);
       if (seen.has(key)) {
         return false;
@@ -293,8 +304,8 @@ function mergePnpmWorkspaceSetting(existing: unknown, incoming: unknown): unknow
       return true;
     });
   }
-  if (isPlainRecord(existing) && isPlainRecord(incoming)) {
-    const merged: Record<string, unknown> = { ...existing };
+  if (isYamlMapping(existing) && isPlainRecord(incoming)) {
+    const merged: YamlMapping = { ...existing };
     for (const [key, value] of Object.entries(incoming)) {
       merged[key] = Object.hasOwn(existing, key)
         ? mergePnpmWorkspaceSetting(existing[key], value)
@@ -307,7 +318,7 @@ function mergePnpmWorkspaceSetting(existing: unknown, incoming: unknown): unknow
 
 export function migratePnpmSettingsToWorkspaceYaml(
   projectPath: string,
-  settings: Record<string, unknown> | undefined,
+  settings: JsonObject | undefined,
 ): void {
   if (!settings || Object.keys(settings).length === 0) {
     return;
@@ -317,7 +328,8 @@ export function migratePnpmSettingsToWorkspaceYaml(
     fs.writeFileSync(pnpmWorkspaceYamlPath, '');
   }
   editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
-    const workspace = (doc.toJS() ?? {}) as Record<string, unknown>;
+    const output: unknown = doc.toJS();
+    const workspace = isYamlMapping(output) ? output : {};
     for (const [key, value] of Object.entries(settings)) {
       // package.json#pnpm was the effective source before migration. Preserve
       // that precedence at conflicting leaves while retaining workspace-only
@@ -378,12 +390,11 @@ export function rewritePnpmWorkspaceYaml(
     // non-vite-plus parent (e.g. `some-app>@vitest/browser-playwright`) only
     // constrains that parent's subtree, so it is preserved — see
     // `shouldDropProviderOverrideKey`.
-    if (overrides instanceof YAMLMap) {
+    if (isMap(overrides)) {
       const keysSnapshot = overrides.items.map((item) => item.key);
       for (const keyNode of keysSnapshot) {
-        const rawKey =
-          keyNode instanceof Scalar ? String(keyNode.value ?? '') : String(keyNode ?? '');
-        if (shouldDropProviderOverrideKey(rawKey)) {
+        const rawKey = isScalar(keyNode) ? keyNode.value : keyNode;
+        if (typeof rawKey === 'string' && shouldDropProviderOverrideKey(rawKey)) {
           overrides.delete(keyNode);
         }
       }
@@ -411,7 +422,7 @@ export function rewritePnpmWorkspaceYaml(
           : getCatalogDependencySpec(currentVersion, managed[key], true, {
               preferredCatalogSpec,
             });
-      if (overrides instanceof YAMLMap) {
+      if (isMap(overrides)) {
         overrides.delete(key);
       }
       doc.setIn(['overrides', scalarString(overrideKey)], scalarString(version));
@@ -421,25 +432,26 @@ export function rewritePnpmWorkspaceYaml(
     // YAMLMap.delete splices `.items`, so iterating the live array would shift
     // the next entry into the current slot and skip it (two ADJACENT `...>vite`
     // selectors would leave the second behind).
-    const updatedOverrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
-    const updatedOverrideKeys = updatedOverrides.items.map((item) => item.key);
-    for (const key of updatedOverrideKeys) {
-      if (key.value.includes('>')) {
-        const splits = key.value.split('>');
-        if (splits.at(-1)!.trim() === 'vite') {
-          updatedOverrides.delete(key);
+    const updatedOverrides = doc.getIn(['overrides']);
+    if (isMap(updatedOverrides)) {
+      const updatedOverrideKeys = updatedOverrides.items.map((item) => item.key);
+      for (const key of updatedOverrideKeys) {
+        if (isScalar(key) && typeof key.value === 'string' && key.value.includes('>')) {
+          const splits = key.value.split('>');
+          if (splits.at(-1)?.trim() === 'vite') {
+            updatedOverrides.delete(key);
+          }
         }
       }
     }
-
     // peerDependencyRules.allowAny
     // `getIn` unwraps scalar values, so a malformed scalar-valued `allowAny:`
     // (`allowAny: react`) arrives as a string here; coerce it into a sequence
     // entry instead of crashing on `.items` below.
     const allowAnyNode = doc.getIn(['peerDependencyRules', 'allowAny']);
-    let allowAny: YAMLSeq<Scalar<string>>;
-    if (allowAnyNode instanceof YAMLSeq) {
-      allowAny = allowAnyNode as YAMLSeq<Scalar<string>>;
+    let allowAny: YAMLSeq;
+    if (isSeq(allowAnyNode)) {
+      allowAny = allowAnyNode;
     } else {
       allowAny = new YAMLSeq<Scalar<string>>();
       if (typeof allowAnyNode === 'string' && allowAnyNode.length > 0) {
@@ -449,8 +461,10 @@ export function rewritePnpmWorkspaceYaml(
     // Drop lingering managed `vitest` and stale `vite` entries.
     const peerRuleKeys = pnpmPeerDependencyRuleKeys(usesVitest, pnpmVersion);
     const stalePeerRuleKeys = peerRuleKeys.stale;
-    allowAny.items = allowAny.items.filter((n) => !stalePeerRuleKeys.includes(n.value));
-    const existing = new Set(allowAny.items.map((n) => n.value));
+    allowAny.items = allowAny.items.filter(
+      (n) => !(isScalar(n) && typeof n.value === 'string' && stalePeerRuleKeys.includes(n.value)),
+    );
+    const existing = new Set(allowAny.items.map((n) => (isScalar(n) ? n.value : n)));
     for (const key of peerRuleKeys.managed) {
       if (!existing.has(key)) {
         allowAny.add(scalarString(key));
@@ -462,9 +476,9 @@ export function rewritePnpmWorkspaceYaml(
     // Same guard as above: a malformed non-map `allowedVersions:` value (pnpm
     // expects a map, so it carries no usable data) is replaced outright.
     const allowedVersionsNode = doc.getIn(['peerDependencyRules', 'allowedVersions']);
-    let allowedVersions: YAMLMap<Scalar<string>, Scalar<string>>;
-    if (allowedVersionsNode instanceof YAMLMap) {
-      allowedVersions = allowedVersionsNode as YAMLMap<Scalar<string>, Scalar<string>>;
+    let allowedVersions: YAMLMap;
+    if (isMap(allowedVersionsNode)) {
+      allowedVersions = allowedVersionsNode;
     } else {
       allowedVersions = new YAMLMap<Scalar<string>, Scalar<string>>();
     }
@@ -482,13 +496,14 @@ export function rewritePnpmWorkspaceYaml(
     // minimumReleaseAgeExclude: exempt the Vite+-managed packages (vite-plus,
     // @voidzero-dev/*, the ox* family, and the vitest family) from the age gate.
     if (doc.has('minimumReleaseAge')) {
-      let minimumReleaseAgeExclude = doc.getIn(['minimumReleaseAgeExclude']) as YAMLSeq<
-        Scalar<string>
-      >;
-      if (!minimumReleaseAgeExclude) {
-        minimumReleaseAgeExclude = new YAMLSeq();
+      const existingExclude = doc.getIn(['minimumReleaseAgeExclude']);
+      if (existingExclude && !isSeq(existingExclude)) {
+        throw new Error('pnpm-workspace.yaml: minimumReleaseAgeExclude must be a sequence');
       }
-      const existing = new Set(minimumReleaseAgeExclude.items.map((n) => n.value));
+      const minimumReleaseAgeExclude = isSeq(existingExclude) ? existingExclude : new YAMLSeq();
+      const existing = new Set(
+        minimumReleaseAgeExclude.items.map((n) => (isScalar(n) ? n.value : n)),
+      );
       for (const exclude of PNPM_MINIMUM_RELEASE_AGE_EXCLUDES) {
         if (!existing.has(exclude)) {
           minimumReleaseAgeExclude.add(scalarString(exclude));
@@ -499,7 +514,7 @@ export function rewritePnpmWorkspaceYaml(
 
     if (doc.get('trustPolicy') === 'no-downgrade') {
       const node = doc.get('trustPolicyExclude');
-      if (node != null && !(node instanceof YAMLSeq)) {
+      if (node !== undefined && node !== null && !isSeq(node)) {
         throw new Error('pnpm-workspace.yaml: trustPolicyExclude must be a sequence');
       }
       const excludes = node ?? new YAMLSeq<Scalar<string>>();
@@ -533,7 +548,7 @@ export function migratePnpmOverridesToWorkspaceYaml(
 export function applyBuildAllowanceToPackageJsonPnpm(
   pnpm: {
     allowBuilds?: Record<string, boolean>;
-    onlyBuiltDependencies?: string[];
+    onlyBuiltDependencies?: Array<string>;
   },
   major: number,
   shouldAllow: boolean,
@@ -582,10 +597,8 @@ function applyBuildAllowanceToWorkspaceYaml(
       // blocked). Mutate an existing map in place (preserving its document position);
       // only attach a freshly created one.
       const existing = doc.getIn(['allowBuilds']);
-      const isNew = !(existing instanceof YAMLMap);
-      const allowBuilds = isNew
-        ? new YAMLMap<Scalar<string>, Scalar<boolean>>()
-        : (existing as YAMLMap<Scalar<string>, Scalar<boolean>>);
+      const isNew = !isMap(existing);
+      const allowBuilds = isNew ? new YAMLMap() : existing;
       for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
         allowBuilds.set(scalarString(name), new Scalar(true));
       }
@@ -598,11 +611,9 @@ function applyBuildAllowanceToWorkspaceYaml(
     // The drivers reach the tree only via the opt-in webdriverio provider, so a project
     // that does not use it never installs them and there is nothing to allow or deny.
   } else if (shouldAllow) {
-    let onlyBuiltDependencies = doc.getIn(['onlyBuiltDependencies']) as YAMLSeq<Scalar<string>>;
-    if (!(onlyBuiltDependencies instanceof YAMLSeq)) {
-      onlyBuiltDependencies = new YAMLSeq<Scalar<string>>();
-    }
-    const existing = new Set(onlyBuiltDependencies.items.map((n) => n.value));
+    const node = doc.getIn(['onlyBuiltDependencies']);
+    const onlyBuiltDependencies = isSeq(node) ? node : new YAMLSeq();
+    const existing = new Set(onlyBuiltDependencies.items.map((n) => (isScalar(n) ? n.value : n)));
     for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
       if (!existing.has(name)) {
         onlyBuiltDependencies.add(scalarString(name));
@@ -665,7 +676,9 @@ export function getCatalogDependencySpec(
       if (resolved && !isVitePlusOverrideSpec(resolved)) {
         return resolved;
       }
-      return PUBLIC_PEER_DEPENDENCY_FALLBACKS[options.dependencyName] ?? currentValue;
+      return (
+        lookupSetting(PUBLIC_PEER_DEPENDENCY_FALLBACKS, options.dependencyName) ?? currentValue
+      );
     }
     return currentValue ?? version;
   }
@@ -717,7 +730,7 @@ export function setDirectViteEdge(
   );
   // Drop any existing `vite` entry first so an out-of-order one (appended after
   // `vite-plus`) is re-placed, then splice the new entry in sorted position.
-  const entries: [string, string][] = Object.entries(pkg.devDependencies ?? {}).filter(
+  const entries: Array<[string, string]> = Object.entries(pkg.devDependencies ?? {}).filter(
     ([name]) => name !== 'vite',
   );
   const insertAt = entries.findIndex(([name]) => name > 'vite');
@@ -807,14 +820,14 @@ export function createCatalogDependencyResolver(
 }
 
 function getYamlMapScalarStringValue(map: unknown, key: string): string | undefined {
-  if (!(map instanceof YAMLMap)) {
+  if (!isMap(map)) {
     return undefined;
   }
   for (const item of map.items) {
     if (
-      item.key instanceof Scalar &&
+      isScalar(item.key) &&
       item.key.value === key &&
-      item.value instanceof Scalar &&
+      isScalar(item.value) &&
       typeof item.value.value === 'string'
     ) {
       return item.value.value;
@@ -848,7 +861,7 @@ function getYamlMapScalarStringValue(map: unknown, key: string): string | undefi
 export function mergeManagedPnpmOverrides(
   overrides: Record<string, string> | undefined,
   managed: Record<string, string>,
-): Record<string, string> {
+) {
   const next = { ...overrides };
   for (const [dependencyName, managedSpec] of Object.entries(managed)) {
     const overrideKey = pnpmOverrideKey(dependencyName);
@@ -864,16 +877,21 @@ export function mergeManagedPnpmOverrides(
 }
 
 function pruneYamlMapLegacyWrapperAliases(map: unknown): void {
-  if (!(map instanceof YAMLMap)) {
+  if (!isMap(map)) {
     return;
   }
-  const stale: Array<{ key: Scalar<string>; fallback: string | undefined }> = [];
+  const stale: Array<{ key: Scalar; fallback: string | undefined }> = [];
   for (const item of map.items) {
-    const value = item.value instanceof Scalar ? item.value.value : undefined;
-    if (typeof value === 'string' && isLegacyWrapperSpec(value) && item.key instanceof Scalar) {
+    const value = isScalar(item.value) ? item.value.value : undefined;
+    if (
+      typeof value === 'string' &&
+      isLegacyWrapperSpec(value) &&
+      isScalar(item.key) &&
+      typeof item.key.value === 'string'
+    ) {
       stale.push({
         key: item.key,
-        fallback: LEGACY_WRAPPER_FALLBACK_VERSIONS[item.key.value],
+        fallback: lookupSetting(LEGACY_WRAPPER_FALLBACK_VERSIONS, item.key.value),
       });
     }
   }
@@ -893,13 +911,19 @@ export function rewriteCatalog(
   catalogAdditions: ReadonlySet<string>,
   packageManager: PackageManager,
 ): string {
-  const parsed = doc.toJS() as {
-    catalog?: Record<string, string>;
-    catalogs?: Record<string, Record<string, string>>;
-  } | null;
+  const parsed: unknown = doc.toJS();
+  const settings = isYamlMapping(parsed) ? parsed : {};
+  const namedCatalogs: Record<string, YamlMapping> = {};
+  if (isYamlMapping(settings.catalogs)) {
+    for (const [name, entries] of Object.entries(settings.catalogs)) {
+      if (isYamlMapping(entries)) {
+        namedCatalogs[name] = entries;
+      }
+    }
+  }
   const preferredCatalogSpec = selectPreferredCatalogSpec(
-    parsed?.catalog,
-    parsed?.catalogs,
+    isYamlMapping(settings.catalog) ? settings.catalog : undefined,
+    namedCatalogs,
     packageManager,
   );
   const targetPath = getYamlCatalogPath(doc, preferredCatalogSpec, packageManager);
@@ -925,12 +949,12 @@ export function rewriteCatalog(
   }
 
   const catalogs = doc.getIn(['catalogs']);
-  if (catalogs instanceof YAMLMap) {
+  if (isMap(catalogs)) {
     for (const item of catalogs.items) {
-      const catalogName = item.key instanceof Scalar ? item.key.value : undefined;
+      const catalogName = isScalar(item.key) ? item.key.value : undefined;
       if (
         typeof catalogName !== 'string' ||
-        !(item.value instanceof YAMLMap) ||
+        !isMap(item.value) ||
         (targetPath[0] === 'catalogs' && targetPath[1] === catalogName)
       ) {
         continue;
@@ -951,22 +975,21 @@ export function rewriteCatalog(
 
 function rewriteYamlCatalogAtPath(
   doc: YamlDocument,
-  catalogPath: readonly string[],
+  catalogPath: ReadonlyArray<string>,
   addMissing: boolean,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
   catalogAdditions: ReadonlySet<string>,
 ): void {
   const managed = managedOverridePackages(usesVitest);
-  let catalogNode = doc.getIn(catalogPath);
-  if (!(catalogNode instanceof YAMLMap)) {
+  const catalogNode = doc.getIn(catalogPath);
+  const catalog = isMap(catalogNode) ? catalogNode : new YAMLMap();
+  if (catalog !== catalogNode) {
     if (!addMissing) {
       return;
     }
-    catalogNode = new YAMLMap();
-    doc.setIn(catalogPath, catalogNode);
+    doc.setIn(catalogPath, catalog);
   }
-  const catalog = catalogNode as YAMLMap;
 
   // Common case (no direct vitest): remove any lingering managed `vitest`
   // catalog entry so it resolves transitively through vite-plus.
@@ -1009,11 +1032,11 @@ function rewriteVitestEcosystemYamlCatalog(
   catalog: unknown,
   vitestEcosystemPackages: ReadonlySet<string>,
 ): void {
-  if (!VITEST_IS_MANAGED_OVERRIDE || !(catalog instanceof YAMLMap)) {
+  if (!VITEST_IS_MANAGED_OVERRIDE || !isMap(catalog)) {
     return;
   }
   for (const item of catalog.items) {
-    const name = item.key instanceof Scalar ? item.key.value : undefined;
+    const name = isScalar(item.key) ? item.key.value : undefined;
     if (
       typeof name === 'string' &&
       vitestEcosystemPackages.has(name) &&
@@ -1124,7 +1147,7 @@ export function rewriteBunCatalog(
     workspaces?: NpmWorkspaces;
     catalog?: Record<string, string>;
     catalogs?: Record<string, Record<string, string>>;
-    overrides?: Record<string, unknown>;
+    overrides?: JsonObject;
   }>(packageJsonPath, (pkg) => {
     // Bun supports catalogs in both workspaces.catalog and top-level catalog;
     // prefer the location the user already chose to avoid moving their config.
@@ -1188,7 +1211,7 @@ export function rewriteRootWorkspacePackageJson(
   // Forwarded to `rewriteMonorepoProject` so the per-root lint-config
   // sanitizer can see hoisted deps in sibling workspace packages, not
   // just the root's own `package.json`.
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
   pnpmMajorVersion?: number,
   pnpmVersion?: string,
   shouldAllowBrowserBuilds = false,
@@ -1212,10 +1235,10 @@ export function rewriteRootWorkspacePackageJson(
     workspaceUsesWebdriverioProvider(projectPath, packages),
   );
 
-  let movedPnpmSettings: Record<string, unknown> | undefined;
+  let movedPnpmSettings: JsonObject | undefined;
   editJsonFile<{
     resolutions?: Record<string, string>;
-    overrides?: Record<string, unknown>;
+    overrides?: JsonObject;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
@@ -1289,7 +1312,7 @@ export function rewriteRootWorkspacePackageJson(
       for (const key in pkg.pnpm?.overrides) {
         if (key.includes('>')) {
           const splits = key.split('>');
-          if (splits.at(-1)!.trim() === 'vite') {
+          if (splits.at(-1)?.trim() === 'vite') {
             delete pkg.pnpm.overrides[key];
           }
         }
@@ -1383,7 +1406,7 @@ export function pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath: str
   }
   const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
     minimumReleaseAge?: unknown;
-    minimumReleaseAgeExclude?: string[];
+    minimumReleaseAgeExclude?: Array<string>;
   } | null;
   if (!doc || doc.minimumReleaseAge === undefined) {
     return false;
@@ -1427,20 +1450,20 @@ function setPeerDependencyRulesField(
     doc.deleteIn(['peerDependencyRules', field]);
   }
   const rules = doc.get('peerDependencyRules');
-  if (rules instanceof YAMLMap && rules.items.length === 0) {
+  if (isMap(rules) && rules.items.length === 0) {
     doc.delete('peerDependencyRules');
   }
 }
 
 export function readPnpmWorkspacePeerDependencyRules(
   projectPath: string,
-): { allowAny?: string[]; allowedVersions?: Record<string, string> } | undefined {
+): { allowAny?: Array<string>; allowedVersions?: Record<string, string> } | undefined {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
     return undefined;
   }
   const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
-    peerDependencyRules?: { allowAny?: string[]; allowedVersions?: Record<string, string> };
+    peerDependencyRules?: { allowAny?: Array<string>; allowedVersions?: Record<string, string> };
   } | null;
   return doc?.peerDependencyRules;
 }
@@ -1453,10 +1476,10 @@ function hasVitePeerDependencyRule(projectPath: string): boolean {
   ) {
     return true;
   }
-  const pkg = readPackageJsonIfExists(path.join(projectPath, 'package.json')) as
-    | { pnpm?: PnpmPackageJsonSettings }
-    | undefined;
-  return peerDependencyRulesHaveStaleEntry(pkg?.pnpm?.peerDependencyRules, ['vite']);
+  const pkg = readPackageJsonIfExists(path.join(projectPath, 'package.json'));
+  const pnpm = pkg && 'pnpm' in pkg && isJsonObject(pkg.pnpm) ? pkg.pnpm : undefined;
+  const rules = isObjectValue(pnpm) ? pnpm.peerDependencyRules : undefined;
+  return peerDependencyRulesHaveStaleEntry(isObjectValue(rules) ? rules : undefined, ['vite']);
 }
 
 // Capture the `vite` peer rule before a migration step. Call the returned
@@ -1485,7 +1508,7 @@ export function trackVitePeerDependencyRuleRemoval(
 
 export function ensurePnpmWorkspacePackages(
   projectPath: string,
-  workspacePatterns: string[],
+  workspacePatterns: Array<string>,
 ): boolean {
   if (workspacePatterns.length === 0) {
     return false;

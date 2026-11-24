@@ -1,7 +1,7 @@
-import type * as t from '@oxc-project/types';
+import type { Node, ObjectExpression } from '@oxc-project/types';
 
 import { isString, objectProperty, staticObject } from '../ast-utils.ts';
-import { SourceEditor } from './ast.ts';
+import type { SourceEditor } from './ast.ts';
 
 const REPORTERS = new Set([
   'default',
@@ -15,14 +15,14 @@ const REPORTERS = new Set([
   'github-actions',
 ]);
 
-function reporterNames(node: t.Node): string[] | undefined {
+function reporterNames(node: Node): Array<string> | undefined {
   const entries = node.type === 'ArrayExpression' ? node.elements : [node];
   return entries.every(isString) ? entries.map((entry) => entry.value) : undefined;
 }
 
 /** Move only resolved built-in output settings. The normal config pass reports
  * any retained legacy options as blockers; no partial output plan is applied. */
-export function migrateBenchmarkConfig(editor: SourceEditor, test: t.ObjectExpression): void {
+export function migrateBenchmarkConfig(editor: SourceEditor, test: ObjectExpression): void {
   const benchmark = objectProperty(test, 'benchmark')?.value;
   if (!staticObject(benchmark)) {
     return;

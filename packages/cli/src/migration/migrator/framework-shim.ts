@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { readJsonFile } from '../../utils/json.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
 
 // .svelte files are handled by @sveltejs/vite-plugin-svelte (transpilation)
 // and svelte-check / Svelte Language Server (type checking).
@@ -28,7 +28,7 @@ const FRAMEWORK_SHIMS: Record<Framework, string> = {
   astro: '/// <reference types="astro/client" />',
 };
 
-export function detectFramework(projectPath: string): Framework[] {
+export function detectFramework(projectPath: string): Array<Framework> {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return [];
@@ -58,7 +58,7 @@ export function hasFrameworkShim(projectPath: string, framework: Framework): boo
     if (!fs.existsSync(dir)) {
       continue;
     }
-    let entries: string[];
+    let entries: Array<string>;
     try {
       entries = fs.readdirSync(dir);
     } catch {
@@ -68,7 +68,7 @@ export function hasFrameworkShim(projectPath: string, framework: Framework): boo
       if (!entry.endsWith('.d.ts')) {
         continue;
       }
-      const content = fs.readFileSync(path.join(dir, entry), 'utf-8');
+      const content = fs.readFileSync(path.join(dir, entry), 'utf8');
       if (framework === 'astro') {
         if (content.includes('astro/client')) {
           return true;
@@ -89,11 +89,11 @@ export function addFrameworkShim(
   const envDtsPath = getEnvDtsPath(projectPath);
   const shim = FRAMEWORK_SHIMS[framework];
   if (fs.existsSync(envDtsPath)) {
-    const existing = fs.readFileSync(envDtsPath, 'utf-8');
-    fs.writeFileSync(envDtsPath, `${existing.trimEnd()}\n\n${shim}\n`, 'utf-8');
+    const existing = fs.readFileSync(envDtsPath, 'utf8');
+    fs.writeFileSync(envDtsPath, `${existing.trimEnd()}\n\n${shim}\n`, 'utf8');
   } else {
     fs.mkdirSync(path.dirname(envDtsPath), { recursive: true });
-    fs.writeFileSync(envDtsPath, `${shim}\n`, 'utf-8');
+    fs.writeFileSync(envDtsPath, `${shim}\n`, 'utf8');
   }
   if (report) {
     report.frameworkShimAdded = true;

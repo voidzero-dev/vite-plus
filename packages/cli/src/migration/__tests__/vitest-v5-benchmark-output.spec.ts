@@ -4,14 +4,19 @@ import { describe, expect, it } from 'vitest';
 
 import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
 import { migrateVitestV5Config } from '../vitest-v5/config.ts';
+import { fixtureObject } from './fixture-json.ts';
 
 const config = (test: string) =>
   migrateVitestV5Config('vitest.config.js', `export default { test: { ${test} } };`, {
     preserveV4: true,
   });
 
-function resolved(content: string): Record<string, unknown> {
-  return runInNewContext(content.replace('export default', 'result ='), {}).test;
+function resolved(content: string) {
+  const result: unknown = runInNewContext(content.replace('export default', 'result ='), {});
+  if (typeof result !== 'object' || !result || !('test' in result)) {
+    throw new TypeError('Expected the fixture to export a test configuration');
+  }
+  return fixtureObject(structuredClone(result.test));
 }
 
 describe('Vitest v5 benchmark output config migration', () => {

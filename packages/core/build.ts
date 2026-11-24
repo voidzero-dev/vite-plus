@@ -3,7 +3,7 @@ import { copyFile, cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/prom
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { types } from 'node:util';
 
 import { format } from 'oxfmt';
 
@@ -12,27 +12,29 @@ function toPosixPath(nativePath: string): string {
   return nativePath.split(path.sep).join(path.posix.sep);
 }
 
-import { build, type BuildOptions } from 'rolldown';
+import type { BuildOptions, RolldownOptions } from 'rolldown';
+import { build } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 import { glob } from 'tinyglobby';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
 import cliPkgJson from '../cli/package.json' with { type: 'json' };
+import { readPackageManifest } from '../tools/src/package-manifest.ts';
 import { assertViteConfigPatched } from '../tools/src/patch-vite-config.ts';
 import { buildCjsDeps } from './build-support/build-cjs-deps.js';
 import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
+import type { ReplacementRule } from './build-support/rewrite-module-specifiers.js';
 import {
   createRolldownRewriteRules,
   createViteRewriteRules,
   rewriteModuleSpecifiers,
-  type ReplacementRule,
 } from './build-support/rewrite-module-specifiers.js';
 import { rewriteRolldownBindingRequires } from './build-support/rewrite-rolldown-binding.js';
 import pkgJson from './package.json' with { type: 'json' };
 
-const projectDir = join(fileURLToPath(import.meta.url), '..');
+const projectDir = join(import.meta.filename, '..');
 
 const rolldownPluginUtilsDir = resolve(
   projectDir,
@@ -55,13 +57,13 @@ const tsdownSourceDir = resolve(projectDir, 'node_modules/tsdown');
 // Main build orchestration
 try {
   assertViteConfigPatched(
-    await readFile(join(rolldownViteSourceDir, 'src/node/config.ts'), 'utf-8'),
+    await readFile(join(rolldownViteSourceDir, 'src/node/config.ts'), 'utf8'),
   );
-} catch (cause) {
+} catch (error) {
   throw new Error(
     'Prepare the Vite source before building core. From the repository root, run ' +
       '`pnpm exec tool brand-vite` and `pnpm --filter vite build-types`.',
-    { cause },
+    { cause: error },
   );
 }
 await bundleRolldownPluginutils();
@@ -104,6 +106,10 @@ if (!existsSync(join(projectDir, 'LICENSE'))) {
 }
 await mergePackageJson();
 
+function hasSingleOutput(config: RolldownOptions): config is BuildOptions {
+  return !Array.isArray(config.output);
+}
+
 async function buildVite() {
   const newViteRolldownConfig = viteRolldownConfig.map((config) => {
     config.tsconfig = join(projectDir, 'tsconfig.json');
@@ -118,7 +124,7 @@ async function buildVite() {
               external === 'fdir' ||
               external === 'rolldown')) ||
           external === 'yaml' ||
-          (external instanceof RegExp && (external.test('rolldown/') || external.test('vite/')))
+          (types.isRegExp(external) && (external.test('rolldown/') || external.test('vite/')))
         );
       });
     }
@@ -251,10 +257,13 @@ async function buildVite() {
       };
     }
 
+    if (!hasSingleOutput(config)) {
+      throw new Error('The Vite build requires one output per Rolldown configuration');
+    }
     return config;
   });
 
-  await build(newViteRolldownConfig as BuildOptions[]);
+  await build(newViteRolldownConfig);
 
   // Copy additional vite files
 
@@ -264,7 +273,7 @@ async function buildVite() {
 
   // `vp dev`, `vp build`, and `vp preview` start through Vite's bin script, as
   // `vite` does (see BUNDLING.md). Point its CLI import at the `dist/vite` layout.
-  const viteBin = await readFile(join(rolldownViteSourceDir, 'bin', 'vite.js'), 'utf-8');
+  const viteBin = await readFile(join(rolldownViteSourceDir, 'bin', 'vite.js'), 'utf8');
   const viteBinCliImport = `import('../dist/node/cli.js')`;
   if (!viteBin.includes(viteBinCliImport)) {
     throw new Error(
@@ -286,7 +295,7 @@ async function buildVite() {
   );
 
   for (const dtsFile of dtsFiles) {
-    const file = await readFile(dtsFile, 'utf-8');
+    const file = await readFile(dtsFile, 'utf8');
     // Normalize paths to use forward slashes for consistent replacement on Windows
     const relativePath = toPosixPath(dtsFile).replace(
       toPosixPath(join(rolldownViteSourceDir, 'dist', 'node')),
@@ -308,7 +317,7 @@ async function buildVite() {
   await mkdir(join(projectDir, 'dist/vite/types'), { recursive: true });
 
   for (const srcDtsFile of srcTypeFiles) {
-    const file = await readFile(srcDtsFile, 'utf-8');
+    const file = await readFile(srcDtsFile, 'utf8');
     // Normalize paths to use forward slashes for consistent replacement on Windows
     const relativePath = toPosixPath(srcDtsFile).replace(
       toPosixPath(join(rolldownViteSourceDir, 'types')),
@@ -360,9 +369,10 @@ async function bundleRolldownPluginutils() {
 async function bundleRolldown() {
   await mkdir(join(projectDir, 'dist/rolldown'), { recursive: true });
 
-  const { version: rolldownVersion }: { version: string } = JSON.parse(
-    await readFile(join(rolldownSourceDir, 'package.json'), 'utf-8'),
-  );
+  const { version: rolldownVersion } = readPackageManifest(join(rolldownSourceDir, 'package.json'));
+  if (!rolldownVersion) {
+    throw new Error('Missing Rolldown package version');
+  }
   const webContainerVersionLookup =
     'JSON.parse(fs.readFileSync(__require.resolve("rolldown/package.json"), "utf-8")).version';
   let webContainerVersionRewrites = 0;
@@ -402,14 +412,14 @@ async function bundleRolldown() {
       file.endsWith('.d.mts') ||
       file.endsWith('.d.ts')
     ) {
-      let source = await readFile(file, 'utf-8');
+      let source = await readFile(file, 'utf8');
       // WebContainer downloads the upstream WASM binding. Inline Rolldown's
       // version so it needs neither an undeclared package nor Vite+'s version.
       source = source.replaceAll(webContainerVersionLookup, () => {
         webContainerVersionRewrites++;
         return JSON.stringify(rolldownVersion);
       });
-      const rules: ReplacementRule[] = [...createRolldownRewriteRules(pkgJson.name)];
+      const rules: Array<ReplacementRule> = [...createRolldownRewriteRules(pkgJson.name)];
       if (vitePlusPlatformSuffixes) {
         const result = rewriteRolldownBindingRequires(source, {
           packageName: cliPkgJson.napi.packageName,
@@ -588,7 +598,7 @@ async function brandTsdown() {
   let buildErrorsPatched = false;
 
   for (const buildFile of buildFiles) {
-    let content = await readFile(buildFile, 'utf-8');
+    let content = await readFile(buildFile, 'utf8');
     let changed = false;
     if (!content.includes(search)) {
       // Keep going to apply other safety patches below.
@@ -608,7 +618,7 @@ async function brandTsdown() {
     }
 
     if (changed) {
-      await writeFile(buildFile, content, 'utf-8');
+      await writeFile(buildFile, content, 'utf8');
     }
   }
 
@@ -637,7 +647,7 @@ async function brandTsdown() {
   let loggerPatched = false;
 
   for (const candidateFile of loggerCandidateFiles) {
-    let content = await readFile(candidateFile, 'utf-8');
+    let content = await readFile(candidateFile, 'utf8');
     let changed = false;
     for (const { search, replacement } of loggerPatches) {
       if (!search.test(content)) {
@@ -649,7 +659,7 @@ async function brandTsdown() {
     if (!changed) {
       continue;
     }
-    await writeFile(candidateFile, content, 'utf-8');
+    await writeFile(candidateFile, content, 'utf8');
     console.log(`Branded tsdown logger prefixes in ${candidateFile}`);
     loggerPatched = true;
   }
@@ -692,7 +702,7 @@ async function wireBundledTsdownExtensions() {
   // the call site is repointed at the stable entry.
   const redundantCssChunks = new Set<string>();
   for (const chunkFile of chunkFiles) {
-    let content = await readFile(chunkFile, 'utf-8');
+    let content = await readFile(chunkFile, 'utf8');
     let changed = false;
     if (content.includes('importWithError("@tsdown/exe")')) {
       content = content.replaceAll('importWithError("@tsdown/exe")', 'import("./tsdown-exe.js")');
@@ -745,14 +755,16 @@ async function mergePackageJson() {
   const vitePkgPath = join(rolldownViteSourceDir, 'package.json');
   const destPkgPath = resolve(projectDir, 'package.json');
 
-  const tsdownPkg = JSON.parse(await readFile(tsdownPkgPath, 'utf-8'));
-  const rolldownPkg = JSON.parse(await readFile(rolldownPkgPath, 'utf-8'));
-  const vitePkg = JSON.parse(await readFile(vitePkgPath, 'utf-8'));
-  const destPkg = JSON.parse(await readFile(destPkgPath, 'utf-8'));
+  const tsdownPkg = readPackageManifest(tsdownPkgPath);
+  const rolldownPkg = readPackageManifest(rolldownPkgPath);
+  const vitePkg = readPackageManifest(vitePkgPath);
+  const destPkg = readPackageManifest(destPkgPath);
   // Read the `rolldown-plugin-dts` that tsdown depends on, which is the copy
   // bundled into `dist/tsdown/`, rather than core's own devDependency.
-  const dtsPkg = createRequire(join(realpathSync(tsdownSourceDir), 'package.json'))(
-    'rolldown-plugin-dts/package.json',
+  const dtsPkg = readPackageManifest(
+    createRequire(join(realpathSync(tsdownSourceDir), 'package.json')).resolve(
+      'rolldown-plugin-dts/package.json',
+    ),
   );
 
   // Merge peerDependencies from rolldown-plugin-dts, tsdown and vite. The bundled

@@ -167,6 +167,9 @@ catalogs:
     '@clack/core':
       specifier: ^1.5.1
       version: 1.5.1
+    '@cloudflare/oxlint-config':
+      specifier: ^0.2.0
+      version: 0.2.0
     '@e18e/eslint-plugin':
       specifier: ^0.8.1
       version: 0.8.1
@@ -386,6 +389,9 @@ importers:
 
   .:
     devDependencies:
+      '@cloudflare/oxlint-config':
+        specifier: 'catalog:'
+        version: 0.2.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.95.0(vite-plus@packages+cli))(tsrs@7.1.0-beta.tsrs5)(vite-plus@packages+cli)
       '@e18e/eslint-plugin':
         specifier: 'catalog:'
         version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.95.0(vite-plus@packages+cli))
@@ -1297,6 +1303,21 @@ packages:
 
   '@clack/prompts@0.11.0':
     resolution: {integrity: sha512-pMN5FcrEw9hUkZA4f+zLlzivQSeQf5dRGJjSUbvVYDLvpKCdQx5OaknvKzgbtXOizhP+SJJJjqEbOe55uKKfAw==}
+
+  '@cloudflare/oxlint-config@0.2.0':
+    resolution: {integrity: sha512-HENc8yIzCuIPvUyQbX47UKv2kgA26iZt1XRsrlQXayJG6cWmBNlnHXfPy7oNCghqWpTBcbFRdGwsHd1Ahe3zhw==}
+    engines: {node: ^22.18.0 || >=24.0.0}
+    peerDependencies:
+      oxlint: ^1.94.0
+      tsrs: '>=7.1.0-beta.tsrs2'
+      vite-plus: workspace:vite-plus@*
+    peerDependenciesMeta:
+      oxlint:
+        optional: true
+      tsrs:
+        optional: true
+      vite-plus:
+        optional: true
 
   '@conventional-changelog/git-client@3.1.2':
     resolution: {integrity: sha512-jZqwnJwf7nboIlAcw/mkOjVa6DexCcUOgT2oOQgkoi3z9vR8tGFkcMy2BFcYwjhL9sYcDDXkRQDayiDieCoW7A==}
@@ -2256,6 +2277,31 @@ packages:
   '@napi-rs/wasm-tools@1.1.2':
     resolution: {integrity: sha512-VM6AVh5aYrUZtadC/ozmyx6lr1mE5RKqBXSrF6HkTrft9wFhHKD8hcKJ9v7QeA0H0QX5Og/7L21hILAICqFLww==}
     engines: {node: '>= 12.22.0'}
+
+  '@nkzw/eslint-plugin@3.0.0':
+    resolution: {integrity: sha512-J6Ms/OzUxx7BNBggCKOqFWbESgAJYjvXvekCjjpxVJA2fBv5xOsC5P+2WDYqQUMCvDOU3GxBgG/jrmbqf+/wQA==}
+    peerDependencies:
+      eslint: '>= 9'
+    peerDependenciesMeta:
+      eslint:
+        optional: true
+
+  '@nkzw/oxlint-config@4.1.0':
+    resolution: {integrity: sha512-uFJxSqD8LPGe+uYVh+EC9BwndUGr3h7+aHQhKcdUANNSV4c1vvRoOqqHUTlML5RnHtvABtapW1ZyY4gkz6sKOA==}
+    peerDependencies:
+      eslint-plugin-perfectionist: ^5.14.0
+      oxlint: '>=1.94.0'
+      tsrs: '>=0.25.0-ts7.1.0-beta || ^7.1.0-beta.tsrs2'
+      vite-plus: workspace:vite-plus@*
+    peerDependenciesMeta:
+      eslint-plugin-perfectionist:
+        optional: true
+      oxlint:
+        optional: true
+      tsrs:
+        optional: true
+      vite-plus:
+        optional: true
 
   '@nkzw/safe-word-list@3.1.0':
     resolution: {integrity: sha512-yU6NAne/aU8n4BnYwlOu451PD/FH9AVKsOsQbITxAPYg4HEcBMv7v13woPOpxAS0lC87N2TOQdBZ7OjiK+5sIA==}
@@ -4804,6 +4850,10 @@ packages:
       typescript:
         optional: true
 
+  eslint-plugin-no-only-tests@3.4.0:
+    resolution: {integrity: sha512-4S3/9Nb7A2tiMcpzEQE9bQSlpeOz6WJkgryBuou/SA8W2x2c8Zf4j0NvTKBjv6qNhF9T79tmkecm/0CHqV0UGg==}
+    engines: {node: '>=5.0.0'}
+
   eslint-plugin-regexp@3.3.3:
     resolution: {integrity: sha512-bIpFf1uL9AB6MY5cDUXL2lrfuBA+/WLc1AwC+56OsHWo93zoKQ4EcAQ+wsOxq5ozLC9xfTYAb4Si+0w0Ll1hYA==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
@@ -7243,6 +7293,17 @@ snapshots:
       picocolors: 1.1.1
       sisteransi: 1.0.5
 
+  '@cloudflare/oxlint-config@0.2.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.95.0(vite-plus@packages+cli))(tsrs@7.1.0-beta.tsrs5)(vite-plus@packages+cli)':
+    dependencies:
+      '@nkzw/oxlint-config': 4.1.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.95.0(vite-plus@packages+cli))(tsrs@7.1.0-beta.tsrs5)(vite-plus@packages+cli)
+    optionalDependencies:
+      oxlint: 1.95.0(vite-plus@packages+cli)
+      tsrs: 7.1.0-beta.tsrs5
+      vite-plus: link:packages/cli
+    transitivePeerDependencies:
+      - eslint
+      - eslint-plugin-perfectionist
+
   '@conventional-changelog/git-client@3.1.2(conventional-commits-filter@6.0.1)(conventional-commits-parser@7.1.2)':
     dependencies:
       '@simple-libs/child-process-utils': 2.0.0
@@ -8156,6 +8217,21 @@ snapshots:
       '@napi-rs/wasm-tools-win32-arm64-msvc': 1.1.2
       '@napi-rs/wasm-tools-win32-ia32-msvc': 1.1.2
       '@napi-rs/wasm-tools-win32-x64-msvc': 1.1.2
+
+  '@nkzw/eslint-plugin@3.0.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))':
+    optionalDependencies:
+      eslint: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
+
+  '@nkzw/oxlint-config@4.1.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.95.0(vite-plus@packages+cli))(tsrs@7.1.0-beta.tsrs5)(vite-plus@packages+cli)':
+    dependencies:
+      '@nkzw/eslint-plugin': 3.0.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))
+      eslint-plugin-no-only-tests: 3.4.0
+    optionalDependencies:
+      oxlint: 1.95.0(vite-plus@packages+cli)
+      tsrs: 7.1.0-beta.tsrs5
+      vite-plus: link:packages/cli
+    transitivePeerDependencies:
+      - eslint
 
   '@nkzw/safe-word-list@3.1.0': {}
 
@@ -10228,6 +10304,8 @@ snapshots:
     optionalDependencies:
       ts-declaration-location: 1.0.7(typescript@7.0.2)
       typescript: 7.0.2
+
+  eslint-plugin-no-only-tests@3.4.0: {}
 
   eslint-plugin-regexp@3.3.3(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1)):
     dependencies:

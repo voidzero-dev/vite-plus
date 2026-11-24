@@ -24,11 +24,10 @@ describe('resolve-lint', () => {
   });
 
   it('should keep the Windows tsrs-lint executable path absolute', () => {
-    const backendPath =
-      'C:\\repo\\node_modules\\.pnpm\\vite-plus@0.1.24\\node_modules\\vite-plus\\node_modules\\.bin\\tsrs-lint.cmd';
+    const backendPath = String.raw`C:\repo\node_modules\.pnpm\vite-plus@0.1.24\node_modules\vite-plus\node_modules\.bin\tsrs-lint.cmd`;
     const result = resolveWindowsLintBackendExecutable(
       [
-        'C:\\repo\\node_modules\\.pnpm\\vite-plus@0.1.24\\node_modules\\vite-plus\\node_modules\\.bin\\tsrs-lint.exe',
+        String.raw`C:\repo\node_modules\.pnpm\vite-plus@0.1.24\node_modules\vite-plus\node_modules\.bin\tsrs-lint.exe`,
         backendPath,
       ],
       {
@@ -41,8 +40,13 @@ describe('resolve-lint', () => {
   });
 
   it('prefers the executable wrapper without resolving Bun paths', () => {
-    const candidates = ['C:\\repo\\.bin\\tsrs-lint.exe', 'C:\\repo\\.bin\\tsrs-lint.cmd'];
-    const getRealpathCandidates = vi.fn(() => ['C:\\cache\\.bin\\tsrs-lint.exe']);
+    const candidates = [
+      String.raw`C:\repo\.bin\tsrs-lint.exe`,
+      String.raw`C:\repo\.bin\tsrs-lint.cmd`,
+    ];
+    const getRealpathCandidates = vi.fn<() => Array<string>>(() => [
+      String.raw`C:\cache\.bin\tsrs-lint.exe`,
+    ]);
 
     expect(
       resolveWindowsLintBackendExecutable(candidates, {
@@ -54,10 +58,10 @@ describe('resolve-lint', () => {
   });
 
   it('resolves a Bun wrapper when the symlinked paths do not exist', () => {
-    const backendPath = 'C:\\repo\\node_modules\\.bun\\tsrs\\node_modules\\.bin\\tsrs-lint.exe';
+    const backendPath = String.raw`C:\repo\node_modules\.bun\tsrs\node_modules\.bin\tsrs-lint.exe`;
 
     expect(
-      resolveWindowsLintBackendExecutable(['C:\\repo\\.bin\\tsrs-lint.exe'], {
+      resolveWindowsLintBackendExecutable([String.raw`C:\repo\.bin\tsrs-lint.exe`], {
         exists: (path) => path === backendPath,
         getRealpathCandidates: () => [backendPath],
       }),
@@ -74,7 +78,10 @@ describe('resolve-lint', () => {
       },
     },
   ])('reports the original candidates when the fallback is $name', ({ getRealpathCandidates }) => {
-    const candidates = ['C:\\repo\\.bin\\tsrs-lint.exe', 'C:\\repo\\.bin\\tsrs-lint.cmd'];
+    const candidates = [
+      String.raw`C:\repo\.bin\tsrs-lint.exe`,
+      String.raw`C:\repo\.bin\tsrs-lint.cmd`,
+    ];
 
     expect(() =>
       resolveWindowsLintBackendExecutable(candidates, {

@@ -1,19 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import url from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import type { ToolchainManifest } from '../../dist/toolchain.js';
-
-const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');
+const cliPkgDir = path.resolve(import.meta.dirname, '../..');
 const distDir = path.join(cliPkgDir, 'dist');
 
 describe('toolchain export', () => {
   it('exports the same manifest as the JSON artifact', async () => {
-    const json = JSON.parse(
-      fs.readFileSync(path.join(distDir, 'toolchain.json'), 'utf8'),
-    ) as ToolchainManifest;
+    const json: unknown = JSON.parse(fs.readFileSync(path.join(distDir, 'toolchain.json'), 'utf8'));
     const module = await import('../../dist/toolchain.js');
 
     expect(module.toolchain).toEqual(json);
@@ -52,7 +47,7 @@ describe('toolchain export', () => {
     const sourceDateEpoch = process.env.SOURCE_DATE_EPOCH;
     const expectedBuildTime =
       sourceDateEpoch !== undefined
-        ? new Date(Number(sourceDateEpoch) * 1_000).toISOString().replace(/\.\d{3}Z$/, 'Z')
+        ? new Date(Number(sourceDateEpoch) * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')
         : fs.existsSync(nativeBuildTimePath)
           ? fs.readFileSync(nativeBuildTimePath, 'utf8').trim()
           : undefined;

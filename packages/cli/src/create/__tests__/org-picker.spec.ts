@@ -9,8 +9,11 @@ import {
 } from '../org-picker.js';
 
 const { mockSelect, mockIsCancel } = vi.hoisted(() => ({
-  mockSelect: vi.fn(),
-  mockIsCancel: vi.fn((value: unknown) => value === '__cancel__'),
+  mockSelect:
+    vi.fn<
+      (options: { options: Array<{ label: string; value: string }> }) => Promise<string | undefined>
+    >(),
+  mockIsCancel: vi.fn<(value: unknown) => boolean>((value: unknown) => value === '__cancel__'),
 }));
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
@@ -44,7 +47,7 @@ describe('pickOrgTemplate', () => {
     mockSelect.mockResolvedValue('web');
     await pickOrgTemplate(manifest(), { isMonorepo: false });
     const passedOptions = mockSelect.mock.calls[0][0].options;
-    expect(passedOptions.map((o: { value: string }) => o.value).slice(0, -1)).toEqual([
+    expect(passedOptions.map((option) => option.value).slice(0, -1)).toEqual([
       'monorepo',
       'web',
       'library',
@@ -56,10 +59,7 @@ describe('pickOrgTemplate', () => {
     mockSelect.mockResolvedValue('web');
     await pickOrgTemplate(manifest(), { isMonorepo: true });
     const passedOptions = mockSelect.mock.calls[0][0].options;
-    expect(passedOptions.map((o: { value: string }) => o.value).slice(0, -1)).toEqual([
-      'web',
-      'library',
-    ]);
+    expect(passedOptions.map((option) => option.value).slice(0, -1)).toEqual(['web', 'library']);
     expect(passedOptions.at(-1)).toMatchObject({ label: 'Vite+ built-in templates' });
   });
 
@@ -77,7 +77,7 @@ describe('pickOrgTemplate', () => {
     // to its escape-hatch option. If the option isn't in the list at all,
     // the assertion below fails.
     mockSelect.mockImplementation(
-      async (opts: { options: { value: string; label: string }[] }) =>
+      async (opts: { options: Array<{ value: string; label: string }> }) =>
         opts.options.find((o) => o.label === 'Vite+ built-in templates')?.value,
     );
     expect(await pickOrgTemplate(manifest(), { isMonorepo: false })).toBe(

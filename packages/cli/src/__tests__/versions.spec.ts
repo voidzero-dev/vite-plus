@@ -1,18 +1,20 @@
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+
+import { globSync } from 'tinyglobby';
+import { assert, describe, expect, it } from 'vitest';
+
+import { isObjectValue } from '../utils/json-value.ts';
 /**
  * Verify that the vite-plus/versions export works correctly.
  *
  * Tests run against the already-built dist/ directory, ensuring
  * that syncToolchainExports() produces correct artifacts.
  */
-import fs from 'node:fs';
-import { createRequire } from 'node:module';
-import path from 'node:path';
-import url from 'node:url';
+import { readJsonFile } from '../utils/json.ts';
 
-import { globSync } from 'tinyglobby';
-import { describe, expect, it } from 'vitest';
-
-const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');
+const cliPkgDir = path.resolve(import.meta.dirname, '../..');
 const distDir = path.join(cliPkgDir, 'dist');
 const corePkgPath = path.join(cliPkgDir, '../core/package.json');
 const require = createRequire(import.meta.url);
@@ -20,12 +22,12 @@ const require = createRequire(import.meta.url);
 describe('versions export', () => {
   describe('build artifacts', () => {
     it('dist/versions.js should export a versions object', () => {
-      const content = fs.readFileSync(path.join(distDir, 'versions.js'), 'utf-8');
+      const content = fs.readFileSync(path.join(distDir, 'versions.js'), 'utf8');
       expect(content).toContain('export const versions');
     });
 
     it('dist/versions.d.ts should declare a versions type', () => {
-      const content = fs.readFileSync(path.join(distDir, 'versions.d.ts'), 'utf-8');
+      const content = fs.readFileSync(path.join(distDir, 'versions.d.ts'), 'utf8');
       expect(content).toContain('export declare const versions');
     });
   });
@@ -46,10 +48,10 @@ describe('versions export', () => {
     const RELATIVE_VERSIONS_IMPORT = /import\(\s*(['"])(\.\.?\/[^'"]*versions\.js)\1\s*\)/g;
 
     it('every relative `import(... versions.js)` in dist resolves to an existing file', () => {
-      const offenders: string[] = [];
+      const offenders: Array<string> = [];
       let matchCount = 0;
       for (const file of globSync('**/*.js', { cwd: distDir, absolute: true })) {
-        const content = fs.readFileSync(file, 'utf-8');
+        const content = fs.readFileSync(file, 'utf8');
         for (const match of content.matchAll(RELATIVE_VERSIONS_IMPORT)) {
           matchCount++;
           const target = path.resolve(path.dirname(file), match[2]);
@@ -72,19 +74,18 @@ describe('versions export', () => {
 
   describe('bundledVersions consistency', () => {
     it('should contain all core bundledVersions', async () => {
-      const corePkg = JSON.parse(fs.readFileSync(corePkgPath, 'utf-8'));
+      const corePkg = readJsonFile(corePkgPath);
+      assert(isObjectValue(corePkg.bundledVersions));
       const mod = await import('../../dist/versions.js');
       const versions = mod.versions as Record<string, string>;
-      for (const [key, value] of Object.entries(
-        corePkg.bundledVersions as Record<string, string>,
-      )) {
+      for (const [key, value] of Object.entries(corePkg.bundledVersions)) {
         expect(versions[key], `versions.${key} should match core bundledVersions`).toBe(value);
       }
     });
 
     it.each(['vitest', 'tsrs'] as const)('should match the installed %s version', async (name) => {
       const pkgPath = require.resolve(`${name}/package.json`);
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
       const mod = await import('../../dist/versions.js');
       const versions = mod.versions as Record<string, string>;
       expect(versions[name], `versions.${name} should match installed ${name} version`).toBe(
@@ -95,7 +96,7 @@ describe('versions export', () => {
 
   describe('type declarations', () => {
     it('should declare every runtime field as a readonly string', async () => {
-      const content = fs.readFileSync(path.join(distDir, 'versions.d.ts'), 'utf-8');
+      const content = fs.readFileSync(path.join(distDir, 'versions.d.ts'), 'utf8');
       const { versions } = await import('../../dist/versions.js');
       const fields = Array.from(
         content.matchAll(/readonly '([^']+)': string;/g),

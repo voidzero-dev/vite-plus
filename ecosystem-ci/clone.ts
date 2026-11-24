@@ -8,7 +8,7 @@ import repos from './repo.json' with { type: 'json' };
 const cwd = import.meta.dirname;
 
 function exec(cmd: string, execCwd: string = cwd): string {
-  return execSync(cmd, { cwd: execCwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+  return execSync(cmd, { cwd: execCwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 }
 
 function getRemoteUrl(dir: string): string | null {
@@ -52,7 +52,7 @@ function checkoutHash(dir: string, hash: string): void {
 }
 
 function cloneProject(repoName: string): void {
-  const repo = repos[repoName as keyof typeof repos];
+  const repo = Object.entries(repos).find(([name]) => name === repoName)?.[1];
   if (!repo) {
     console.error(`Project ${repoName} is not defined in repo.json`);
     process.exit(1);

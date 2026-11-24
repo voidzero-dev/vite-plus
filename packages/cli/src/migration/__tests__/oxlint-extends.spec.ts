@@ -7,6 +7,7 @@ import { loadConfigFromFile } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
+import type { JsonObject } from '../../utils/json.ts';
 import {
   injectLintTypeCheckDefaults,
   mergeViteConfigFiles,
@@ -20,7 +21,7 @@ import { createMigrationReport } from '../report.ts';
 describe('Oxlint JSON extends migration', () => {
   let project: string;
 
-  function write(filename: string, content: string | object) {
+  function write(filename: string, content: string | JsonObject) {
     const filenamePath = path.join(project, filename);
     fs.mkdirSync(path.dirname(filenamePath), { recursive: true });
     fs.writeFileSync(filenamePath, typeof content === 'string' ? content : JSON.stringify(content));
@@ -192,11 +193,10 @@ describe('Oxlint JSON extends migration', () => {
       expect(migrated.rules).not.toHaveProperty('vp-missing/custom');
       expect(migrated.rules).toHaveProperty('base/custom', 'warn');
       expect(migrated.extends![0].rules).toHaveProperty('base/custom', 'error');
-      if (shared) {
-        expect((await loadConfig(path.join(project, 'packages/a'))).lint!.extends![0]).toEqual(
-          migrated,
-        );
-      }
+      const child = shared
+        ? (await loadConfig(path.join(project, 'packages/a'))).lint?.extends?.[0]
+        : undefined;
+      expect(child).toEqual(shared ? migrated : undefined);
     },
   );
 
@@ -421,7 +421,7 @@ describe('Oxlint JSON extends migration', () => {
       createWorkspace();
       const root = write('.oxlintrc.json', { rules: { 'no-console': 'off' } });
       const shared = write('shared/lint.json', {
-        ...(extendsRoot ? { extends: [root] } : {}),
+        ...(extendsRoot ? { extends: [root] } : undefined),
         rules: { 'no-console': 'error' },
         options: { typeAware: false, typeCheck: false },
       });
@@ -442,18 +442,14 @@ describe('Oxlint JSON extends migration', () => {
         expect(lint!.rules!['no-console']).toBe('error');
         expect(lint!.options).toEqual({ typeAware: false, typeCheck: false });
         expect(fs.existsSync(path.join(directory, '.oxlintrc.json'))).toBe(false);
-        if (extendsRoot) {
-          expect(lint!.extends![0].rules!['no-console']).toBe('off');
-        }
+        expect(lint?.extends?.[0]?.rules?.['no-console']).toBe(extendsRoot ? 'off' : undefined);
       }
       expect(fs.readFileSync(shared, 'utf8')).toBe(original);
       // Removing the links leaves their target on disk, so its dependencies must remain too.
       expect(fs.existsSync(root)).toBe(extendsRoot);
-      if (extendsRoot) {
-        expect(resolveOxlintConfigExtends(shared).config.extends![0].rules!['no-console']).toBe(
-          'off',
-        );
-      }
+      expect(resolveOxlintConfigExtends(shared).config.extends?.[0]?.rules?.['no-console']).toBe(
+        extendsRoot ? 'off' : undefined,
+      );
     },
   );
 
@@ -656,13 +652,13 @@ describe('Oxlint JSON extends migration', () => {
   it.skipIf(process.platform === 'win32')(
     'preserves literal backslashes in plugin filenames',
     async () => {
-      write('base.json', { jsPlugins: ['./plugin\\name.mjs'] });
+      write('base.json', { jsPlugins: [String.raw`./plugin\name.mjs`] });
       write('.oxlintrc.json', { extends: ['./base.json'] });
 
       mergeViteConfigFiles(project, true);
 
       expect((await loadConfig()).lint!.extends![0].jsPlugins).toEqual([
-        path.join(project, 'plugin\\name.mjs'),
+        path.join(project, String.raw`plugin\name.mjs`),
       ]);
     },
   );
@@ -829,10 +825,14 @@ describe('Oxlint JSON extends migration', () => {
       const firstReport = createMigrationReport();
       mergeViteConfigFiles(project, true, firstReport);
       expect(firstReport.warnings).toHaveLength(1);
+      const pendingReport = createMigrationReport();
+      const pending =
+        failure === 'missing source'
+          ? retryPreservedOxlintConfigs(project, true, pendingReport)
+          : undefined;
+      expect(pending).toBe(failure === 'missing source' ? false : undefined);
+      expect(pendingReport.warnings).toHaveLength(failure === 'missing source' ? 1 : 0);
       if (failure === 'missing source') {
-        const pendingReport = createMigrationReport();
-        expect(retryPreservedOxlintConfigs(project, true, pendingReport)).toBe(false);
-        expect(pendingReport.warnings).toHaveLength(1);
         write('base.json', { rules: { 'no-debugger': 'error' } });
       } else {
         fs.unlinkSync(path.join(project, 'base.ts'));

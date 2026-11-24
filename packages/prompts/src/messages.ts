@@ -2,7 +2,8 @@ import type { Writable } from 'node:stream';
 
 import color from 'picocolors';
 
-import { type CommonOptions, getGuide, S_BAR, S_BAR_START, S_BAR_END } from './common.js';
+import type { CommonOptions } from './common.js';
+import { getGuide, S_BAR, S_BAR_START, S_BAR_END } from './common.js';
 
 export const cancel = (message = '', opts?: CommonOptions) => {
   const output: Writable = opts?.output ?? process.stdout;

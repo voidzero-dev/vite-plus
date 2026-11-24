@@ -31,14 +31,14 @@ test('lazyPlugins executes the callback by default', () => {
 
 test('lazyPlugins returns undefined during a config-metadata resolution', () => {
   process.env.VP_RESOLVING_CONFIG_METADATA = '1';
-  const cb = vi.fn(() => [{ name: 'my-plugin' }]);
+  const cb = vi.fn<() => Array<PluginOption>>(() => [{ name: 'my-plugin' }]);
   const result = lazyPlugins(cb);
   expect(result).toBeUndefined();
   expect(cb).not.toHaveBeenCalled();
 });
 
 test('withConfigMetadataResolution skips plugins during the resolution and restores after', async () => {
-  const cb = vi.fn(() => [{ name: 'my-plugin' }]);
+  const cb = vi.fn<() => Array<PluginOption>>(() => [{ name: 'my-plugin' }]);
   let during: ReturnType<typeof lazyPlugins>;
   const returned = await withConfigMetadataResolution(async () => {
     during = lazyPlugins(cb);
@@ -112,13 +112,16 @@ const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 const AUTO_INLINE_PLUGIN_NAME = 'vite-plus:auto-inline-matcher-deps';
 const COVERAGE_GUARD_PLUGIN_NAME = 'vite-plus:coverage-version-guard';
 const CACHE_PATHS_PLUGIN_NAME = 'vite-plus:vitest-cache-paths';
-const userPlugins = (plugins: unknown): unknown[] => {
+const userPlugins = (plugins: unknown): Array<unknown> => {
   expect(Array.isArray(plugins)).toBe(true);
-  const arr = plugins as unknown[];
-  expect((arr[0] as { name?: string })?.name).toBe(RESOLVER_PLUGIN_NAME);
-  expect((arr[1] as { name?: string })?.name).toBe(AUTO_INLINE_PLUGIN_NAME);
-  expect((arr[2] as { name?: string })?.name).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-  expect((arr[3] as { name?: string })?.name).toBe(CACHE_PATHS_PLUGIN_NAME);
+  if (!Array.isArray(plugins)) {
+    throw new TypeError('Expected a plugin array');
+  }
+  const arr: Array<unknown> = plugins;
+  expect(arr[0]).toHaveProperty('name', RESOLVER_PLUGIN_NAME);
+  expect(arr[1]).toHaveProperty('name', AUTO_INLINE_PLUGIN_NAME);
+  expect(arr[2]).toHaveProperty('name', COVERAGE_GUARD_PLUGIN_NAME);
+  expect(arr[3]).toHaveProperty('name', CACHE_PATHS_PLUGIN_NAME);
   return arr.slice(4);
 };
 
@@ -164,13 +167,13 @@ test('lazyPlugins with vitest configureVitest plugin satisfies plugins field', (
   });
   const userOnly = userPlugins(config.plugins);
   expect(userOnly.length).toBe(1);
-  expect((userOnly[0] as { name: string })?.name).toBe('vitest-plugin');
+  expect(userOnly[0]).toHaveProperty('name', 'vitest-plugin');
 });
 
 // defineConfig compatibility tests
 
 test('defineConfig supports mixed PluginOption types in array', () => {
-  const plugins: PluginOption[] = [
+  const plugins: Array<PluginOption> = [
     { name: 'sync-plugin' },
     false,
     Promise.resolve({ name: 'promised-plugin' }),

@@ -1,13 +1,13 @@
 import { execFile } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { describe, expect, onTestFinished, test } from 'vitest';
 
+import { parseJsonObject } from '../../../cli/src/utils/json-value.ts';
 import {
   assertCoreVersionMatchesVite,
   assertCoreVersionUnclaimed,
@@ -57,8 +57,8 @@ describe('decodeCoreVersion', () => {
 });
 
 // Each release publishes its core version before the next one is prepared.
-function releaseSequence(vite: string, vitePlusVersions: string[]): string[] {
-  const published: string[] = [];
+function releaseSequence(vite: string, vitePlusVersions: Array<string>): Array<string> {
+  const published: Array<string> = [];
   for (const vitePlus of vitePlusVersions) {
     published.push(nextCoreVersion({ vite, vitePlus, published }));
   }
@@ -324,7 +324,10 @@ describe('localCoreVersion', () => {
 // The workflows run `core-version.ts` from the repository root (`prepare`,
 // `check`) or from packages/core (`local`). Make a temporary copy of that
 // layout with the given core manifest and CLI version.
-function repoLayout(core: object, cliVersion = '0.0.0'): string {
+function repoLayout(
+  core: { version: string; bundledVersions?: { vite: string }; vitePlusVersion?: string },
+  cliVersion = '0.0.0',
+): string {
   const root = mkdtempSync(path.join(tmpdir(), 'vp-core-version-'));
   onTestFinished(() => rmSync(root, { recursive: true, force: true }));
   const toolsDir = path.join(root, 'packages/tools/src');
@@ -343,8 +346,8 @@ function repoLayout(core: object, cliVersion = '0.0.0'): string {
   return root;
 }
 
-function readCoreManifest(root: string): Record<string, unknown> {
-  return JSON.parse(readFileSync(path.join(root, 'packages/core/package.json'), 'utf8'));
+function readCoreManifest(root: string) {
+  return parseJsonObject(readFileSync(path.join(root, 'packages/core/package.json'), 'utf8'));
 }
 
 interface ScriptResult {
@@ -357,7 +360,7 @@ interface ScriptResult {
 // answer its request.
 async function runScript(
   root: string,
-  args: string[],
+  args: Array<string>,
   { cwd = root, registry }: { cwd?: string; registry?: string } = {},
 ): Promise<ScriptResult> {
   const script = path.relative(cwd, path.join(root, 'packages/tools/src/core-version.ts'));
@@ -369,8 +372,19 @@ async function runScript(
     });
     return { code: 0, stdout: stdout.trim(), stderr };
   } catch (error) {
-    const failure = error as { code: number; stdout: string; stderr: string };
-    return { code: failure.code, stdout: failure.stdout.trim(), stderr: failure.stderr };
+    if (
+      typeof error !== 'object' ||
+      error === null ||
+      !('code' in error) ||
+      typeof error.code !== 'number' ||
+      !('stdout' in error) ||
+      typeof error.stdout !== 'string' ||
+      !('stderr' in error) ||
+      typeof error.stderr !== 'string'
+    ) {
+      throw error;
+    }
+    return { code: error.code, stdout: error.stdout.trim(), stderr: error.stderr };
   }
 }
 
@@ -384,9 +398,20 @@ async function startRegistry(status: number, body: unknown = {}): Promise<string
     }
     response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  onTestFinished(() => new Promise<void>((resolve) => server.close(() => resolve())));
-  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  onTestFinished(
+    () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      }),
+  );
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected a TCP server address');
+  }
+  return `http://127.0.0.1:${address.port}`;
 }
 
 describe('core-version.ts local', () => {

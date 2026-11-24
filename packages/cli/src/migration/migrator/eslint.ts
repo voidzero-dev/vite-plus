@@ -3,13 +3,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import { type OxlintConfig } from 'oxlint';
+import {
+  confirm as promptConfirm,
+  isCancel,
+  log as promptLog,
+} from '@voidzero-dev/vite-plus-prompts';
+import type { OxlintConfig } from 'oxlint';
 import { compareReversed, isLessThanOrEqual, normalize } from 'verkit';
 
 import { ResolverFactory, rewriteEslint } from '../../../binding/index.js';
-import { type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
 import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
+import { isJsonObject, isObjectValue } from '../../utils/json-value.ts';
+import type { JsonObject } from '../../utils/json.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { fetchNpmResource, getNpmRegistry } from '../../utils/npm-config.ts';
 import { displayRelative } from '../../utils/path.ts';
@@ -17,7 +23,8 @@ import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs } from '../detector.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
+import { rewriteScriptMap } from './shared.ts';
 import {
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
@@ -51,16 +58,16 @@ const OXLINT_SCHEMA_PATH = fileURLToPath(
   new URL('configuration_schema.json', import.meta.resolve('oxlint/package.json')),
 );
 
-const OXLINT_SCHEMA = readJsonFile(OXLINT_SCHEMA_PATH) as {
-  definitions: { DummyRuleMap: { properties: Record<string, unknown> } };
-};
+const schemaDefinitions = readJsonFile(OXLINT_SCHEMA_PATH).definitions;
+const ruleMap = isObjectValue(schemaDefinitions) ? schemaDefinitions.DummyRuleMap : undefined;
+if (!isObjectValue(ruleMap) || !isObjectValue(ruleMap.properties)) {
+  throw new Error('The Oxlint schema is missing its built-in rules');
+}
 
 // Oxlint generates `DummyRuleMap.properties` from its built-in `RULES` table.
 // Defined in `oxc_linter/src/generated/rules_enum.rs`;
 // schema generation is in `oxc_linter/src/config/rules.rs`.
-const OXLINT_BUILTIN_RULES = new Set<string>(
-  Object.keys(OXLINT_SCHEMA.definitions.DummyRuleMap.properties),
-);
+const OXLINT_BUILTIN_RULES = new Set<string>(Object.keys(ruleMap.properties));
 
 // Oxlint accepts these TypeScript rule names as aliases for the corresponding
 // built-in ESLint rules. Keep this list aligned with
@@ -86,14 +93,7 @@ const TYPESCRIPT_COMPATIBLE_ESLINT_RULES = new Set([
   'no-useless-constructor',
 ]);
 
-export function detectEslintProject(
-  projectPath: string,
-  packages?: WorkspacePackage[],
-): {
-  hasDependency: boolean;
-  configFile?: string;
-  legacyConfigFile?: string;
-} {
+export function detectEslintProject(projectPath: string, packages?: Array<WorkspacePackage>) {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return { hasDependency: false };
@@ -104,7 +104,7 @@ export function detectEslintProject(
   };
   let hasDependency = !!(pkg.devDependencies?.eslint || pkg.dependencies?.eslint);
   const configs = detectConfigs(projectPath);
-  let configFile = configs.eslintConfig;
+  const configFile = configs.eslintConfig;
   const legacyConfigFile = configs.eslintLegacyConfig;
 
   // If root doesn't have eslint dependency, check workspace packages
@@ -162,11 +162,13 @@ export async function resolveOxlintMigrateVersion(oxlintVersion: string): Promis
     if (!response.ok) {
       return oxlintVersion;
     }
-    const packument = (await response.json()) as { versions?: Record<string, unknown> };
-    if (packument.versions && Object.hasOwn(packument.versions, oxlintVersion)) {
+    const packument: unknown = await response.json();
+    const available =
+      isJsonObject(packument) && isObjectValue(packument.versions) ? packument.versions : {};
+    if (Object.hasOwn(available, oxlintVersion)) {
       return oxlintVersion;
     }
-    const candidates = Object.keys(packument.versions ?? {}).filter(
+    const candidates = Object.keys(available).filter(
       (version) => normalize(version) && isLessThanOrEqual(version, oxlintVersion),
     );
     return candidates.length > 0 ? candidates.toSorted(compareReversed)[0] : oxlintVersion;
@@ -182,7 +184,7 @@ export async function resolveOxlintMigrateVersion(oxlintVersion: string): Promis
 async function runOxlintMigrateStep(
   cwd: string,
   migratePackage: string,
-  args: string[],
+  args: Array<string>,
   spinner: ReturnType<typeof getSpinner>,
   failMessage: string,
   manualHint: string,
@@ -197,15 +199,15 @@ async function runOxlintMigrateStep(
       spinner.stop(failMessage);
       const stderr = result.stderr.toString().trim();
       if (stderr) {
-        prompts.log.warn(`⚠ ${stderr}`);
+        promptLog.warn(`⚠ ${stderr}`);
       }
-      prompts.log.info(manualHint);
+      promptLog.info(manualHint);
       return { ok: false };
     }
     return { ok: true, skippedRules: extractSkippedRules(result.stdout) };
   } catch {
     spinner.stop(failMessage);
-    prompts.log.info(manualHint);
+    promptLog.info(manualHint);
     return { ok: false };
   }
 }
@@ -214,7 +216,7 @@ export async function migrateEslintToOxlint(
   projectPath: string,
   interactive: boolean,
   eslintConfigFile?: string,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
@@ -224,7 +226,6 @@ export async function migrateEslintToOxlint(
     // Pin @oxlint/migrate to the bundled oxlint version when the registry
     // has it; the package trails oxlint releases, so resolve the newest
     // published version that is not newer than the pin.
-    // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
     const { versions } = await import('../versions.js');
     const migratePackage = `@oxlint/migrate@${await resolveOxlintMigrateVersion(versions.oxlint)}`;
     const migrateArgs = [
@@ -355,7 +356,7 @@ function deleteEslintConfigFiles(basePath: string, report?: MigrationReport, sil
           report.removedConfigCount++;
         }
         if (!silent) {
-          prompts.log.success(`✔ Removed ${displayRelative(configPath)}`);
+          promptLog.success(`✔ Removed ${displayRelative(configPath)}`);
         }
       }
     }
@@ -449,7 +450,7 @@ export function rewriteEslintPackageJson(
     peerDependencies?: Record<string, string>;
     optionalDependencies?: Record<string, string>;
     scripts?: Record<string, string>;
-    'lint-staged'?: Record<string, string | string[]>;
+    'lint-staged'?: Record<string, string | Array<string>>;
   }>(packageJsonPath, (pkg) => {
     let changed = false;
     for (const field of [
@@ -480,16 +481,16 @@ export function rewriteEslintPackageJson(
       }
     }
     if (pkg.scripts) {
-      const updated = rewriteEslint(JSON.stringify(pkg.scripts));
+      const updated = rewriteScriptMap(pkg.scripts, rewriteEslint);
       if (updated) {
-        pkg.scripts = JSON.parse(updated);
+        pkg.scripts = updated;
         changed = true;
       }
     }
     if (pkg['lint-staged']) {
-      const updated = rewriteEslint(JSON.stringify(pkg['lint-staged']));
+      const updated = rewriteScriptMap(pkg['lint-staged'], rewriteEslint);
       if (updated) {
-        pkg['lint-staged'] = JSON.parse(updated);
+        pkg['lint-staged'] = updated;
         changed = true;
       }
     }
@@ -519,13 +520,9 @@ export function rewriteToolLintStagedConfigFiles(
       );
       continue;
     }
-    editJsonFile<Record<string, string | string[]>>(configPath, (config) => {
-      const updated = rewriteFn(JSON.stringify(config));
-      if (updated) {
-        return JSON.parse(updated);
-      }
-      return undefined;
-    });
+    editJsonFile<Record<string, string | Array<string>>>(configPath, (config) =>
+      rewriteScriptMap(config, rewriteFn),
+    );
   }
   for (const filename of LINT_STAGED_OTHER_CONFIG_FILES) {
     const configPath = path.join(projectPath, filename);
@@ -578,7 +575,7 @@ function deriveJsPluginNamespace(packageName: string): string {
  */
 export function collectInstalledPackageNames(
   projectPath: string,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): Set<string> {
   const names = new Set<string>();
   const paths = [projectPath, ...(packages ?? []).map((p) => path.join(projectPath, p.path))];
@@ -587,9 +584,9 @@ export function collectInstalledPackageNames(
     if (!fs.existsSync(pkgJsonPath)) {
       continue;
     }
-    let pkg: Record<string, Record<string, string> | undefined>;
+    let pkg: JsonObject;
     try {
-      pkg = readJsonFile(pkgJsonPath) as typeof pkg;
+      pkg = readJsonFile(pkgJsonPath);
     } catch {
       continue;
     }
@@ -599,7 +596,7 @@ export function collectInstalledPackageNames(
     // must not count as available here.
     for (const field of ['devDependencies', 'dependencies', 'optionalDependencies'] as const) {
       const deps = pkg[field];
-      if (deps) {
+      if (isJsonObject(deps)) {
         for (const name of Object.keys(deps)) {
           names.add(name);
         }
@@ -687,19 +684,21 @@ function hasBuiltinOxlintNamespace(key: string): boolean {
 
 /** Filter a rules object to Oxlint rules or rules under a configured JS plugin namespace. */
 function filterRulesAgainstNamespaces(
-  rules: Record<string, unknown>,
+  rules: NonNullable<OxlintConfig['rules']>,
   jsPluginNamespaces: Set<string>,
   droppedRules: Set<string>,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(rules)) {
+) {
+  const out = { ...rules };
+  for (const key of Object.keys(rules)) {
     if (
       isBuiltinOxlintRule(key) ||
       ruleKeyMatchesNamespace(key, jsPluginNamespaces) ||
       ruleKeyMatchesNamespace(normalizeOxlintRuleNamespace(key), jsPluginNamespaces)
     ) {
-      out[key] = value;
-    } else if (hasBuiltinOxlintNamespace(key)) {
+      continue;
+    }
+    delete out[key];
+    if (hasBuiltinOxlintNamespace(key)) {
       droppedRules.add(key);
     }
   }
@@ -716,12 +715,9 @@ function filterRulesAgainstNamespaces(
 function partitionJsPlugins(
   entries: NonNullable<OxlintConfig['jsPlugins']>,
   availablePackages: Set<string>,
-): {
-  kept: NonNullable<OxlintConfig['jsPlugins']>;
-  dropped: string[];
-} {
+) {
   const kept: NonNullable<OxlintConfig['jsPlugins']> = [];
-  const dropped: string[] = [];
+  const dropped: Array<string> = [];
   for (const entry of entries) {
     if (typeof entry !== 'string') {
       kept.push(entry);
@@ -822,7 +818,7 @@ export function sanitizeInheritedJsPlugins(
     }
     for (const rule of Object.keys(layer.rules ?? {})) {
       if (ruleKeyMatchesNamespace(rule, droppedNamespaces) && !isBuiltinOxlintRule(rule)) {
-        delete layer.rules![rule];
+        delete layer.rules?.[rule];
       }
     }
     return droppedNamespaces;
@@ -881,7 +877,7 @@ export function sanitizeMigratedOxlintConfig(
   // 3. Sanitize base-level plugins[] against base namespaces.
   if (config.plugins) {
     type PluginEntry = NonNullable<OxlintConfig['plugins']>[number];
-    const keptPlugins: PluginEntry[] = [];
+    const keptPlugins: Array<PluginEntry> = [];
     for (const p of config.plugins) {
       if (baseNamespaces.has(p)) {
         keptPlugins.push(p);
@@ -904,7 +900,7 @@ export function sanitizeMigratedOxlintConfig(
       allDroppedRules,
     );
     if (Object.keys(filtered).length !== Object.keys(config.rules).length) {
-      config.rules = filtered as typeof config.rules;
+      config.rules = filtered;
     }
   }
 
@@ -941,7 +937,7 @@ export function sanitizeMigratedOxlintConfig(
       // Override plugins[].
       if (override.plugins) {
         type OverridePluginEntry = NonNullable<typeof override.plugins>[number];
-        const keptOverridePlugins: OverridePluginEntry[] = [];
+        const keptOverridePlugins: Array<OverridePluginEntry> = [];
         for (const p of override.plugins) {
           if (overrideNamespaces.has(p)) {
             keptOverridePlugins.push(p);
@@ -962,7 +958,7 @@ export function sanitizeMigratedOxlintConfig(
           allDroppedRules,
         );
         if (Object.keys(filtered).length !== Object.keys(override.rules).length) {
-          override.rules = filtered as typeof override.rules;
+          override.rules = filtered;
         }
       }
     }
@@ -996,7 +992,7 @@ export function sanitizeMigratedOxlintConfig(
 }
 
 export function warnPackageLevelEslint() {
-  prompts.log.warn(
+  promptLog.warn(
     'ESLint detected in workspace packages but no root config found. Package-level ESLint must be migrated manually.',
   );
 }
@@ -1022,7 +1018,7 @@ const INCOMPATIBLE_ESLINT_INTEGRATIONS = ['@nuxt/eslint'] as const;
  */
 export function detectIncompatibleEslintIntegration(
   projectPath: string,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): string | undefined {
   const candidates = [projectPath, ...(packages ?? []).map((p) => path.join(projectPath, p.path))];
   for (const candidate of candidates) {
@@ -1046,7 +1042,7 @@ export function detectIncompatibleEslintIntegration(
 }
 
 export function warnIncompatibleEslintIntegration(name: string): void {
-  prompts.log.warn(
+  promptLog.warn(
     `${name} detected — automatic ESLint migration is skipped. ` +
       `${name} wires ESLint into a framework-specific flow that Vite+ cannot migrate cleanly yet. ` +
       'Your ESLint setup is preserved. ' +
@@ -1055,7 +1051,7 @@ export function warnIncompatibleEslintIntegration(name: string): void {
 }
 
 export function warnLegacyEslintConfig(legacyConfigFile: string) {
-  prompts.log.warn(
+  promptLog.warn(
     `Legacy ESLint configuration detected (${legacyConfigFile}). ` +
       'Automatic migration to Oxlint requires ESLint v9+ with flat config format (eslint.config.*). ' +
       'Please upgrade to ESLint v9 first: https://eslint.org/docs/latest/use/migrate-to-9.0.0',
@@ -1064,7 +1060,7 @@ export function warnLegacyEslintConfig(legacyConfigFile: string) {
 
 export async function confirmEslintMigration(interactive: boolean): Promise<boolean> {
   if (interactive) {
-    const confirmed = await prompts.confirm({
+    const confirmed = await promptConfirm({
       message:
         'Migrate ESLint rules to Oxlint using @oxlint/migrate?\n  ' +
         styleText(
@@ -1073,7 +1069,7 @@ export async function confirmEslintMigration(interactive: boolean): Promise<bool
         ),
       initialValue: true,
     });
-    if (prompts.isCancel(confirmed)) {
+    if (isCancel(confirmed)) {
       cancelAndExit();
     }
     return confirmed;
@@ -1084,7 +1080,7 @@ export async function confirmEslintMigration(interactive: boolean): Promise<bool
 export async function promptEslintMigration(
   projectPath: string,
   interactive: boolean,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): Promise<boolean> {
   const incompatible = detectIncompatibleEslintIntegration(projectPath, packages);
   if (incompatible) {

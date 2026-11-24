@@ -3,9 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { coerce } from 'verkit';
-import { Scalar, YAMLSeq } from 'yaml';
+import { isSeq, isScalar } from 'yaml';
+import { YAMLSeq } from 'yaml';
 
-import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
 import { createCatalogDependencyResolverFromCatalogs } from '../../utils/catalog.ts';
 import {
   VITEST_AGE_GATE_EXEMPT_PACKAGES,
@@ -15,13 +17,13 @@ import {
 import { readJsonFile } from '../../utils/json.ts';
 import { editYamlFile, readYamlFile, scalarString } from '../../utils/yaml.ts';
 import { overridesSatisfyVitePlus, rewriteCatalog, usesWebdriverioProvider } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
+import type { DependencyBag } from './shared.ts';
 import {
   WEBDRIVERIO_PROVIDER,
   findDeclaredSpec,
   readPackageJsonIfExists,
   warnMigration,
-  type DependencyBag,
 } from './shared.ts';
 
 // Webdriverio is the runtime peer that drags `edgedriver` / `geckodriver` in.
@@ -36,7 +38,7 @@ const WEBDRIVERIO_ALLOW_SIGNAL_DEPS = [WEBDRIVERIO_PEER_DEP, WEBDRIVERIO_PROVIDE
 // Only the provider (or its legacy imports) needs the shared browser override.
 export function workspaceUsesWebdriverioProvider(
   rootDir: string,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): boolean {
   return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))].some((dir) => {
     const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
@@ -62,7 +64,7 @@ export function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
 
 export function workspaceUsesWebdriverio(
   rootDir: string,
-  packages: WorkspacePackage[] | undefined,
+  packages: Array<WorkspacePackage> | undefined,
 ): boolean {
   const rootPkg = readPackageJsonIfExists(path.join(rootDir, 'package.json'));
   if (rootPkg && hasOwnWebdriverioDependency(rootPkg)) {
@@ -116,7 +118,7 @@ function readYarnrcValue(dir: string, key: string): string | undefined {
     return undefined;
   }
   try {
-    const doc = readYamlFile(yarnrcYmlPath) as Record<string, unknown> | null;
+    const doc = readYamlFile(yarnrcYmlPath);
     const value = doc?.[key];
     return typeof value === 'string' ? value : undefined;
   } catch {
@@ -228,7 +230,7 @@ function dirIsWorkspaceRoot(dir: string): boolean {
   }
   try {
     const pkg = readJsonFile(pkgJsonPath) as { workspaces?: unknown };
-    return pkg.workspaces != null;
+    return pkg.workspaces !== undefined && pkg.workspaces !== null;
   } catch {
     return false;
   }
@@ -375,11 +377,13 @@ export function rewriteYarnrcYml(
     // that already preapproves private packages) instead of skipping when set,
     // otherwise the gate could still reject the freshly pinned vitest.
     if (supportPreapproved) {
-      let npmPreapprovedPackages = doc.getIn(['npmPreapprovedPackages']) as YAMLSeq<Scalar<string>>;
-      if (!npmPreapprovedPackages) {
-        npmPreapprovedPackages = new YAMLSeq();
-      }
-      const existingPreapproved = new Set(npmPreapprovedPackages.items.map((n) => n.value));
+      const current = doc.getIn(['npmPreapprovedPackages']);
+      const npmPreapprovedPackages = isSeq(current) ? current : new YAMLSeq();
+      const existingPreapproved = new Set(
+        npmPreapprovedPackages.items.map((item: unknown) =>
+          isScalar(item) ? item.value : undefined,
+        ),
+      );
       for (const pkg of VITEST_AGE_GATE_EXEMPT_PACKAGES) {
         if (!existingPreapproved.has(pkg)) {
           npmPreapprovedPackages.add(scalarString(pkg));
@@ -415,7 +419,7 @@ export function yarnrcSatisfiesVitePlus(
   }
   const doc = readYamlFile(yarnrcYmlPath) as {
     nodeLinker?: string;
-    npmPreapprovedPackages?: string[];
+    npmPreapprovedPackages?: Array<string>;
     catalog?: Record<string, string>;
     catalogs?: Record<string, Record<string, string>>;
   } | null;

@@ -3,9 +3,9 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import * as verkit from 'verkit';
+import { normalize, normalizeRange, isGreaterThan, findMinimumForRange } from 'verkit';
 import { describe, expect, test } from 'vitest';
-import * as yaml from 'yaml';
+import { isMap, isScalar, parse, parseDocument, stringify } from 'yaml';
 
 import { VITEST_VERSION } from '../../../cli/src/utils/constants.ts';
 import {
@@ -15,6 +15,9 @@ import {
   syncCargoOxcVersions,
   syncViteDevtoolsDependencies,
 } from '../sync-remote-deps.ts';
+
+const yaml = { isMap, isScalar, parse, parseDocument, stringify };
+const verkit = { normalize, normalizeRange, isGreaterThan, findMinimumForRange };
 import { alignVendoredVitestDependencies } from '../vendored-vitest.ts';
 
 const VITE_PACKAGE = { devDependencies: { typescript: '~7.0.2' } };
@@ -47,7 +50,15 @@ describe('imported workspace dependencies', () => {
 
   test('removes unused catalog entries without importing benchmarks or nested fixtures', () => {
     const root = mkdtempSync(join(tmpdir(), 'vp-workspace-catalog-'));
-    const writePackage = (directory: string, pkg: object) => {
+    const writePackage = (
+      directory: string,
+      pkg: Partial<
+        Record<
+          'dependencies' | 'devDependencies' | 'peerDependencies' | 'optionalDependencies',
+          Record<string, string>
+        >
+      >,
+    ) => {
       mkdirSync(join(root, directory), { recursive: true });
       writeFileSync(join(root, directory, 'package.json'), JSON.stringify(pkg));
     };

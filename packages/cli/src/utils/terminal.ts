@@ -51,11 +51,9 @@ export function formatDuration(durationMs: number) {
 // warn/error go to stderr (diagnostics).
 
 export function warnMsg(msg: string) {
-  /* oxlint-disable-next-line no-console */
   console.error(styleText(['yellow', 'bold'], 'warn:'), msg);
 }
 
 export function errorMsg(msg: string) {
-  /* oxlint-disable-next-line no-console */
   console.error(styleText(['red', 'bold'], 'error:'), msg);
 }

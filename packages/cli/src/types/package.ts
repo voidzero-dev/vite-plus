@@ -6,6 +6,10 @@ export const PackageManager = {
 } as const;
 export type PackageManager = (typeof PackageManager)[keyof typeof PackageManager];
 
+export function isPackageManager(value: unknown): value is PackageManager {
+  return typeof value === 'string' && Object.hasOwn(PackageManager, value);
+}
+
 export const DependencyType = {
   dependencies: 'dependencies',
   devDependencies: 'devDependencies',

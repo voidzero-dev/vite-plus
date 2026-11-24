@@ -1,18 +1,26 @@
+import type {
+  chmodSync as chmodSyncImplementation,
+  mkdirSync as mkdirSyncImplementation,
+  rmSync as rmSyncImplementation,
+} from 'node:fs';
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test';
 
 import { publishNpmPackageFromEnv } from '../../../../.github/scripts/publish-npm-package.ts';
+import type { waitForNpmPackagesFromEnv as waitForNpmPackagesFromEnvImplementation } from '../../../../.github/scripts/wait-for-npm-packages.ts';
+import type { validateInstallLockfile as validateInstallLockfileImplementation } from '../../generate-install-lockfile.ts';
+import type { editJsonFile as editJsonFileImplementation } from '../utils/json.ts';
 
 vi.mock('node:fs', () => ({
-  copyFileSync: vi.fn(),
+  copyFileSync: vi.fn<typeof copyFileSync>(),
   existsSync: (path: string) => !path.endsWith('rust-cli-artifacts'),
-  chmodSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  readFileSync: vi.fn(),
-  rmSync: vi.fn(),
-  writeFileSync: vi.fn(),
+  chmodSync: vi.fn<typeof chmodSyncImplementation>(),
+  mkdirSync: vi.fn<typeof mkdirSyncImplementation>(),
+  readFileSync: vi.fn<typeof readFileSync>(),
+  rmSync: vi.fn<typeof rmSyncImplementation>(),
+  writeFileSync: vi.fn<typeof writeFileSync>(),
 }));
 vi.mock('node:fs/promises', () => ({ readdir: async () => [] }));
 vi.mock('@napi-rs/cli', () => ({
@@ -29,7 +37,7 @@ vi.mock('../../package.json', () => ({
   },
 }));
 vi.mock('../utils/json.ts', () => ({
-  editJsonFile: vi.fn(),
+  editJsonFile: vi.fn<typeof editJsonFileImplementation>(),
   readJsonFile: () => ({
     version: '1.4.0',
     optionalDependencies: { '@voidzero-dev/vite-plus-darwin-arm64': '1.4.0' },
@@ -37,13 +45,13 @@ vi.mock('../utils/json.ts', () => ({
 }));
 vi.mock('../../generate-install-lockfile.ts', () => ({
   INSTALL_LOCKFILE: 'vp-install-lock.yaml',
-  validateInstallLockfile: vi.fn(),
+  validateInstallLockfile: vi.fn<typeof validateInstallLockfileImplementation>(),
 }));
 vi.mock('../../../../.github/scripts/publish-npm-package.ts', () => ({
-  publishNpmPackageFromEnv: vi.fn(async () => 'published'),
+  publishNpmPackageFromEnv: vi.fn<typeof publishNpmPackageFromEnv>(async () => 'published'),
 }));
 vi.mock('../../../../.github/scripts/wait-for-npm-packages.ts', () => ({
-  waitForNpmPackagesFromEnv: vi.fn(),
+  waitForNpmPackagesFromEnv: vi.fn<typeof waitForNpmPackagesFromEnvImplementation>(),
 }));
 
 const originalArgv = process.argv;
@@ -78,21 +86,23 @@ test.each([
   expect(writeFileSync).toHaveBeenCalledOnce();
   const [path, contents] = vi.mocked(writeFileSync).mock.calls[0];
   expect(path).toEqual(expect.stringContaining(join('cli-npm', 'darwin-arm64', 'package.json')));
-  expect(JSON.parse(contents as string)).toMatchObject({
+  if (typeof contents !== 'string') {
+    throw new TypeError('Expected package.json text');
+  }
+  expect(JSON.parse(contents)).toMatchObject({
     name: '@voidzero-dev/vite-plus-cli-darwin-arm64',
     version: '1.4.0',
     vpNodeVersion: nodeVersion,
   });
-  if (mode === 'npm') {
-    expect(publishNpmPackageFromEnv).toHaveBeenCalledWith(
-      expect.objectContaining({ vpNodeVersion: nodeVersion }),
-      'npm',
-      expect.any(Array),
-      expect.any(String),
-    );
-  } else {
-    expect(publishNpmPackageFromEnv).not.toHaveBeenCalled();
-  }
+  const expectedCall = [
+    expect.objectContaining({ vpNodeVersion: nodeVersion }),
+    'npm',
+    expect.any(Array),
+    expect.any(String),
+  ];
+  expect(vi.mocked(publishNpmPackageFromEnv).mock.calls).toEqual(
+    mode === 'npm' ? [expectedCall] : [],
+  );
 });
 
 test.each(['', 'lts', '24', '24.22', 'v24.22.1', '024.22.1', '24.22.1-rc.1', '24.22.1+build'])(

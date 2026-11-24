@@ -4,8 +4,8 @@ import { checkNpmPackageExists, hasPackageManagerDeclaration } from '../package.
 
 // Pin the registry: getNpmRegistry reads the developer's real `.npmrc`, so
 // the URL assertions below would fail for anyone using a mirror registry.
-vi.mock('../npm-config.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../npm-config.js')>();
+vi.mock(import('../npm-config.js'), async (importOriginal) => {
+  const actual = await importOriginal();
   return {
     ...actual,
     getNpmRegistry: () => 'https://registry.npmjs.org',
@@ -18,12 +18,12 @@ describe('checkNpmPackageExists', () => {
   });
 
   it('returns true when package exists (200)', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ status: 200, ok: true } as Response);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
     expect(await checkNpmPackageExists('create-vite')).toBe(true);
   });
 
   it('returns false when package does not exist (404)', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ status: 404, ok: false } as Response);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
     expect(await checkNpmPackageExists('create-vite-plus-app')).toBe(false);
   });
 
@@ -35,7 +35,7 @@ describe('checkNpmPackageExists', () => {
   it('strips version from unscoped package name', async () => {
     const mockFetch = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue({ status: 200, ok: true } as Response);
+      .mockResolvedValue(new Response(null, { status: 200 }));
     await checkNpmPackageExists('create-vite@latest');
     expect(mockFetch).toHaveBeenCalledWith(
       'https://registry.npmjs.org/create-vite',
@@ -46,7 +46,7 @@ describe('checkNpmPackageExists', () => {
   it('strips version from scoped package name', async () => {
     const mockFetch = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue({ status: 200, ok: true } as Response);
+      .mockResolvedValue(new Response(null, { status: 200 }));
     await checkNpmPackageExists('@tanstack/create-start@latest');
     expect(mockFetch).toHaveBeenCalledWith(
       'https://registry.npmjs.org/@tanstack/create-start',
@@ -57,7 +57,7 @@ describe('checkNpmPackageExists', () => {
   it('does not strip scope from scoped package without version', async () => {
     const mockFetch = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue({ status: 200, ok: true } as Response);
+      .mockResolvedValue(new Response(null, { status: 200 }));
     await checkNpmPackageExists('@tanstack/create-start');
     expect(mockFetch).toHaveBeenCalledWith(
       'https://registry.npmjs.org/@tanstack/create-start',

@@ -2,10 +2,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { log as promptLog } from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { JsonObject } from '../../utils/json.ts';
+import { readJsonFile } from '../../utils/json.ts';
+
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
-  log: { info: vi.fn(), success: vi.fn(), warn: vi.fn() },
+  log: {
+    info: vi.fn<typeof promptLog.info>(),
+    success: vi.fn<typeof promptLog.success>(),
+    warn: vi.fn<typeof promptLog.warn>(),
+  },
 }));
 
 import {
@@ -17,13 +25,13 @@ import { createMigrationReport } from '../report.ts';
 
 describe('ts-node migration', () => {
   let root: string;
-  const write = (file: string, content: string | object) => {
+  const write = (file: string, content: string | JsonObject) => {
     const target = path.join(root, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, typeof content === 'string' ? content : JSON.stringify(content));
   };
   const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
-  const readJson = (file: string) => JSON.parse(read(file));
+  const readJson = (file: string) => readJsonFile(path.join(root, file));
 
   const expectRetained = () => {
     const command = 'ts-node -T a.ts';
@@ -39,8 +47,8 @@ describe('ts-node migration', () => {
       });
     }
     expect(migrateTsNodeToVpx(root, undefined, report).dependencyRemoved).toBe(false);
-    expect(readJson('package.json').scripts.run).toBe(command);
-    expect(readJson('package.json').devDependencies['ts-node']).toBe('10.9.2');
+    expect(readJson('package.json')).toHaveProperty(['scripts', 'run'], command);
+    expect(readJson('package.json')).toHaveProperty(['devDependencies', 'ts-node'], '10.9.2');
     expect(report.warnings).toContainEqual(expect.stringContaining('CommonJS interop'));
   };
 
@@ -87,6 +95,7 @@ describe('ts-node migration', () => {
       "import value from 'node:fs'; console.log(value);",
       "import * as dependency from 'node:fs'; console.log(dependency);",
     ])('retains runtime bindings in %s', (source) => {
+      expect.hasAssertions();
       write('a.ts', source);
       expectRetained();
     });
@@ -94,6 +103,7 @@ describe('ts-node migration', () => {
     it.each([undefined, false, true])(
       'retains default bindings with esModuleInterop=%s',
       (esModuleInterop) => {
+        expect.hasAssertions();
         write('tsconfig.json', {
           compilerOptions: { module: 'CommonJS', target: 'ES2022', esModuleInterop },
         });
@@ -124,6 +134,7 @@ describe('ts-node migration', () => {
       ['./nested', 'nested/index.js', {}],
       ['./nested/dep.cts', 'nested/dep.cts', {}],
     ])('resolves CommonJS target %s', (specifier, file, pkg) => {
+      expect.hasAssertions();
       write(file, 'module.exports = Object.assign({}, { value: 42 });\n');
       write(path.join(path.dirname(file), 'package.json'), pkg);
       write('a.ts', `import { value } from '${specifier}'; console.log(value);`);
@@ -131,6 +142,7 @@ describe('ts-node migration', () => {
     });
 
     it('retains a dependency whose import and require conditions select different modules', () => {
+      expect.hasAssertions();
       write('node_modules/dependency/package.json', {
         exports: { import: './import.mjs', require: './require.mjs' },
       });
@@ -141,6 +153,7 @@ describe('ts-node migration', () => {
     });
 
     it('resolves imports relative to the real entry behind a symlink', () => {
+      expect.hasAssertions();
       write('package.json', { ...readJson('package.json'), type: 'module' });
       write('dep.js', 'export const value = 1;');
       write('actual/package.json', { type: 'commonjs' });
@@ -154,6 +167,7 @@ describe('ts-node migration', () => {
     it.each(['./missing.js', 'missing-package', './invalid/dep.js'])(
       'retains a binding when the target cannot be checked: %s',
       (specifier) => {
+        expect.hasAssertions();
         write('invalid/package.json', '{');
         write('invalid/dep.js', 'exports.value = 42;');
         write('a.ts', `import { value } from '${specifier}'; console.log(value);`);
@@ -569,8 +583,8 @@ describe('ts-node migration', () => {
     write(file, content);
     const report = createMigrationReport();
     expect(migrateTsNodeToVpx(root, undefined, report).dependencyRemoved).toBe(false);
-    expect(readJson('package.json').scripts.seed).toBe('vpx a.ts');
-    expect(readJson('package.json').devDependencies['ts-node']).toBe('^10.9.2');
+    expect(readJson('package.json')).toHaveProperty(['scripts', 'seed'], 'vpx a.ts');
+    expect(readJson('package.json')).toHaveProperty(['devDependencies', 'ts-node'], '^10.9.2');
     expect(report.warnings).toContainEqual(expect.stringContaining(`${file} still uses ts-node`));
   });
 
@@ -583,7 +597,7 @@ describe('ts-node migration', () => {
       });
       expect(detectTsNodeProject(root)).toBe(true);
       expect(migrateTsNodeToVpx(root).changed).toBe(false);
-      expect(readJson('package.json').scripts.seed).toBe('ts-node -T a.ts');
+      expect(readJson('package.json')).toHaveProperty(['scripts', 'seed'], 'ts-node -T a.ts');
     },
   );
 
@@ -614,9 +628,12 @@ describe('ts-node migration', () => {
       { name: 'b', path: 'packages/b' },
     ];
     expect(migrateTsNodeToVpx(root, packages).dependencyRemoved).toBe(false);
-    expect(readJson('packages/a/package.json').scripts.seed).toBe('vpx a.ts');
-    expect(readJson('packages/b/package.json').scripts.seed).toBe('ts-node a.ts');
-    expect(readJson('packages/a/package.json').devDependencies['ts-node']).toBe('^10.9.2');
-    expect(readJson('package.json').devDependencies['ts-node']).toBe('^10.9.2');
+    expect(readJson('packages/a/package.json')).toHaveProperty(['scripts', 'seed'], 'vpx a.ts');
+    expect(readJson('packages/b/package.json')).toHaveProperty(['scripts', 'seed'], 'ts-node a.ts');
+    expect(readJson('packages/a/package.json')).toHaveProperty(
+      ['devDependencies', 'ts-node'],
+      '^10.9.2',
+    );
+    expect(readJson('package.json')).toHaveProperty(['devDependencies', 'ts-node'], '^10.9.2');
   });
 });

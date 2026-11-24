@@ -102,16 +102,18 @@ describe('Renovate configuration', () => {
     "{extends: ['first'], limit: 1_000}",
     '{extends: [], limit: 0b10}',
     '{extends: [], enabled: (true)}',
-    "{extends: ['\\u{61}']}",
+    String.raw`{extends: ['\u{61}']}`,
     "{extends: ['first'], extends: []}",
     "{extends: ['group:vitePlus']}",
     "{extends: ['first'",
   ])('skips unsupported or ineligible JSON5 configs: %s', async (source) => {
+    expect.hasAssertions();
     const file = await config('.gitlab/renovate.json5', source);
     await expectSkipped(file, source);
   });
 
   it('accepts JSON5-only syntax only in a .json5 file', async () => {
+    expect.hasAssertions();
     const source = "{extends: ['config:recommended']}";
     const file = await config('renovate.jsonc', source);
     await expectSkipped(file, source);
@@ -176,8 +178,8 @@ describe('Renovate configuration', () => {
   });
 
   it.each([
-    ['renovate.jsonc', '"extends"', '"config:recomm\\u0065nded"', '"group:vitePlus"'],
-    ['renovate.json5', 'extends', "'config:recomm\\x65nded'", "'group:vitePlus'"],
+    ['renovate.jsonc', '"extends"', String.raw`"config:recomm\u0065nded"`, '"group:vitePlus"'],
+    ['renovate.json5', 'extends', String.raw`'config:recomm\x65nded'`, "'group:vitePlus'"],
   ])(
     'preserves the shorthand literal and surrounding comments in %s',
     async (name, key, literal, group) => {
@@ -193,14 +195,16 @@ describe('Renovate configuration', () => {
 
   it.each([
     ['renovate.json', '{"extends":"group:vitePlus"}'],
-    ['renovate.json5', "{extends:'group:vite\\x50lus'}"],
+    ['renovate.json5', String.raw`{extends:'group:vite\x50lus'}`],
     ['package.json', '{"renovate":"group:vitePlus"}'],
     ['package.json', '{"renovate":{"extends":"group:vitePlus"}}'],
   ])('skips an already enabled shorthand in %s: %s', async (name, source) => {
+    expect.hasAssertions();
     await expectSkipped(await config(name, source), source);
   });
 
   it('ignores an empty Renovate shorthand in package.json', async () => {
+    expect.hasAssertions();
     const source = '{"renovate":""}';
     await expectSkipped(await config('package.json', source), source);
   });
@@ -216,6 +220,7 @@ describe('Renovate configuration', () => {
   ])(
     'skips an ineligible active config without touching a lower-priority config: %s',
     async (source) => {
+      expect.hasAssertions();
       const file = await config('renovate.json', source);
       await config('.github/renovate.json', '{}');
       await expectSkipped(file, source);

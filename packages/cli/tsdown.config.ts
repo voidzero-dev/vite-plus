@@ -5,7 +5,15 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'tsdown';
 
 const require = createRequire(import.meta.url);
-const lintStagedPackageJson = require('lint-staged/package.json') as { version: string };
+const lintStagedPackageJson: unknown = require('lint-staged/package.json');
+if (
+  !lintStagedPackageJson ||
+  typeof lintStagedPackageJson !== 'object' ||
+  !('version' in lintStagedPackageJson) ||
+  typeof lintStagedPackageJson.version !== 'string'
+) {
+  throw new Error('Expected lint-staged to have a package version');
+}
 
 const oxcNodeCli = fileURLToPath(new URL('../../oxc-node/packages/cli/', import.meta.url));
 

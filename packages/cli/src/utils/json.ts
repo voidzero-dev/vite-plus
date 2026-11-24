@@ -2,14 +2,14 @@ import fs from 'node:fs';
 
 import detectIndent from 'detect-indent';
 import { detectNewline } from 'detect-newline';
-import {
-  applyEdits,
-  type FormattingOptions,
-  type JSONPath,
-  modify,
-  type ModificationOptions,
-  parse as parseJsonc,
-} from 'jsonc-parser';
+import type { FormattingOptions, JSONPath, ModificationOptions } from 'jsonc-parser';
+import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
+
+import type { JsonObject, JsonValue } from './json-value.ts';
+import { isJsonObject, parseJsonValue } from './json-value.ts';
+
+export { isJsonObject, parseJsonValue };
+export type { JsonObject, JsonValue };
 
 /**
  * Derive `jsonc-parser` formatting options from existing file text so inserted
@@ -38,7 +38,7 @@ export function appendMissingJsoncArrayItems(
   text: string,
   path: JSONPath,
   existing: unknown,
-  incoming: readonly unknown[],
+  incoming: ReadonlyArray<unknown>,
   formattingOptions?: FormattingOptions,
 ): string {
   if (existing === undefined) {
@@ -60,28 +60,44 @@ export function appendMissingJsoncArrayItems(
   return text;
 }
 
-export function readJsonFile(file: string, allowComments?: boolean): Record<string, unknown> {
-  const content = fs.readFileSync(file, 'utf-8');
-  const parseFunction = allowComments ? parseJsonc : JSON.parse;
-  return parseFunction(content);
+export function readJsonValue(file: string, allowComments?: boolean): JsonValue {
+  const content = fs.readFileSync(file, 'utf8');
+  if (!allowComments) {
+    return parseJsonValue(content);
+  }
+  const value: unknown = parseJsonc(content);
+  if (value === undefined) {
+    throw new SyntaxError(`Invalid JSON in ${file}`);
+  }
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- jsonc-parser returns a JSON value or undefined.
+  return value as JsonValue;
 }
 
-export function writeJsonFile(file: string, data: Record<string, unknown>) {
+export function readJsonFile(file: string, allowComments?: boolean): JsonObject {
+  const value = readJsonValue(file, allowComments);
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`Expected a JSON object in ${file}`);
+  }
+  return value;
+}
+
+export function writeJsonFile(file: string, data: unknown) {
   let newline = '\n';
   let indent = '  ';
   if (fs.existsSync(file)) {
-    const content = fs.readFileSync(file, 'utf-8');
+    const content = fs.readFileSync(file, 'utf8');
     // keep the original newline and indent
     indent = detectIndent(content).indent;
     newline = detectNewline(content) ?? '';
   }
-  fs.writeFileSync(file, JSON.stringify(data, null, indent) + newline, 'utf-8');
+  fs.writeFileSync(file, JSON.stringify(data, null, indent) + newline, 'utf8');
 }
 
-export function editJsonFile<T extends Record<string, unknown> = Record<string, unknown>>(
+export function editJsonFile<T extends object = JsonObject>(
   file: string,
   callback: (content: T) => T | undefined,
 ) {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Callers supply the schema of the file they own and edit.
   const json = readJsonFile(file) as T;
   const newJson = callback(json);
   if (newJson) {
@@ -91,7 +107,7 @@ export function editJsonFile<T extends Record<string, unknown> = Record<string, 
 
 export function isJsonFile(file: string): boolean {
   try {
-    readJsonFile(file);
+    readJsonValue(file);
     return true;
   } catch {
     return false;

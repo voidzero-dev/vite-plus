@@ -22,37 +22,37 @@ const args = unwrapCliParseOutcome(parseStagedArgs(process.argv.slice(3)));
 const options: Options = {};
 
 // Boolean flags — only include if explicitly set
-if (args.allowEmpty != null) {
+if (args.allowEmpty !== null && args.allowEmpty !== undefined) {
   options.allowEmpty = args.allowEmpty;
 }
-if (args.debug != null) {
+if (args.debug !== null && args.debug !== undefined) {
   options.debug = args.debug;
 }
-if (args.continueOnError != null) {
+if (args.continueOnError !== null && args.continueOnError !== undefined) {
   options.continueOnError = args.continueOnError;
 }
-if (args.failOnChanges != null) {
+if (args.failOnChanges !== null && args.failOnChanges !== undefined) {
   options.failOnChanges = args.failOnChanges;
 }
-if (args.hidePartiallyStaged != null) {
+if (args.hidePartiallyStaged !== null && args.hidePartiallyStaged !== undefined) {
   options.hidePartiallyStaged = args.hidePartiallyStaged;
 }
-if (args.hideUnstaged != null) {
+if (args.hideUnstaged !== null && args.hideUnstaged !== undefined) {
   options.hideUnstaged = args.hideUnstaged;
 }
-if (args.quiet != null) {
+if (args.quiet !== null && args.quiet !== undefined) {
   options.quiet = args.quiet;
 }
-if (args.relative != null) {
+if (args.relative !== null && args.relative !== undefined) {
   options.relative = args.relative;
 }
-if (args.revert != null) {
+if (args.revert !== null && args.revert !== undefined) {
   options.revert = args.revert;
 }
-if (args.stash != null) {
+if (args.stash !== null && args.stash !== undefined) {
   options.stash = args.stash;
 }
-if (args.verbose != null) {
+if (args.verbose !== null && args.verbose !== undefined) {
   options.verbose = args.verbose;
 }
 
@@ -61,10 +61,10 @@ let stagedConfig;
 try {
   const viteConfig = await resolveViteConfig(args.cwd ?? process.cwd());
   stagedConfig = viteConfig.staged;
-} catch (err) {
+} catch (error) {
   // Surface real errors (syntax errors, missing imports, etc.)
   // instead of masking them as "no config found"
-  const message = err instanceof Error ? err.message : String(err);
+  const message = error instanceof Error ? error.message : String(error);
   log(`Failed to load vite.config: ${message}`);
   process.exit(1);
 }
@@ -80,16 +80,16 @@ if (stagedConfig) {
   log('  });');
   process.exit(1);
 }
-if (args.cwd != null) {
+if (args.cwd !== null && args.cwd !== undefined) {
   options.cwd = args.cwd;
 }
-if (args.diff != null) {
+if (args.diff !== null && args.diff !== undefined) {
   options.diff = args.diff;
 }
-if (args.diffFilter != null) {
+if (args.diffFilter !== null && args.diffFilter !== undefined) {
   options.diffFilter = args.diffFilter;
 }
-if (args.concurrent != null) {
+if (args.concurrent !== null && args.concurrent !== undefined) {
   options.concurrent = args.concurrent;
 }
 

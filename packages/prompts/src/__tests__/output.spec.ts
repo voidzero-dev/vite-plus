@@ -20,7 +20,7 @@ function capture(columns = 52, isTTY = false) {
   let content = '';
   const output = Object.assign(
     new Writable({
-      write(chunk, _, done) {
+      write(chunk: Buffer, _, done) {
         content += chunk.toString();
         done();
       },
@@ -38,6 +38,7 @@ function spinInTerminal(platform: NodeJS.Platform = 'linux') {
   vi.spyOn(process, 'platform', 'get').mockReturnValue(platform);
   vi.stubEnv('CI', '');
   const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The exit spy must return to keep the test process alive.
   const exit = vi.spyOn(process, 'exit').mockReturnValue(undefined as never);
   const c = capture(52, true);
   const s = spinner({ output: c.output });
@@ -48,8 +49,8 @@ function spinInTerminal(platform: NodeJS.Platform = 'linux') {
 function expectNoTerminalControls(output: string) {
   // Forced colors are valid in CI and pipes; cursor movement and erasure are not.
   // oxlint-disable-next-line no-control-regex
-  const withoutColors = output.replace(/\x1b\[[\d;]*m/g, '');
-  expect(withoutColors).not.toContain('\x1b');
+  const withoutColors = output.replaceAll(/\u001b\[[\d;]*m/g, '');
+  expect(withoutColors).not.toContain('\u001b');
   expect(withoutColors).not.toContain('\r');
 }
 
@@ -126,7 +127,7 @@ describe('output identity', () => {
   it('keeps streamed chunks together when the output has no columns', async () => {
     let content = '';
     const output = new Writable({
-      write(chunk, _, done) {
+      write(chunk: Buffer, _, done) {
         content += chunk.toString();
         done();
       },
@@ -160,7 +161,7 @@ describe('output identity', () => {
     ).toBe(true);
     expect(new Set(lines.map((line) => stringWidth(line))).size).toBe(1);
     expect(lines.every((line) => stringWidth(line) <= 24)).toBe(true);
-    expect(c.raw()).not.toContain('\x1b[2m');
+    expect(c.raw()).not.toContain('\u001b[2m');
   });
 
   it.each([8, 12, 24, 52])(
@@ -213,7 +214,7 @@ describe('spinner', () => {
     s.start('Building');
     vi.advanceTimersByTime(2000);
     s.pause();
-    vi.advanceTimersByTime(10000);
+    vi.advanceTimersByTime(10_000);
     s.resume();
     vi.advanceTimersByTime(1000);
     s.stop('Built');
@@ -236,7 +237,7 @@ describe('spinner', () => {
   describe('keys while spinning in a terminal', () => {
     it('interrupts the foreground process group on Ctrl+C instead of exiting with 0', () => {
       const { c, s, kill, exit } = spinInTerminal();
-      press('c', '\x03', true);
+      press('c', '\u0003', true);
       expect(s.isCancelled).toBe(true);
       expect(c.text()).toContain('■ Canceled');
       expect(kill).toHaveBeenCalledWith(0, 'SIGINT');
@@ -245,7 +246,7 @@ describe('spinner', () => {
 
     it('exits with 130 on Ctrl+C on Windows, which has no signals', () => {
       const { c, kill, exit } = spinInTerminal('win32');
-      press('c', '\x03', true);
+      press('c', '\u0003', true);
       expect(c.text()).toContain('■ Canceled');
       expect(exit).toHaveBeenCalledWith(130);
       expect(kill).not.toHaveBeenCalled();
@@ -253,12 +254,12 @@ describe('spinner', () => {
 
     it('ignores Escape and handles a Ctrl+C that follows in the same chunk', () => {
       const { c, s, kill, exit } = spinInTerminal();
-      press('escape', '\x1b');
+      press('escape', '\u001b');
       expect(s.isCancelled).toBe(false);
       expect(c.text()).not.toContain('Canceled');
       expect(kill).not.toHaveBeenCalled();
       expect(exit).not.toHaveBeenCalled();
-      press('c', '\x03', true);
+      press('c', '\u0003', true);
       expect(kill).toHaveBeenCalledWith(0, 'SIGINT');
     });
 
@@ -266,7 +267,7 @@ describe('spinner', () => {
       const { s, kill } = spinInTerminal();
       press('a', 'a');
       s.stop('Built');
-      press('c', '\x03', true);
+      press('c', '\u0003', true);
       expect(kill).not.toHaveBeenCalled();
     });
   });

@@ -16,8 +16,8 @@
 import { randomBytes } from 'node:crypto';
 
 const MILESTONE_TITLE_MARKER = 'vt-pty-terminal-test:';
-const OSC2_OPEN = '\x1b]2;';
-const ST = '\x1b\\';
+const OSC2_OPEN = '\u001b]2;';
+const ST = '\u001b\\';
 
 // Cached at module load: the runner sets the env before spawning the CLI,
 // and milestone() runs on every prompt render (every keystroke), so the

@@ -13,10 +13,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parseArgs, stripVTControlCharacters } from 'node:util';
 
+import type { JsonObject } from '../../packages/cli/src/utils/json-value.ts';
+import { isObjectValue } from '../../packages/cli/src/utils/json-value.ts';
+import { readJsonObject, requireJsonObject } from '../../scripts/json.ts';
+
 type ToolName = 'vite' | 'vitest' | 'oxlint' | 'oxfmt' | 'tsdown';
 
 type Tool = {
-  commands: string[][];
+  commands: Array<Array<string>>;
   name: ToolName;
   packageName: string;
   title: string;
@@ -28,24 +32,14 @@ type ToolSnapshot = {
 };
 
 type Snapshot = {
-  tools: Record<ToolName, ToolSnapshot>;
+  tools: Record<string, ToolSnapshot>;
 };
-
-type VersionMetadata = Partial<
-  Record<
-    ToolName,
-    {
-      new: string;
-      tag?: string;
-    }
-  >
->;
 
 const ROOT = process.cwd();
 const WORKSPACE_PATH = join(ROOT, 'pnpm-workspace.yaml');
 // Leave room for five reports plus Markdown within GitHub's 65,536-character comment limit.
 const MAX_DIFF_LENGTH = 12_000;
-const TOOLS: Tool[] = [
+const TOOLS: Array<Tool> = [
   {
     // Vite+ mirrors the root command plus the build and preview option sets.
     commands: [['--help'], ['build', '--help'], ['preview', '--help']],
@@ -79,14 +73,12 @@ const TOOLS: Tool[] = [
   },
 ];
 
-function readJson(filePath: string): unknown {
-  return JSON.parse(readFileSync(filePath, 'utf8'));
-}
-
-function readToolVersion(tool: Tool, versions?: VersionMetadata): string {
+function readToolVersion(tool: Tool, versions?: JsonObject): string {
   if (versions) {
     const change = versions[tool.name];
-    const version = tool.name === 'vite' ? change?.tag?.replace(/^v/, '') : change?.new;
+    const value = isObjectValue(change) ? change[tool.name === 'vite' ? 'tag' : 'new'] : undefined;
+    const version =
+      typeof value === 'string' && (tool.name === 'vite' ? value.replace(/^v/, '') : value);
     if (!version) {
       throw new Error(`Upgrade metadata has no target version for ${tool.name}`);
     }
@@ -94,7 +86,7 @@ function readToolVersion(tool: Tool, versions?: VersionMetadata): string {
   }
 
   if (tool.name === 'vite') {
-    const pkg = readJson(join(ROOT, 'vite/packages/vite/package.json')) as { version?: unknown };
+    const pkg = readJsonObject(join(ROOT, 'vite/packages/vite/package.json'));
     if (typeof pkg.version !== 'string') {
       throw new TypeError('vite/packages/vite/package.json has no version');
     }
@@ -150,8 +142,8 @@ function captureToolHelp(tool: Tool, version: string, cwd: string): string {
 }
 
 function captureSnapshot(outputPath: string, versionsPath?: string): void {
-  const versions = versionsPath ? (readJson(versionsPath) as VersionMetadata) : undefined;
-  const tools = {} as Record<ToolName, ToolSnapshot>;
+  const versions = versionsPath ? readJsonObject(versionsPath) : undefined;
+  const tools: Snapshot['tools'] = {};
   // Run outside the repository so pnpm dlx does not inherit workspace overrides or patches.
   const cwd = mkdtempSync(join(tmpdir(), 'vite-plus-cli-help-capture-'));
   try {
@@ -276,14 +268,31 @@ function renderReport(before: Snapshot, after: Snapshot, hasChanges: boolean): s
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
+function readSnapshot(path: string): Snapshot {
+  const entries = requireJsonObject(readJsonObject(path).tools, path);
+  const tools: Snapshot['tools'] = {};
+  for (const { name } of TOOLS) {
+    const entry = entries[name];
+    if (
+      !isObjectValue(entry) ||
+      typeof entry.help !== 'string' ||
+      typeof entry.version !== 'string'
+    ) {
+      throw new Error(`Invalid snapshot for ${name} in ${path}`);
+    }
+    tools[name] = { help: entry.help, version: entry.version };
+  }
+  return { tools };
+}
+
 function generateReport(
   beforePath: string,
   afterPath: string,
   outputPath: string,
   githubOutputPath?: string,
 ): void {
-  const before = readJson(beforePath) as Snapshot;
-  const after = readJson(afterPath) as Snapshot;
+  const before = readSnapshot(beforePath);
+  const after = readSnapshot(afterPath);
   const hasChanges = hasHelpChanges(before, after);
   mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, renderReport(before, after, hasChanges));

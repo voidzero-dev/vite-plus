@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log } from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
@@ -11,7 +11,8 @@ import { setPackageName } from '../utils.ts';
 import { executeGeneratorScaffold } from './generator.ts';
 import { removeNestedLibraryToolConfig } from './monorepo.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
-import { BuiltinTemplate, type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
+import type { BuiltinTemplateInfo } from './types.ts';
+import { BuiltinTemplate, LibraryTemplateRepo } from './types.ts';
 
 export async function executeBuiltinTemplate(
   workspaceInfo: WorkspaceInfo,
@@ -59,7 +60,7 @@ export async function executeBuiltinTemplate(
   // Unknown vite: template (e.g. vite:test) — application was already rewritten to create-vite@latest
   if (templateInfo.command.startsWith('vite:')) {
     if (!options?.silent) {
-      prompts.log.error(
+      log.error(
         `Unknown builtin template "${templateInfo.command}". Run ${colors.yellow('vp create --list')} to see available templates.`,
       );
     }

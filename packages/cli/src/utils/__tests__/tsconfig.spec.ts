@@ -68,7 +68,7 @@ describe.each(['esModuleInterop', 'allowSyntheticDefaultImports'])(
       fs.writeFileSync(filePath, content);
       const result = removeDeprecatedTsconfigFalseOption(filePath, option);
       expect(result).toBe(true);
-      return fs.readFileSync(filePath, 'utf-8');
+      return fs.readFileSync(filePath, 'utf8');
     }
 
     it('removes option: false (middle property)', () => {
@@ -186,7 +186,7 @@ describe.each(['esModuleInterop', 'allowSyntheticDefaultImports'])(
 
       const result = removeDeprecatedTsconfigFalseOption(filePath, option);
       expect(result).toBe(false);
-      expect(fs.readFileSync(filePath, 'utf-8')).toBe(original);
+      expect(fs.readFileSync(filePath, 'utf8')).toBe(original);
     });
 
     it('returns false for non-existent file', () => {
@@ -232,7 +232,7 @@ describe('rewriteTypesInTsconfig', () => {
     );
 
     expect(rewriteTypesInTsconfig(filePath)).toBe(true);
-    expect(fs.readFileSync(filePath, 'utf-8')).toMatchInlineSnapshot(`
+    expect(fs.readFileSync(filePath, 'utf8')).toMatchInlineSnapshot(`
       "{
         "compilerOptions": {
           "types": ["vite-plus/pack/client"]
@@ -307,7 +307,7 @@ describe('rewriteTypesInTsconfig', () => {
     fs.writeFileSync(filePath, original);
 
     expect(rewriteTypesInTsconfig(filePath)).toBe(false);
-    expect(fs.readFileSync(filePath, 'utf-8')).toBe(original);
+    expect(fs.readFileSync(filePath, 'utf8')).toBe(original);
   });
 
   it('rewrites tsdown/client but preserves vite/client in the same array', () => {
@@ -322,7 +322,7 @@ describe('rewriteTypesInTsconfig', () => {
     );
 
     expect(rewriteTypesInTsconfig(filePath)).toBe(true);
-    expect(fs.readFileSync(filePath, 'utf-8')).toMatchInlineSnapshot(`
+    expect(fs.readFileSync(filePath, 'utf8')).toMatchInlineSnapshot(`
       "{
         "compilerOptions": {
           "types": ["vite-plus/pack/client", "vite/client"]
@@ -365,7 +365,7 @@ describe('removeDeprecatedTsconfigFalseOption — combined removal', () => {
     expect(removeDeprecatedTsconfigFalseOption(filePath, 'allowSyntheticDefaultImports')).toBe(
       true,
     );
-    expect(fs.readFileSync(filePath, 'utf-8')).toMatchInlineSnapshot(`
+    expect(fs.readFileSync(filePath, 'utf8')).toMatchInlineSnapshot(`
       "{
         "compilerOptions": {
           "target": "ES2023",

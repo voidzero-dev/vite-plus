@@ -5,7 +5,9 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { stringify } from 'yaml';
 
-import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
+import { isStringRecord } from '../../utils/json-value.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { templatesDir } from '../../utils/path.ts';
 import { readYamlFile } from '../../utils/yaml.ts';
@@ -33,7 +35,8 @@ async function scaffold(
     JSON.stringify({
       private: true,
       workspaces: ['tools/*'],
-      ...(packageManager === PackageManager.bun ? catalogs : {}),
+      catalog: packageManager === PackageManager.bun ? catalogs.catalog : undefined,
+      catalogs: packageManager === PackageManager.bun ? catalogs.catalogs : undefined,
     }),
   );
   if (packageManager === PackageManager.pnpm) {
@@ -88,7 +91,7 @@ describe('generator scaffold dependencies', () => {
     [PackageManager.bun, '1.3.0'],
   ])('uses installable versions for %s %s without catalog entries', async (manager, version) => {
     const pkg = await scaffold(manager, version);
-    const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml'));
+    const catalog = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml'))?.catalog;
     expect(pkg.devDependencies).toEqual(catalog);
     expect(pkg.name).toBe('my-generator');
     const templatePkg = readJsonFile(path.join(templatesDir, 'generator/package.json'));
@@ -112,9 +115,10 @@ describe('generator scaffold dependencies', () => {
     [PackageManager.bun, '1.3.0'],
   ])('fills only missing catalog dependencies for %s %s', async (manager, version) => {
     const pkg = await scaffold(manager, version, { catalog: { typescript: '^5' } });
-    const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml')) as {
-      catalog: Record<string, string>;
-    };
+    const catalog = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml'))?.catalog;
+    if (!isStringRecord(catalog)) {
+      throw new Error('Missing template catalog');
+    }
     expect(pkg.devDependencies).toEqual({
       '@types/node': catalog['@types/node'],
       typescript: 'catalog:',
@@ -132,7 +136,9 @@ describe('generator scaffold dependencies', () => {
       const pkg = await scaffold(manager, version, {
         catalogs: { default: { '@types/node': '^22', typescript: '^5' } },
       });
-      const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml'));
+      const catalog = readYamlFile(
+        path.join(templatesDir, 'monorepo/pnpm-workspace.yaml'),
+      )?.catalog;
       expect(pkg.devDependencies).toEqual(
         sharedDefault ? { '@types/node': 'catalog:', typescript: 'catalog:' } : catalog,
       );

@@ -3,10 +3,10 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function resolveWindowsLintBackendExecutable(
-  pathCandidates: string[],
+  pathCandidates: Array<string>,
   options: {
     exists: (path: string) => boolean;
-    getRealpathCandidates?: () => string[];
+    getRealpathCandidates?: () => Array<string>;
   },
 ): string {
   const backendPath = pathCandidates.find((path) => options.exists(path));

@@ -1,15 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import type { JsonObject, JsonValue } from '../packages/cli/src/utils/json-value.ts';
+import { isJsonObject } from '../packages/cli/src/utils/json-value.ts';
+import { readJsonObject } from './json.ts';
+
 interface GenerateLicenseFileOptions {
   title: string;
   packageName: string;
   outputPath: string;
   coreLicensePath: string;
-  bundledPaths: string[];
-  resolveFrom?: string[];
-  extraPackages?: PackageReference[];
-  excludePackageNames?: string[];
+  bundledPaths: Array<string>;
+  resolveFrom?: Array<string>;
+  extraPackages?: Array<PackageReference>;
+  excludePackageNames?: Array<string>;
 }
 
 interface PackageReference {
@@ -22,8 +26,8 @@ interface DependencyInfo {
   license?: string;
   licenseText?: string;
   author?: string;
-  contributors: string[];
-  maintainers: string[];
+  contributors: Array<string>;
+  maintainers: Array<string>;
   repository?: string;
 }
 
@@ -107,7 +111,7 @@ export function generateLicenseFile(options: GenerateLicenseFileOptions) {
         .filter((license): license is string => typeof license === 'string'),
     ),
   );
-  const coreLicense = fs.readFileSync(options.coreLicensePath, 'utf-8');
+  const coreLicense = fs.readFileSync(options.coreLicensePath, 'utf8');
 
   let dependencyLicenseTexts = '';
   for (let i = 0; i < deps.length; i++) {
@@ -133,8 +137,7 @@ export function generateLicenseFile(options: GenerateLicenseFileOptions) {
     ) {
       const { license, names } = depInfos[0];
       const repositoryText = depInfos
-        .map((info) => info.repository)
-        .filter(Boolean)
+        .flatMap((info) => (info.repository ? [info.repository] : []))
         .join(', ');
 
       if (license) {
@@ -169,7 +172,7 @@ export function generateLicenseFile(options: GenerateLicenseFileOptions) {
         '\n' +
         licenseText
           .trim()
-          .replace(/\r\n|\r/g, '\n')
+          .replaceAll(/\r\n|\r/g, '\n')
           .split('\n')
           .map((line) => `> ${line}`)
           .join('\n') +
@@ -196,7 +199,7 @@ export function generateLicenseFile(options: GenerateLicenseFileOptions) {
 
   let existingContent: string | undefined;
   try {
-    existingContent = fs.readFileSync(options.outputPath, 'utf-8');
+    existingContent = fs.readFileSync(options.outputPath, 'utf8');
   } catch {
     // File does not exist yet.
   }
@@ -205,12 +208,12 @@ export function generateLicenseFile(options: GenerateLicenseFileOptions) {
     fs.writeFileSync(options.outputPath, licenseFileContent);
     const outputFileName = path.basename(options.outputPath);
     console.error(
-      `\x1b[33m\n${outputFileName} updated. You should commit the updated file.\n\x1b[0m`,
+      `\u001b[33m\n${outputFileName} updated. You should commit the updated file.\n\u001b[0m`,
     );
   }
 }
 
-function collectBundledPackageNames(bundledPaths: string[]): Set<string> {
+function collectBundledPackageNames(bundledPaths: Array<string>): Set<string> {
   const packageNames = new Set<string>();
 
   for (const bundledPath of bundledPaths) {
@@ -219,7 +222,7 @@ function collectBundledPackageNames(bundledPaths: string[]): Set<string> {
     }
 
     for (const filePath of walkTextFiles(bundledPath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
+      const content = fs.readFileSync(filePath, 'utf8');
       for (const match of content.matchAll(NODE_MODULES_REGION_RE)) {
         const packageName = extractPackageName(match[1]);
         if (packageName) {
@@ -286,7 +289,7 @@ function extractPackageName(regionPath: string): string | undefined {
   return packageName;
 }
 
-function resolvePackageDir(packageName: string, resolveFrom: string[]): string | undefined {
+function resolvePackageDir(packageName: string, resolveFrom: Array<string>): string | undefined {
   const seen = new Set<string>();
 
   for (const startPath of resolveFrom) {
@@ -392,53 +395,41 @@ function readDependencyInfo(packageRef: PackageReference): DependencyInfo | null
     maintainers: [],
   };
 
-  if (pkgJson.author) {
-    dependency.author =
-      typeof pkgJson.author === 'string'
-        ? pkgJson.author
-        : (pkgJson.author as Record<string, string>).name;
-  }
-
-  if (Array.isArray(pkgJson.contributors)) {
-    for (const contributor of pkgJson.contributors) {
-      const name = typeof contributor === 'string' ? contributor : contributor?.name;
-      if (name) {
-        dependency.contributors.push(name);
+  dependency.author = personName(pkgJson.author);
+  for (const field of ['contributors', 'maintainers'] as const) {
+    const people = pkgJson[field];
+    if (Array.isArray(people)) {
+      for (const person of people) {
+        const name = personName(person);
+        if (name) {
+          dependency[field].push(name);
+        }
       }
     }
   }
-
-  if (Array.isArray(pkgJson.maintainers)) {
-    for (const maintainer of pkgJson.maintainers) {
-      const name = typeof maintainer === 'string' ? maintainer : maintainer?.name;
-      if (name) {
-        dependency.maintainers.push(name);
-      }
-    }
-  }
-
-  if (pkgJson.repository) {
-    const repositoryUrl =
-      typeof pkgJson.repository === 'string'
-        ? pkgJson.repository
-        : (pkgJson.repository as Record<string, string>).url;
-    if (repositoryUrl) {
-      dependency.repository = normalizeGitUrl(repositoryUrl);
-    }
+  const repository = pkgJson.repository;
+  const url = isJsonObject(repository) ? repository.url : repository;
+  if (typeof url === 'string' && url) {
+    dependency.repository = normalizeGitUrl(url);
   }
 
   dependency.licenseText = readLicenseText(packageRef);
   return dependency;
 }
 
-function readPackageJson(packageDir: string): Record<string, unknown> | null {
+function personName(person: JsonValue | undefined): string | undefined {
+  const name = isJsonObject(person) ? person.name : person;
+  return typeof name === 'string' ? name : undefined;
+}
+
+function readPackageJson(packageDir: string): JsonObject | null {
   const packageJsonPath = path.join(packageDir, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return null;
   }
 
   try {
-    return JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    return readJsonObject(packageJsonPath);
   } catch {
     return null;
   }
@@ -446,26 +437,26 @@ function readPackageJson(packageDir: string): Record<string, unknown> | null {
 
 function readLicenseText(packageRef: PackageReference): string | undefined {
   if (packageRef.licensePath && fs.existsSync(packageRef.licensePath)) {
-    return fs.readFileSync(packageRef.licensePath, 'utf-8');
+    return fs.readFileSync(packageRef.licensePath, 'utf8');
   }
 
   for (const licenseFileName of LICENSE_FILE_NAMES) {
     const licensePath = path.join(packageRef.packageDir, licenseFileName);
     if (fs.existsSync(licensePath)) {
-      return fs.readFileSync(licensePath, 'utf-8');
+      return fs.readFileSync(licensePath, 'utf8');
     }
   }
 
   return undefined;
 }
 
-function sortDependencies(dependencies: DependencyInfo[]): DependencyInfo[] {
+function sortDependencies(dependencies: Array<DependencyInfo>): Array<DependencyInfo> {
   return dependencies.toSorted((a, b) => a.name.localeCompare(b.name));
 }
 
-function sortLicenses(licenses: Set<string>): string[] {
-  const withParenthesis: string[] = [];
-  const withoutParenthesis: string[] = [];
+function sortLicenses(licenses: Set<string>): Array<string> {
+  const withParenthesis: Array<string> = [];
+  const withoutParenthesis: Array<string> = [];
 
   for (const license of licenses) {
     if (license.startsWith('(')) {

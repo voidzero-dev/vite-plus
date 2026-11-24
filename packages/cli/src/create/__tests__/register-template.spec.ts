@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log } from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveViteConfig } from '../../resolve-vite-config.js';
@@ -55,10 +55,10 @@ describe('registerLocalTemplate', () => {
 
   async function readCreate(): Promise<{
     defaultTemplate?: string;
-    templates?: CreateTemplateEntry[];
+    templates?: Array<CreateTemplateEntry>;
   }> {
     const config = (await resolveViteConfig(workspaceRoot)) as {
-      create?: { defaultTemplate?: string; templates?: CreateTemplateEntry[] };
+      create?: { defaultTemplate?: string; templates?: Array<CreateTemplateEntry> };
     };
     return config.create ?? {};
   }
@@ -140,7 +140,9 @@ describe('registerLocalTemplate', () => {
     const original = `import { defineConfig } from 'vite-plus';\nimport 'vite-plus-nonexistent-module-xyz';\n\nexport default defineConfig({ create: { defaultTemplate: '@your-org', templates: [{ name: 'pre', description: 'p', template: './pre' }] } });\n`;
     fs.writeFileSync(configPath, original);
 
-    await expect(registerLocalTemplate(workspaceRoot, ENTRY_A, true)).rejects.toThrow();
+    await expect(registerLocalTemplate(workspaceRoot, ENTRY_A, true)).rejects.toThrow(
+      /vite-plus-nonexistent-module-xyz|failed to load/i,
+    );
     expect(fs.readFileSync(configPath, 'utf8')).toBe(original);
   });
 
@@ -149,16 +151,12 @@ describe('registerLocalTemplate', () => {
 
     await registerLocalTemplate(workspaceRoot, ENTRY_A, true);
 
-    const config = (await resolveViteConfig(workspaceRoot)) as {
-      run?: { cache?: boolean };
-      create?: { templates?: CreateTemplateEntry[] };
-    };
-    expect(config.run?.cache).toBe(true);
-    expect(config.create?.templates).toEqual([ENTRY_A]);
+    const config = await resolveViteConfig(workspaceRoot);
+    expect(config).toMatchObject({ run: { cache: true }, create: { templates: [ENTRY_A] } });
   });
 
   it('warns when a same-name entry already points at a different template', async () => {
-    const warnSpy = vi.spyOn(prompts.log, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(log, 'warn').mockImplementation(() => {});
     writeViteConfig(
       `{ create: { templates: [{ name: '${ENTRY_A.name}', description: 'pre', template: './old-path' }] } }`,
     );

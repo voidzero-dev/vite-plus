@@ -22,6 +22,8 @@ import {
   removeManagedVitestEntry,
   setDirectViteEdge,
 } from '../migrator.ts';
+import type { PackageJsonDependencyField } from './shared.ts';
+import { rewriteScriptMap } from './shared.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
   hasProviderPeerDependency,
@@ -33,13 +35,12 @@ import {
   bundledPackagesToRemove,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
-  type PackageJsonDependencyField,
 } from './shared.ts';
 
 export function rewritePackageJson(
   pkg: {
     scripts?: Record<string, string>;
-    'lint-staged'?: Record<string, string | string[]>;
+    'lint-staged'?: Record<string, string | Array<string>>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
@@ -70,31 +71,32 @@ export function rewritePackageJson(
   browserCatalogAdditions: ReadonlySet<string> = new Set(),
   // Bundled browser packages that this package still imports.
   retainedBrowserPackages?: ReadonlySet<string>,
-): Record<string, string | string[]> | null {
+): Record<string, string | Array<string>> | null {
   if (pkg.scripts) {
-    const updated = rewriteScripts(
-      JSON.stringify(pkg.scripts),
-      getScriptRulesYaml(skipStagedMigration),
+    const updated = rewriteScriptMap(pkg.scripts, (serialized) =>
+      rewriteScripts(serialized, getScriptRulesYaml(skipStagedMigration)),
     );
     if (updated) {
-      pkg.scripts = JSON.parse(updated);
+      pkg.scripts = updated;
     }
   }
   // Extract staged config from package.json (lint-staged) → will be merged into vite.config.ts.
   // The lint-staged key is NOT deleted here — it's removed by the caller only after
   // the merge into vite.config.ts succeeds, to avoid losing config on merge failure.
-  let extractedStagedConfig: Record<string, string | string[]> | null = null;
+  let extractedStagedConfig: Record<string, string | Array<string>> | null = null;
   if (!skipStagedMigration && pkg['lint-staged']) {
     const config = pkg['lint-staged'];
-    const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
-    extractedStagedConfig = updated ? JSON.parse(updated) : config;
+    const updated = rewriteScriptMap(config, (serialized) =>
+      rewriteScripts(serialized, readRulesYaml()),
+    );
+    extractedStagedConfig = updated ?? config;
   }
   const supportCatalog = !!isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
-  const dependencyGroups: {
+  const dependencyGroups: Array<{
     dependencyField: PackageJsonDependencyField;
     dependencies: Record<string, string> | undefined;
-  }[] = [
+  }> = [
     { dependencyField: 'devDependencies', dependencies: pkg.devDependencies },
     { dependencyField: 'dependencies', dependencies: pkg.dependencies },
     { dependencyField: 'peerDependencies', dependencies: pkg.peerDependencies },
@@ -199,7 +201,7 @@ export function rewritePackageJson(
       if (
         ownsOxlintApi &&
         (dependencyField === 'peerDependencies' || dependencyField === 'dependencies') &&
-        (OXLINT_PLUGIN_API_PACKAGES as readonly string[]).includes(name)
+        (OXLINT_PLUGIN_API_PACKAGES as ReadonlyArray<string>).includes(name)
       ) {
         // A `catalog:` reference would dangle once the catalog entry for a
         // REMOVE_PACKAGES name is dropped, and the next install fails. Resolve

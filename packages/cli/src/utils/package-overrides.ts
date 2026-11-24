@@ -20,8 +20,8 @@ export function extractOverrideTargetName(key: string): string {
   // Yarn uses `from/target`; retain a trailing scoped target as one name.
   if (target.includes('/')) {
     const segments = target.split('/');
-    const last = segments.at(-1)!;
-    const scope = segments[segments.length - 2];
+    const last = target.slice(target.lastIndexOf('/') + 1);
+    const scope = segments.at(-2);
     target = scope?.startsWith('@') ? `${scope}/${last}` : last;
   }
 

@@ -1,28 +1,57 @@
 import { fileURLToPath } from 'node:url';
+import { isRegExp } from 'node:util/types';
 
 import { preview } from '@vitest/browser-preview';
-import {
-  build,
-  resolveConfig,
-  type Alias,
-  type ConfigEnv,
-  type Plugin,
-  type UserConfig,
-} from 'vite';
-import { describe, expect, it } from 'vitest';
+import type { Alias } from 'vite';
+import type { ConfigEnv, Plugin, UserConfig } from 'vite';
+import { build, resolveConfig } from 'vite';
+import { assert, describe, expect, it } from 'vitest';
 
 import { defineConfig, defineProject, isVitestFamilySpecifier } from '../define-config.ts';
 import { VITEST_RESOLVER_PACKAGES } from '../utils/vitest-ecosystem.ts';
 
 const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 
-function findPlugin(plugins: unknown, name: string): Plugin | undefined {
+type ResolverPlugin = {
+  name: string;
+  enforce?: string;
+  config: { handler: (config: UserConfig, env: ConfigEnv) => void };
+  resolveId: { filter: { id: RegExp }; handler: ResolveId };
+};
+
+function findPlugin(plugins: unknown, name: string): ResolverPlugin | undefined {
   if (!Array.isArray(plugins)) {
     return undefined;
   }
-  return plugins.find(
-    (p): p is Plugin => !!p && typeof p === 'object' && (p as { name?: unknown }).name === name,
-  );
+  const entries: Array<unknown> = plugins;
+  return entries.find((plugin): plugin is ResolverPlugin => {
+    if (
+      !plugin ||
+      typeof plugin !== 'object' ||
+      !('name' in plugin) ||
+      plugin.name !== name ||
+      !('config' in plugin) ||
+      !('resolveId' in plugin)
+    ) {
+      return false;
+    }
+    const { config, resolveId } = plugin;
+    return (
+      !!config &&
+      typeof config === 'object' &&
+      'handler' in config &&
+      typeof config.handler === 'function' &&
+      !!resolveId &&
+      typeof resolveId === 'object' &&
+      'handler' in resolveId &&
+      typeof resolveId.handler === 'function' &&
+      'filter' in resolveId &&
+      !!resolveId.filter &&
+      typeof resolveId.filter === 'object' &&
+      'id' in resolveId.filter &&
+      isRegExp(resolveId.filter.id)
+    );
+  });
 }
 
 function idOf(resolved: string | { id: string } | null | undefined): string | undefined {
@@ -95,7 +124,7 @@ describe('isVitestFamilySpecifier', () => {
 describe('vitePlusVitestResolverPlugin', () => {
   it('lets every resolver package through the hook filter', () => {
     const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-    const { filter } = plugin.resolveId as { filter: { id: RegExp } };
+    const { filter } = plugin.resolveId;
     for (const name of [...VITEST_RESOLVER_PACKAGES, 'vite-plus/test']) {
       expect(name).toMatch(filter.id);
     }
@@ -186,8 +215,7 @@ describe('vitePlusVitestResolverPlugin', () => {
 
   it('does not add browser aliases to builds even with a Vitest environment', () => {
     const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
-      .handler;
+    const hook = plugin.config.handler;
     const config: UserConfig = {
       environments: { __vitest__: {} },
       test: { browser: { enabled: true } },
@@ -198,8 +226,7 @@ describe('vitePlusVitestResolverPlugin', () => {
 
   it('anchors Preview optimizer dependencies without changing other providers', () => {
     const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
-      .handler;
+    const hook = plugin.config.handler;
     const config: UserConfig = {
       environments: { __vitest__: {} },
       test: {
@@ -210,10 +237,14 @@ describe('vitePlusVitestResolverPlugin', () => {
       },
     };
     hook(config, { command: 'serve', mode: 'test' });
-    const aliases = config.resolve!.alias as Alias[];
+    const configuredAliases = config.resolve!.alias;
+    assert(Array.isArray(configuredAliases));
+    const aliases: Array<Alias> = configuredAliases;
     expect(aliases).toHaveLength(9);
     for (const id of ['@testing-library/user-event', '@testing-library/dom']) {
-      const replacement = aliases.find(({ find }) => (find as RegExp).test(id))?.replacement;
+      const replacement = aliases.find(
+        ({ find }) => typeof find !== 'string' && find.test(id),
+      )?.replacement;
       expect(replacement?.replaceAll('\\', '/')).toContain(id);
     }
     hook(config, { command: 'serve', mode: 'test' });
@@ -222,19 +253,20 @@ describe('vitePlusVitestResolverPlugin', () => {
 
   it('anchors browser optimizer entries to the bundled ESM runtime', () => {
     const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
-      .handler;
+    const hook = plugin.config.handler;
     const config: UserConfig = {
       environments: { __vitest__: {} },
       test: { browser: { enabled: true } },
     };
     hook(config, { command: 'serve', mode: 'test' });
-    const aliases = config.resolve!.alias as Alias[];
+    const configuredAliases = config.resolve!.alias;
+    assert(Array.isArray(configuredAliases));
+    const aliases: Array<Alias> = configuredAliases;
     expect(aliases).toHaveLength(7);
     for (const id of ['vitest', 'vitest/internal/browser', 'vitest/internal/traces']) {
-      expect(aliases.find(({ find }) => (find as RegExp).test(id))?.replacement).toBe(
-        fileURLToPath(import.meta.resolve(id)),
-      );
+      expect(
+        aliases.find(({ find }) => typeof find !== 'string' && find.test(id))?.replacement,
+      ).toBe(fileURLToPath(import.meta.resolve(id)));
     }
     hook(config, { command: 'serve', mode: 'test' });
     expect(config.resolve!.alias).toHaveLength(7);
@@ -242,15 +274,14 @@ describe('vitePlusVitestResolverPlugin', () => {
 
   it('preserves explicit browser aliases and leaves Node-only configs unchanged', () => {
     const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-    const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void })
-      .handler;
+    const hook = plugin.config.handler;
     const config: UserConfig = {
       environments: { __vitest__: {} },
       resolve: { alias: { vitest: '/custom/vitest' } },
       test: { browser: { enabled: true } },
     };
     hook(config, { command: 'serve', mode: 'test' });
-    expect((config.resolve!.alias as Alias[])[0]).toEqual({
+    expect(config.resolve!.alias).toHaveProperty([0], {
       find: 'vitest',
       replacement: '/custom/vitest',
     });
@@ -273,10 +304,11 @@ describe('vitePlusVitestResolverPlugin', () => {
           },
         ],
       },
-    }) as { test: { projects: unknown[] } };
+    });
 
-    for (const project of result.test.projects) {
-      const plugins = (project as { plugins?: unknown }).plugins;
+    for (const project of result.test!.projects!) {
+      assert(project && typeof project === 'object' && 'plugins' in project);
+      const plugins = project.plugins;
       const plugin = findPlugin(plugins, RESOLVER_PLUGIN_NAME);
       expect(plugin).toBeDefined();
       expect(plugin?.enforce).toBe('pre');
@@ -285,9 +317,7 @@ describe('vitePlusVitestResolverPlugin', () => {
   });
 
   it('is injected by defineProject too (browser project configs)', () => {
-    const result = defineProject({ test: { browser: { enabled: true } } }) as {
-      plugins: unknown[];
-    };
+    const result = defineProject({ test: { browser: { enabled: true } } });
     const plugin = findPlugin(result.plugins, RESOLVER_PLUGIN_NAME);
 
     expect(plugin).toBeDefined();
@@ -303,14 +333,14 @@ type ResolveIdCtx = {
   resolve: (
     id: string,
     importer: string | undefined,
-    options: Record<string, unknown>,
+    options: { skipSelf?: boolean },
   ) => Promise<ResolveResult>;
 };
 type ResolveId = (
   this: ResolveIdCtx,
   id: string,
   importer: string | undefined,
-  options: Record<string, unknown>,
+  options: { skipSelf?: boolean },
 ) => Promise<string | { id: string } | null | undefined>;
 
 interface ResolveCall {
@@ -320,23 +350,20 @@ interface ResolveCall {
 }
 
 function getResolveId(): ResolveId {
-  const result = defineConfig({}) as { plugins: unknown[] };
+  const result = defineConfig({});
   const plugin = findPlugin(result.plugins, RESOLVER_PLUGIN_NAME);
   if (!plugin) {
     throw new Error(`${RESOLVER_PLUGIN_NAME} is not injected`);
   }
-  return (plugin.resolveId as { handler: ResolveId }).handler;
+  return plugin.resolveId.handler;
 }
 
 // The resolver re-resolves through `this.resolve` rooted at vite-plus's own
 // (bundled) anchors BEFORE the project importer. A `this.resolve` whose
 // `importer` is NOT the project importer is therefore a bundled-anchor probe;
 // `importer === PROJECT_IMPORTER` is the last-resort project fallback.
-function makeCtx(resolveFor: (call: ResolveCall) => ResolveResult): {
-  ctx: ResolveIdCtx;
-  calls: ResolveCall[];
-} {
-  const calls: ResolveCall[] = [];
+function makeCtx(resolveFor: (call: ResolveCall) => ResolveResult) {
+  const calls: Array<ResolveCall> = [];
   const ctx: ResolveIdCtx = {
     resolve: async (id, importer) => {
       const call: ResolveCall = { id, importer, fromProject: importer === PROJECT_IMPORTER };
@@ -349,9 +376,9 @@ function makeCtx(resolveFor: (call: ResolveCall) => ResolveResult): {
 
 function resolver(command: 'serve' | 'build', vitestServer: boolean): ResolveId {
   const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
-  const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void }).handler;
+  const hook = plugin.config.handler;
   hook(vitestServer ? { environments: { __vitest__: {} } } : {}, { command, mode: 'test' });
-  return (plugin.resolveId as { handler: ResolveId }).handler;
+  return plugin.resolveId.handler;
 }
 
 describe('workspace test API identity', () => {

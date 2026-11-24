@@ -1,15 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log as promptLog } from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
 
-import {
-  type LiteralCommandToken,
-  parseConfigArgs,
-  parseLiteralCommands,
-  rewriteScripts,
-} from '../../../binding/index.js';
+import type { LiteralCommandToken } from '../../../binding/index.js';
+import { parseConfigArgs, parseLiteralCommands, rewriteScripts } from '../../../binding/index.js';
 import {
   findUnsafeHookInstallPath,
   HOOK_STUB_SCRIPT,
@@ -20,6 +16,7 @@ import type { PackageManager, WorkspacePackage } from '../../types/index.ts';
 import { getVpCommand } from '../../utils/command.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
 import { findGitRoot } from '../../utils/git.ts';
+import { isObjectValue } from '../../utils/json-value.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
   hasStagedConfigInViteConfig,
@@ -27,7 +24,8 @@ import {
   readRulesYaml,
   removeLintStagedFromPackageJson,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
+import { rewriteScriptMap } from './shared.ts';
 import {
   getCommandStartIndex,
   LINT_STAGED_ALL_CONFIG_FILES,
@@ -102,7 +100,7 @@ export function hasExistingViteHooksPolicy(projectPath: string): boolean {
 /**
  * List the supported hook files present in `.vite-hooks/`, in canonical order.
  */
-export function listExistingViteHookNames(projectPath: string): string[] {
+export function listExistingViteHookNames(projectPath: string): Array<string> {
   const hooksDir = path.join(projectPath, '.vite-hooks');
   return SUPPORTED_GIT_HOOK_NAMES.filter((hookName) =>
     fs.lstatSync(path.join(hooksDir, hookName), { throwIfNoEntry: false })?.isFile(),
@@ -160,13 +158,13 @@ function hasVpConfigLifecycleScript(scripts: Record<string, string> | undefined)
 }
 
 interface VpConfigHookCommand {
-  args: LiteralCommandToken[];
+  args: Array<LiteralCommandToken>;
   hooksEnabled: boolean;
 }
 
 /** Only recognize literal invocations in the project directory. Text passed
  * to echo, node, or another command must not count as a dispatcher refresh. */
-function vpConfigHookCommands(script: string | undefined): VpConfigHookCommand[] {
+function vpConfigHookCommands(script: string | undefined): Array<VpConfigHookCommand> {
   if (!script) {
     return [];
   }
@@ -181,7 +179,7 @@ function vpConfigHookCommands(script: string | undefined): VpConfigHookCommand[]
   if (!commands) {
     return [];
   }
-  const result: VpConfigHookCommand[] = [];
+  const result: Array<VpConfigHookCommand> = [];
   for (const tokens of commands) {
     const values = tokens.map(({ value }) => value);
     if (/^[A-Za-z_]\w*=/.test(values[0] ?? '')) {
@@ -243,7 +241,7 @@ function findNonRegularViteHookPath(projectPath: string): string | null {
 
 function findWorkspacePackageHookPolicy(
   workspaceRoot: string,
-  packages: readonly WorkspacePackage[],
+  packages: ReadonlyArray<WorkspacePackage>,
 ): string | null {
   for (const pkg of packages) {
     const packagePath = path.join(workspaceRoot, pkg.path);
@@ -256,8 +254,8 @@ function findWorkspacePackageHookPolicy(
     if (hasHuskySetup(packagePath, pkgContent)) {
       return `Detected Husky in workspace package "${pkg.path}" — leaving its hooks, configuration, and dependencies unchanged.`;
     }
-    const deps = pkgContent.devDependencies as Record<string, string> | undefined;
-    const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
+    const deps = isObjectValue(pkgContent.devDependencies) ? pkgContent.devDependencies : undefined;
+    const prodDeps = isObjectValue(pkgContent.dependencies) ? pkgContent.dependencies : undefined;
     for (const tool of OTHER_HOOK_TOOLS) {
       if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
         return `Detected ${tool} in workspace package "${pkg.path}" — leaving the existing hook setup unchanged.`;
@@ -303,7 +301,7 @@ function normalizeGitHooksPath(hooksPath: string): string {
 export function preflightGitHooksSetup(
   projectPath: string,
   _packageManager?: PackageManager,
-  packages: readonly WorkspacePackage[] = [],
+  packages: ReadonlyArray<WorkspacePackage> = [],
 ): string | null {
   const gitRoot = findGitRoot(projectPath);
   if (gitRoot && path.resolve(projectPath) !== path.resolve(gitRoot)) {
@@ -314,8 +312,8 @@ export function preflightGitHooksSetup(
     return null; // silently skip
   }
   const pkgContent = readJsonFile(packageJsonPath);
-  const deps = pkgContent.devDependencies as Record<string, string> | undefined;
-  const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
+  const deps = isObjectValue(pkgContent.devDependencies) ? pkgContent.devDependencies : undefined;
+  const prodDeps = isObjectValue(pkgContent.dependencies) ? pkgContent.dependencies : undefined;
   const configuredHooksPath = gitRoot ? getConfiguredHooksPath(projectPath) : '';
   const normalizedHooksPath = normalizeGitHooksPath(configuredHooksPath);
   if (
@@ -366,7 +364,7 @@ export function shouldSkipStagedMigrationForHooks(
   projectPath: string,
   shouldSetupHooks: boolean,
   packageManager?: PackageManager,
-  packages: readonly WorkspacePackage[] = [],
+  packages: ReadonlyArray<WorkspacePackage> = [],
 ): boolean {
   return (
     !shouldSetupHooks ||
@@ -385,7 +383,7 @@ export function installGitHooks(
   silent = false,
   report?: MigrationReport,
   packageManager?: PackageManager,
-  packages: readonly WorkspacePackage[] = [],
+  packages: ReadonlyArray<WorkspacePackage> = [],
 ): boolean {
   const reason = preflightGitHooksSetup(projectPath, packageManager, packages);
   if (reason) {
@@ -430,13 +428,13 @@ export function installGitHooks(
   if (!hasExistingHookPolicy && !stagedMerged && !hasStandaloneConfig) {
     // Use lint-staged config from package.json if available, otherwise use default
     const pkgData = readJsonFile(packageJsonPath) as {
-      'lint-staged'?: Record<string, string | string[]>;
+      'lint-staged'?: Record<string, string | Array<string>>;
     };
     const stagedConfig = pkgData?.['lint-staged'] ?? DEFAULT_STAGED_CONFIG;
-    const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
-    const finalConfig: Record<string, string | string[]> = updated
-      ? JSON.parse(updated)
-      : stagedConfig;
+    const updated = rewriteScriptMap(stagedConfig, (serialized) =>
+      rewriteScripts(serialized, readRulesYaml()),
+    );
+    const finalConfig = updated ?? stagedConfig;
     stagedMerged = mergeStagedConfigToViteConfig(projectPath, finalConfig, silent, report);
   }
 
@@ -484,7 +482,7 @@ export function installGitHooks(
       report.gitHooksConfigured = true;
     }
     if (!silent) {
-      prompts.log.success('✔ Git hooks configured');
+      promptLog.success('✔ Git hooks configured');
     }
     return true;
   }
@@ -517,7 +515,7 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
   return false;
 }
 
-const DEFAULT_STAGED_CONFIG: Record<string, string> = { '*': 'vp check --fix' };
+const DEFAULT_STAGED_CONFIG = { '*': 'vp check --fix' };
 
 export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
   const huskyDir = path.join(projectPath, dir);

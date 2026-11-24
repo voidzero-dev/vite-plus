@@ -8,23 +8,21 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { readdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import { NapiCli, parseTriple } from '@napi-rs/cli';
 
 import { publishNpmPackageFromEnv } from '../../.github/scripts/publish-npm-package.ts';
-import {
-  type NpmPackageVersion,
-  waitForNpmPackagesFromEnv,
-} from '../../.github/scripts/wait-for-npm-packages.ts';
+import type { NpmPackageVersion } from '../../.github/scripts/wait-for-npm-packages.ts';
+import { waitForNpmPackagesFromEnv } from '../../.github/scripts/wait-for-npm-packages.ts';
 import { INSTALL_LOCKFILE, validateInstallLockfile } from './generate-install-lockfile.ts';
 import pkg from './package.json' with { type: 'json' };
+import { isObjectValue } from './src/utils/json-value.ts';
 import { editJsonFile, readJsonFile } from './src/utils/json.ts';
 
 const cli = new NapiCli();
 
-const currentDir = dirname(fileURLToPath(import.meta.url));
+const currentDir = import.meta.dirname;
 const repoRoot = join(currentDir, '..', '..');
 const nodeVersion = readFileSync(join(repoRoot, '.node-version'), 'utf8').trim();
 if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(nodeVersion)) {
@@ -106,19 +104,18 @@ if (phase !== 'cli') {
   for (const dir of platformDirs) {
     editJsonFile(join(npmDir, dir, 'package.json'), (pkgJson) => ({
       ...pkgJson,
-      engines: { ...(pkgJson.engines as Record<string, unknown>), node: '>=20.0.0' },
+      engines: { ...(isObjectValue(pkgJson.engines) && pkgJson.engines), node: '>=20.0.0' },
     }));
   }
 }
 
 // Fresh read: napi-rs prePublish rewrote this package.json on disk, so the
 // top-level `pkg` import is stale for injected fields.
-const cliPackageJson = readJsonFile(join(currentDir, 'package.json')) as {
-  version: string;
-  repository?: unknown;
-  optionalDependencies?: Record<string, string>;
-};
+const cliPackageJson = readJsonFile(join(currentDir, 'package.json'));
 // Lockstep versioning: every generated platform package uses the CLI version.
+if (typeof cliPackageJson.version !== 'string') {
+  throw new TypeError('Expected a version in packages/cli/package.json');
+}
 const cliVersion = cliPackageJson.version;
 
 // napi-rs prePublish injects the platform packages into this package's
@@ -131,8 +128,9 @@ const cliVersion = cliPackageJson.version;
 const nativePlatformPins: Record<string, string> = {};
 for (const target of pkg.napi.targets) {
   const packageName = `${pkg.napi.packageName}-${parseTriple(target).platformArchABI}`;
-  const pin = cliPackageJson.optionalDependencies?.[packageName];
-  if (!pin) {
+  const optional = cliPackageJson.optionalDependencies;
+  const pin = isObjectValue(optional) ? optional[packageName] : undefined;
+  if (typeof pin !== 'string' || !pin) {
     console.error(
       `napi prePublish did not inject ${packageName} into packages/cli/package.json optionalDependencies`,
     );
@@ -143,11 +141,11 @@ for (const target of pkg.napi.targets) {
 editJsonFile(join(repoRoot, 'packages', 'core', 'package.json'), (corePkgJson) => ({
   ...corePkgJson,
   optionalDependencies: {
-    ...(corePkgJson.optionalDependencies as Record<string, string> | undefined),
+    ...(isObjectValue(corePkgJson.optionalDependencies) && corePkgJson.optionalDependencies),
     ...nativePlatformPins,
   },
 }));
-const platformPackages: NpmPackageVersion[] = [];
+const platformPackages: Array<NpmPackageVersion> = [];
 
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';
@@ -155,7 +153,11 @@ const publishArgs = ['publish', '--tag', npmTag, '--access', 'public'];
 if (!skipNpmPublish && phase !== 'cli') {
   for (const file of await readdir(npmDir)) {
     const platformDir = join(npmDir, file);
-    const platformPackage = readJsonFile(join(platformDir, 'package.json')) as NpmPackageVersion;
+    const { name, version } = readJsonFile(join(platformDir, 'package.json'));
+    if (typeof name !== 'string' || typeof version !== 'string') {
+      throw new TypeError(`Expected package name and version in ${platformDir}/package.json`);
+    }
+    const platformPackage = { name, version };
     await publishNpmPackageFromEnv(platformPackage, 'npm', publishArgs, platformDir);
     platformPackages.push(platformPackage);
   }
@@ -227,10 +229,10 @@ async function prepareAndPublishCliPackage(napiTarget: string): Promise<void> {
     version: cliVersion,
     os: [platform],
     cpu: [arch],
-    ...(abi ? { libc: [abi] } : {}),
+    libc: abi ? [abi] : undefined,
     files,
     vpNodeVersion: nodeVersion,
-    ...(!skipNpmPublish ? { vpInstallLockfile: true } : {}),
+    vpInstallLockfile: skipNpmPublish ? undefined : true,
     description: `Vite+ CLI binary for ${platformArchABI}`,
     repository: cliPackageJson.repository,
   };

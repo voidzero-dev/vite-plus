@@ -1,16 +1,11 @@
-import type { CANCEL_SYMBOL, Validate } from '@clack/core';
+import type { Validate } from '@clack/core';
 import { TextPrompt } from '@clack/core';
 import color from 'picocolors';
 
-import {
-  type CommonOptions,
-  getGuide,
-  promptTitle,
-  wrapTextWithPrefix,
-  S_BAR,
-  S_BAR_END,
-} from './common.js';
+import type { CommonOptions } from './common.js';
+import { getGuide, promptTitle, wrapTextWithPrefix, S_BAR, S_BAR_END } from './common.js';
 import { promptMilestone } from './milestone.js';
+import { runPrompt } from './prompt-result.js';
 
 export interface TextOptions extends CommonOptions {
   message: string;
@@ -21,7 +16,7 @@ export interface TextOptions extends CommonOptions {
 }
 
 export const text = (opts: TextOptions) => {
-  return new TextPrompt({
+  const prompt = new TextPrompt({
     validate: opts.validate,
     placeholder: opts.placeholder,
     defaultValue: opts.defaultValue,
@@ -73,5 +68,6 @@ export const text = (opts: TextOptions) => {
         }
       }
     },
-  }).prompt() as Promise<string | typeof CANCEL_SYMBOL>;
+  });
+  return runPrompt<string>(prompt);
 };

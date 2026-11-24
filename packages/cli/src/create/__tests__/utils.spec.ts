@@ -165,7 +165,7 @@ describe('ensureDefaultGitignoreEntries', () => {
   });
 
   function gitignore(): string {
-    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf-8');
+    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf8');
   }
 
   const dotenvBlock = '# dotenv environment variable files\n.env\n.env.*\n!.env.example\n';
@@ -244,7 +244,7 @@ describe('ensureGitignoreVsCodeEditorConfigs', () => {
   });
 
   function gitignore(): string {
-    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf-8');
+    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf8');
   }
 
   function writeGitignore(content: string): void {
@@ -378,7 +378,7 @@ describe('renameFiles', () => {
   }
 
   function read(name: string): string {
-    return fs.readFileSync(path.join(projectDir, name), 'utf-8');
+    return fs.readFileSync(path.join(projectDir, name), 'utf8');
   }
 
   function exists(name: string): boolean {

@@ -18,16 +18,16 @@ export interface WorkspaceInfo {
   monorepoScope: string;
   // The patterns of the workspace packages
   // For example, ["apps/*", "packages/*", "services/*", "tools/*"]
-  workspacePatterns: string[];
+  workspacePatterns: Array<string>;
   // The parent directories of the generated package
   // For example, ["apps", "packages", "services", "tools"]
-  parentDirs: string[];
+  parentDirs: Array<string>;
   packageManager: PackageManager;
   packageManagerVersion: string;
   downloadPackageManager: DownloadPackageManagerResult;
   // The `VP_PACKAGE_MANAGER` override pinned to the downloaded version, keeping any integrity hash
   packageManagerOverride?: string;
-  packages: WorkspacePackage[];
+  packages: Array<WorkspacePackage>;
 }
 
 export interface WorkspaceInfoOptional extends Omit<

@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
+import { ZodError } from 'zod';
 
-import {
-  parseSyncVersionsRequest,
-  planSyncVersions,
-  type SyncVersionsRequestV1,
-  type SyncVersionsToolchain,
-} from '../plan.ts';
+import type { SyncVersionsRequestV1, SyncVersionsToolchain } from '../plan.ts';
+import { parseSyncVersionsRequest, planSyncVersions } from '../plan.ts';
 
 const toolchain: SyncVersionsToolchain = {
   vitePlus: '0.4.0',
@@ -169,6 +166,20 @@ describe('planSyncVersions', () => {
 
     expect(plan.replacements).toHaveLength(1);
     expect(plan.replacements[0].after).toBe(before.replace("vitest: '^4.1.11'", "vitest: '5.0.0'"));
+  });
+
+  it('aligns catalog entries alongside tagged values and recursive YAML aliases', () => {
+    const before =
+      'metadata: !!timestamp 2024-01-01\ncatalog: { vitest: 4.1.11, other: &loop [*loop] }\n';
+    const request = parseSyncVersionsRequest({
+      schemaVersion: 1,
+      workspace: '.',
+      manifests: [{ path: 'pnpm-workspace.yaml', kind: 'pnpmWorkspace', contents: before }],
+    });
+
+    expect(planSyncVersions(request, toolchain).replacements[0]?.after).toBe(
+      before.replace('vitest: 4.1.11', 'vitest: 5.0.0'),
+    );
   });
 
   it('preserves double-quoted YAML scalar style', () => {
@@ -376,7 +387,7 @@ describe('parseSyncVersionsRequest', () => {
     {
       schemaVersion: 1,
       workspace: '.',
-      manifests: [{ path: 'dir\\package.json', kind: 'packageJson', contents: '{}' }],
+      manifests: [{ path: String.raw`dir\package.json`, kind: 'packageJson', contents: '{}' }],
     },
     {
       schemaVersion: 1,
@@ -402,7 +413,7 @@ describe('parseSyncVersionsRequest', () => {
       manifests: [{ path: 'yarnrc.yml', kind: 'yarnRc', contents: '{}' }],
     },
   ])('rejects an invalid or ambiguous request', (request) => {
-    expect(() => parseSyncVersionsRequest(request)).toThrow();
+    expect(() => parseSyncVersionsRequest(request)).toThrow(ZodError);
   });
 
   it('enforces manifest count and size limits', () => {
@@ -416,7 +427,7 @@ describe('parseSyncVersionsRequest', () => {
           contents: '{}',
         })),
       }),
-    ).toThrow();
+    ).toThrow(ZodError);
     expect(() =>
       parseSyncVersionsRequest({
         schemaVersion: 1,
@@ -429,6 +440,6 @@ describe('parseSyncVersionsRequest', () => {
           },
         ],
       }),
-    ).toThrow();
+    ).toThrow(ZodError);
   });
 });

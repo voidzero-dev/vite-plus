@@ -1,9 +1,8 @@
-import type { CANCEL_SYMBOL } from '@clack/core';
 import { MultiSelectPrompt } from '@clack/core';
 import color from 'picocolors';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   formatInstructionFooter,
   MULTISELECT_INSTRUCTIONS,
@@ -19,12 +18,13 @@ import {
   S_POINTER_INACTIVE,
 } from './common.js';
 import { limitOptions } from './limit-options.js';
+import { runPrompt } from './prompt-result.js';
 import type { Option } from './select.js';
 
 export interface MultiSelectOptions<Value> extends CommonOptions {
   message: string;
-  options: Option<Value>[];
-  initialValues?: Value[];
+  options: Array<Option<Value>>;
+  initialValues?: Array<Value>;
   maxItems?: number;
   required?: boolean;
   cursorAt?: Value;
@@ -114,7 +114,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
   };
   const required = opts.required ?? true;
 
-  return new MultiSelectPrompt({
+  const prompt = new MultiSelectPrompt({
     options: opts.options,
     signal: opts.signal,
     input: opts.input,
@@ -123,7 +123,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
     initialValues: opts.initialValues,
     required,
     cursorAt: opts.cursorAt,
-    validate(selected: Value[] | undefined) {
+    validate(selected: Array<Value> | undefined) {
       if (required && (selected === undefined || selected.length === 0)) {
         return 'Please select at least one option.';
       }
@@ -216,5 +216,6 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
         }
       }
     },
-  }).prompt() as Promise<Value[] | typeof CANCEL_SYMBOL>;
+  });
+  return runPrompt<Array<Value>>(prompt);
 };

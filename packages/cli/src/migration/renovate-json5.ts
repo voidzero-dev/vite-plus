@@ -1,4 +1,10 @@
-import type * as t from '@oxc-project/types';
+import type {
+  ArrayExpression,
+  Node,
+  ObjectExpression,
+  ObjectPropertyKind,
+  Span,
+} from '@oxc-project/types';
 
 import { detectFormattingOptions } from '../utils/json.ts';
 import { isString, objectProperty, staticObject } from './ast-utils.ts';
@@ -10,7 +16,7 @@ const JSON5_NUMBER =
 const CODE_POINT_ESCAPE = /(?:^|[^\\])(?:\\\\)*\\u\{/;
 const LINE_INDENT = /(\r\n|[\r\n\u2028\u2029])([^\S\r\n\u2028\u2029]*)$/;
 
-function isJson5Value(node: t.Node, source: string): boolean {
+function isJson5Value(node: Node, source: string): boolean {
   switch (node.type) {
     case 'ObjectExpression':
       return (
@@ -86,22 +92,24 @@ export async function withJson5Preset(source: string, preset: string): Promise<s
   return appendEntry(wrapped, existing ?? object, parsed.comments, entry).slice(1, -2);
 }
 
-function quoteAt(source: string, node?: t.Span | null): string {
+function quoteAt(source: string, node?: Span | null): string {
   const char = node && source[node.start];
   return char === "'" || char === '"' ? char : '';
 }
 
 function quotePreset(preset: string, quote: string): string {
   const jsonString = JSON.stringify(preset);
-  return quote === '"' ? jsonString : "'" + jsonString.slice(1, -1).replaceAll("'", "\\'") + "'";
+  return quote === '"'
+    ? jsonString
+    : "'" + jsonString.slice(1, -1).replaceAll("'", String.raw`\'`) + "'";
 }
 
 /** Match the property's quotes and colon spacing when creating an `extends` list. */
 function formatPresetEntry(
   source: string,
   preset: string,
-  array: t.ArrayExpression | undefined,
-  styleProperty: t.ObjectPropertyKind | undefined,
+  array: ArrayExpression | undefined,
+  styleProperty: ObjectPropertyKind | undefined,
 ): string {
   const property = styleProperty?.type === 'Property' ? styleProperty : undefined;
   const keyQuote = quoteAt(source, property?.key);
@@ -117,8 +125,8 @@ function formatPresetEntry(
 
 function appendEntry(
   source: string,
-  container: t.ArrayExpression | t.ObjectExpression,
-  comments: readonly t.Span[],
+  container: ArrayExpression | ObjectExpression,
+  comments: ReadonlyArray<Span>,
   entry: string,
 ): string {
   const items = container.type === 'ArrayExpression' ? container.elements : container.properties;
@@ -147,7 +155,7 @@ function appendEntry(
   let spacing: string;
   if (newline) {
     let indent = lastLine?.[2];
-    if (indent == null) {
+    if (indent === undefined || indent === null) {
       const { insertSpaces, tabSize } = detectFormattingOptions(source);
       indent = (closingLine?.[2] ?? '') + (insertSpaces ? ' '.repeat(tabSize ?? 2) : '\t');
     }

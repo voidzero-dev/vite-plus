@@ -1,13 +1,14 @@
-import type * as t from '@oxc-project/types';
+import type { Node, ObjectExpression } from '@oxc-project/types';
 
 import { propertyName } from '../ast-utils.ts';
-import { CONFIG_SOURCES, SourceEditor, importedName, isModuleExports } from './ast.ts';
+import type { SourceEditor } from './ast.ts';
+import { CONFIG_SOURCES, importedName, isModuleExports } from './ast.ts';
 
 const CONFIG_KEYS = new Set(['root', 'test', 'extends']);
 
 // A conditional spread of build/server options cannot change test ownership.
 // Unknown spreads (including imported objects) must still be reviewed.
-function unrelatedSpread(node: t.Node): boolean {
+function unrelatedSpread(node: Node): boolean {
   if (node.type === 'ConditionalExpression') {
     return unrelatedSpread(node.consequent) && unrelatedSpread(node.alternate);
   }
@@ -26,8 +27,8 @@ function unrelatedSpread(node: t.Node): boolean {
  * alternative configs. Return the original object so edits keep its spans. */
 export function resolveConfigObject(
   editor: SourceEditor,
-  node: t.Node | null | undefined,
-): t.ObjectExpression | undefined {
+  node: Node | null | undefined,
+): ObjectExpression | undefined {
   if (node?.type === 'Identifier') {
     const binding = editor.binding(node);
     if (

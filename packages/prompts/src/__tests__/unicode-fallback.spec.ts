@@ -14,7 +14,7 @@ function capture() {
   let content = '';
   const output = Object.assign(
     new Writable({
-      write(chunk, _, done) {
+      write(chunk: Buffer, _, done) {
         content += chunk.toString();
         done();
       },

@@ -11,7 +11,7 @@ const features = [
 
 const activeSection = ref('feature-dev-build');
 const underlineStyle = ref({ left: '0px', width: '0px' });
-const listItems = ref<HTMLElement[]>([]);
+const listItems = ref<Array<HTMLElement>>([]);
 let scrollTimeout: number | null = null;
 
 const scrollToSection = (e: Event, id: string) => {
@@ -88,22 +88,22 @@ const updateUnderlinePosition = () => {
 
 const determineActiveSection = () => {
   // Get all sections and their positions
-  const sections = features
-    .map((feature) => {
-      const element = document.getElementById(feature.id);
-      if (!element) {
-        return null;
-      }
+  const sections = features.flatMap((feature) => {
+    const element = document.getElementById(feature.id);
+    if (!element) {
+      return [];
+    }
 
-      const rect = element.getBoundingClientRect();
-      return {
+    const rect = element.getBoundingClientRect();
+    return [
+      {
         id: feature.id,
         top: rect.top,
         bottom: rect.bottom,
         height: rect.height,
-      };
-    })
-    .filter(Boolean);
+      },
+    ];
+  });
 
   // Find the section that's most visible near the top of the viewport
   // We consider a section "active" if it's within 200px of the top
@@ -111,10 +111,6 @@ const determineActiveSection = () => {
   let activeId = activeSection.value;
 
   for (const section of sections) {
-    if (!section) {
-      continue;
-    }
-
     // If section top is near or above threshold and bottom is below threshold
     if (section.top <= threshold && section.bottom > threshold) {
       activeId = section.id;

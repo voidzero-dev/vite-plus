@@ -1,18 +1,26 @@
-import type * as t from '@oxc-project/types';
+import type {
+  ArrayExpression,
+  ArrowFunctionExpression,
+  Function,
+  Node,
+  ObjectExpression,
+  ObjectProperty,
+  Program,
+  Span,
+} from '@oxc-project/types';
 
 import { isString, memberName, objectProperty, parseSource, propertyName } from '../ast-utils.ts';
 
 interface Binding {
-  declaration: t.Node;
-  references: t.Node[];
+  declaration: Node;
+  references: Array<Node>;
   constant: boolean;
 }
 
-type Visitors = {
-  [Type in t.Node['type']]?: (node: Extract<t.Node, { type: Type }>) => void;
-};
+type NodeByType = { [Variant in Node as Variant['type']]: Variant };
+type Visitors = { [Type in keyof NodeByType]?: (node: NodeByType[Type]) => void };
 
-function isNode(value: unknown): value is t.Node {
+function isNode(value: unknown): value is Node {
   return typeof value === 'object' && value !== null && 'type' in value && 'start' in value;
 }
 
@@ -27,7 +35,7 @@ export interface VitestV5Finding {
 
 export interface RewriteResult {
   content: string;
-  findings: VitestV5Finding[];
+  findings: Array<VitestV5Finding>;
 }
 
 export interface SourceOptions {
@@ -41,7 +49,7 @@ export interface SourceOptions {
   temporalPolyfill?: boolean;
 }
 
-export function isModuleExports(editor: SourceEditor, node: t.Node): boolean {
+export function isModuleExports(editor: SourceEditor, node: Node): boolean {
   return (
     node.type === 'MemberExpression' &&
     !node.computed &&
@@ -54,8 +62,8 @@ export function isModuleExports(editor: SourceEditor, node: t.Node): boolean {
 
 /** Consider both possible project lists without evaluating environment-dependent
  * config code. Unknown spreads stay in the list for a localized review. */
-export function projectElements(node: t.ArrayExpression): Array<t.Node | null> {
-  const expand = (value: t.Node): Array<t.Node | null> | undefined => {
+export function projectElements(node: ArrayExpression): Array<Node | null> {
+  const expand = (value: Node): Array<Node | null> | undefined => {
     if (value.type === 'ArrayExpression') {
       return projectElements(value);
     }
@@ -83,7 +91,7 @@ export function projectElements(node: t.ArrayExpression): Array<t.Node | null> {
 
 export function importedName(
   editor: SourceEditor,
-  node: t.Node | null | undefined,
+  node: Node | null | undefined,
   sources: ReadonlySet<string>,
 ): string | undefined {
   if (
@@ -131,7 +139,7 @@ export const NODE_SOURCES = new Set(['vitest/node', 'vite-plus/test/node']);
 
 export function testApiName(
   editor: SourceEditor,
-  node: t.Node | null | undefined,
+  node: Node | null | undefined,
   globals = false,
 ): string | undefined {
   const imported = importedName(editor, node, ROOT_TEST_SOURCES);
@@ -162,7 +170,7 @@ export function testApiName(
   return undefined;
 }
 
-export function isImportMetaVitest(node: t.Node | null | undefined): boolean {
+export function isImportMetaVitest(node: Node | null | undefined): boolean {
   return (
     node?.type === 'MemberExpression' &&
     !node.optional &&
@@ -175,7 +183,7 @@ export function isImportMetaVitest(node: t.Node | null | undefined): boolean {
 
 export interface AddedProperty {
   key: string;
-  value: string | AddedProperty[];
+  value: string | Array<AddedProperty>;
   comment?: string;
 }
 
@@ -191,7 +199,11 @@ function printAddedProperty(property: AddedProperty, indent: string, newline: st
 }
 
 /** Format generated objects without reindenting copied expressions or string literals. */
-export function printAddedObject(properties: AddedProperty[], indent = '', newline = '\n'): string {
+export function printAddedObject(
+  properties: Array<AddedProperty>,
+  indent = '',
+  newline = '\n',
+): string {
   const childIndent = `${indent}  `;
   return `{${newline}${properties
     .map((property) => `${childIndent}${printAddedProperty(property, childIndent, newline)}`)
@@ -200,17 +212,17 @@ export function printAddedObject(properties: AddedProperty[], indent = '', newli
 
 /** Offset edits retain comments and formatting outside the precise changed span. */
 export class SourceEditor {
-  readonly ast: t.Program;
-  readonly comments: t.Span[];
-  readonly findings: VitestV5Finding[] = [];
-  private readonly nodes: t.Node[] = [];
-  private readonly parents = new Map<t.Node, t.Node>();
+  readonly ast: Program;
+  readonly comments: Array<Span>;
+  readonly findings: Array<VitestV5Finding> = [];
+  private readonly nodes: Array<Node> = [];
+  private readonly parents = new Map<Node, Node>();
   private readonly bindings = new Map<number, Binding>();
   private readonly names = new Set<string>();
   private readonly edits: Array<{ start: number; end: number; text: string }> = [];
-  private readonly additions = new Map<t.ObjectExpression, Map<string, AddedProperty>>();
+  private readonly additions = new Map<ObjectExpression, Map<string, AddedProperty>>();
   private readonly reported = new Set<string>();
-  private lineStarts?: number[];
+  private lineStarts?: Array<number>;
 
   constructor(
     readonly file: string,
@@ -219,8 +231,8 @@ export class SourceEditor {
     const parsed = parseSource(file, source);
     this.ast = parsed.program;
     this.comments = parsed.comments;
-    const identifiers = new Map<number, t.Node>();
-    const index = (node: t.Node, parent?: t.Node) => {
+    const identifiers = new Map<number, Node>();
+    const index = (node: Node, parent?: Node) => {
       this.nodes.push(node);
       if (parent) {
         this.parents.set(node, parent);
@@ -253,18 +265,19 @@ export class SourceEditor {
   }
 
   visit(visitors: Visitors): void {
+    function dispatch<Type extends keyof NodeByType>(type: Type, node: NodeByType[Type]) {
+      visitors[type]?.(node);
+    }
     for (const node of this.nodes) {
-      // Dispatch by the same discriminant that selects the visitor's node type.
-      const visitor = visitors[node.type] as ((node: t.Node) => void) | undefined;
-      visitor?.(node);
+      dispatch(node.type, node);
     }
   }
 
-  parent(node: t.Node): t.Node | undefined {
+  parent(node: Node): Node | undefined {
     return this.parents.get(node);
   }
 
-  functionParent(node: t.Node): t.Function | t.ArrowFunctionExpression | undefined {
+  functionParent(node: Node): Function | ArrowFunctionExpression | undefined {
     let parent = this.parent(node);
     while (parent) {
       if (
@@ -279,7 +292,7 @@ export class SourceEditor {
     return undefined;
   }
 
-  binding(node: t.Node): Binding | undefined {
+  binding(node: Node): Binding | undefined {
     return node.type === 'Identifier' ? this.bindings.get(node.start) : undefined;
   }
 
@@ -293,11 +306,11 @@ export class SourceEditor {
     return name;
   }
 
-  text(node: t.Node): string {
+  text(node: Node): string {
     return this.source.slice(node.start, node.end);
   }
 
-  replace(node: t.Node, text: string): void {
+  replace(node: Node, text: string): void {
     this.edit(node.start, node.end, text);
   }
 
@@ -314,7 +327,7 @@ export class SourceEditor {
   }
 
   add(
-    object: t.ObjectExpression,
+    object: ObjectExpression,
     key: string,
     value: AddedProperty['value'],
     comment?: string,
@@ -330,7 +343,7 @@ export class SourceEditor {
     additions.set(key, { key, value, comment });
   }
 
-  remove(object: t.ObjectExpression, prop: t.ObjectProperty): void {
+  remove(object: ObjectExpression, prop: ObjectProperty): void {
     const index = object.properties.indexOf(prop);
     const nextStart = object.properties[index + 1]?.start ?? object.end - 1;
     const previousEnd = object.properties[index - 1]?.end ?? object.start + 1;
@@ -357,7 +370,7 @@ export class SourceEditor {
   }
 
   report(
-    node: t.Node | undefined,
+    node: Node | undefined,
     code: string,
     message: string,
     severity: VitestV5Finding['severity'] = 'review',

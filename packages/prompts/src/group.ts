@@ -30,26 +30,27 @@ export const group = async <T>(
   prompts: PromptGroup<T>,
   opts?: PromptGroupOptions<T>,
 ): Promise<Prettify<PromptGroupAwaitedReturn<T>>> => {
-  const results = {} as any;
-  const promptNames = Object.keys(prompts);
+  const results: Partial<PromptGroupAwaitedReturn<T>> = {};
 
-  for (const name of promptNames) {
-    const prompt = prompts[name as keyof T];
-    const result = await prompt({ results })?.catch((e) => {
-      throw e;
-    });
+  for (const name in prompts) {
+    if (!Object.hasOwn(prompts, name)) {
+      continue;
+    }
+    const prompt = prompts[name];
+    const result = await prompt({ results });
 
     // Pass the results to the onCancel function
     // so the user can decide what to do with the results
     // TODO: Switch to callback within core to avoid isCancel Fn
     if (typeof opts?.onCancel === 'function' && isCancel(result)) {
-      results[name] = 'canceled';
+      Object.assign(results, { [name]: 'canceled' });
       opts.onCancel({ results });
       continue;
     }
 
-    results[name] = result;
+    Object.assign(results, { [name]: result });
   }
 
-  return results;
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Every prompt has now populated its corresponding result.
+  return results as PromptGroupAwaitedReturn<T>;
 };

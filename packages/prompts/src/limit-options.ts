@@ -11,7 +11,7 @@ export interface LimitOptionsParams<TOption> extends CommonOptions {
   /**
    * The list of options to display.
    */
-  options: TOption[];
+  options: Array<TOption>;
 
   /**
    * The index of the currently active/selected option.
@@ -46,7 +46,7 @@ export interface LimitOptionsParams<TOption> extends CommonOptions {
 }
 
 const trimLines = (
-  groups: Array<string[]>,
+  groups: Array<Array<string>>,
   initialLineCount: number,
   startIndex: number,
   endIndex: number,
@@ -112,7 +112,7 @@ export const limitOptions = <TOption>({
   maxItems = Number.POSITIVE_INFINITY,
   columnPadding = 0,
   rowPadding = 4,
-}: LimitOptionsParams<TOption>): string[] => {
+}: LimitOptionsParams<TOption>): Array<string> => {
   const columns = getColumns(output);
   const maxWidth = Math.max(1, columns - columnPadding);
   const rows = getRows(output);
@@ -138,7 +138,7 @@ export const limitOptions = <TOption>({
     slidingWindowLocation + computedMaxItems,
     options.length,
   );
-  const lineGroups: Array<string[]> = [];
+  const lineGroups: Array<Array<string>> = [];
   let lineCount = 0;
   if (shouldRenderTopEllipsis) {
     lineCount++;
@@ -210,7 +210,7 @@ export const limitOptions = <TOption>({
     }
   }
 
-  const result: string[] = [];
+  const result: Array<string> = [];
   if (shouldRenderTopEllipsis) {
     result.push(overflowFormat);
   }

@@ -3,11 +3,25 @@ import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 // Keep Unicode snapshots independent of the host terminal and platform.
 vi.mock('is-unicode-supported', () => ({ default: () => true }));
 
+interface RenderContext {
+  state: string;
+  options?: ReadonlyArray<{ value: string; label?: string | null; group?: string | boolean }>;
+  filteredOptions?: ReadonlyArray<{ value: string; label?: string }>;
+  selectedValues?: Array<string>;
+  cursor?: number;
+  focusedValue?: string;
+  isNavigating?: boolean;
+  isGroupSelected?: () => boolean;
+  userInput?: string;
+  userInputWithCursor?: string;
+  value?: string | boolean | Array<string>;
+}
+
 type PromptConfig = {
-  render: (this: Record<string, unknown>) => string;
+  render: (this: RenderContext) => string;
 };
 
-const captured: {
+interface CapturedPrompts {
   select?: PromptConfig;
   multiSelect?: PromptConfig;
   groupMultiSelect?: PromptConfig;
@@ -16,7 +30,9 @@ const captured: {
   selectKey?: PromptConfig;
   text?: PromptConfig;
   password?: PromptConfig;
-} = {};
+}
+
+const captured: CapturedPrompts = {};
 
 class SelectPrompt<_Value> {
   constructor(config: PromptConfig) {
@@ -99,7 +115,7 @@ class PasswordPrompt {
 }
 
 vi.mock('@clack/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@clack/core')>();
+  const actual = await importOriginal<object>();
   return {
     ...actual,
     getColumns: (output?: { columns?: number }) => output?.columns ?? 80,
@@ -116,10 +132,10 @@ vi.mock('@clack/core', async (importOriginal) => {
 });
 
 // oxlint-disable-next-line no-control-regex
-const stripAnsi = (value: string): string => value.replaceAll(/\x1b\[[0-9;]*m/gu, '');
+const stripAnsi = (value: string): string => value.replaceAll(/\u001b\[[0-9;]*m/gu, '');
 const normalize = (value: string): string => stripAnsi(value).replaceAll('\r\n', '\n');
 
-const renderWith = (config: PromptConfig | undefined, ctx: Record<string, unknown>): string => {
+const renderWith = (config: PromptConfig | undefined, ctx: RenderContext): string => {
   if (config === undefined) {
     throw new Error('Prompt config was not captured');
   }

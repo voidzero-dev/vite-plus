@@ -12,8 +12,12 @@ import {
 } from 'verkit';
 import { parseDocument } from 'yaml';
 
-import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
 import { VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
+import type { JsonValue } from '../../utils/json.ts';
+import type { JsonObject } from '../../utils/json.ts';
+import { isJsonObject } from '../../utils/json.ts';
 import { extractOverrideTargetName } from '../../utils/package-overrides.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { extractOverrideParentSegments, usesWebdriverioProvider } from '../migrator.ts';
@@ -52,20 +56,22 @@ export function webdriverioMigrationSpec(spec: string): string | undefined {
   return narrowed.length ? narrowed.join(' || ') : DEFAULT_SPEC;
 }
 
-function object(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+function object(value: unknown): JsonObject {
+  return isJsonObject(value) ? value : {};
 }
 
 /** Compose dependency edits into the versioned preflight's in-memory sources.
  * No writes or network resolution: unresolved custom specs block before install. */
 export function migrateWebdriverioDependencies(
-  workspace: { rootDir: string; packageManager?: PackageManager; packages?: WorkspacePackage[] },
+  workspace: {
+    rootDir: string;
+    packageManager?: PackageManager;
+    packages?: Array<WorkspacePackage>;
+  },
   sources: Map<string, string>,
   inputs: Map<string, string | null>,
-): VitestV5Finding[] {
-  const findings: VitestV5Finding[] = [];
+): Array<VitestV5Finding> {
+  const findings: Array<VitestV5Finding> = [];
   const rootManifest = path.join(workspace.rootDir, 'package.json');
   const manifests = [
     rootManifest,
@@ -73,20 +79,23 @@ export function migrateWebdriverioDependencies(
       path.resolve(workspace.rootDir, pkg.path, 'package.json'),
     ),
   ];
-  const read = (file: string): Record<string, unknown> => {
+  const read = (file: string): JsonObject => {
     const source = sources.get(file);
     if (source === undefined) {
       return {};
     }
     return object(file.endsWith('.json') ? parse(source) : parseDocument(source).toJS());
   };
-  const get = (file: string, keys: string[]): unknown =>
-    keys.reduce<unknown>((value, key) => object(value)[key], read(file));
-  const set = (file: string, keys: string[], value: string | undefined) => {
+  const get = (file: string, keys: Array<string>) =>
+    keys.reduce<JsonValue | undefined>((value, key) => object(value)[key], read(file));
+  const set = (file: string, keys: Array<string>, value: string | undefined) => {
     if (get(file, keys) === value) {
       return;
     }
-    const source = sources.get(file)!;
+    const source = sources.get(file);
+    if (source === undefined) {
+      throw new Error(`Missing source for ${file}`);
+    }
     if (file.endsWith('.json')) {
       sources.set(
         file,
@@ -120,7 +129,7 @@ export function migrateWebdriverioDependencies(
   const catalogEntry = (
     spec: string,
     name: string,
-  ): { file: string; keys: string[] } | undefined => {
+  ): { file: string; keys: Array<string> } | undefined => {
     const catalog = spec.slice('catalog:'.length);
     const keys = catalog && catalog !== 'default' ? ['catalogs', catalog, name] : ['catalog', name];
     if (workspace.packageManager === PackageManager.bun) {
@@ -137,7 +146,12 @@ export function migrateWebdriverioDependencies(
     );
     return typeof get(file, keys) === 'string' ? { file, keys } : undefined;
   };
-  const update = (file: string, keys: string[], directory: string, seen = new Set<string>()) => {
+  const update = (
+    file: string,
+    keys: Array<string>,
+    directory: string,
+    seen = new Set<string>(),
+  ) => {
     const spec = get(file, keys);
     if (typeof spec !== 'string') {
       return;
@@ -259,7 +273,7 @@ export function migrateWebdriverioDependencies(
       // An existing installed framework is another safe fallback, e.g. a
       // WebDriverIO CLI that brings its framework transitively.
       const metadata = peer === '*' ? detectPackageMetadata(directory, 'webdriverio') : undefined;
-      if (metadata && normalize(metadata.version)) {
+      if (metadata?.version && normalize(metadata.version)) {
         const metadataFile = path.join(metadata.path, 'package.json');
         inputs.set(metadataFile, fs.readFileSync(metadataFile, 'utf8'));
         peer = `^${metadata.version}`;
@@ -277,10 +291,11 @@ export function migrateWebdriverioDependencies(
     }
   }
 
-  const projectNames = selected
-    .map((file) => read(file).name)
-    .filter((name): name is string => typeof name === 'string');
-  function matchesProject(parents: string[]): boolean {
+  const projectNames = selected.flatMap((file) => {
+    const { name } = read(file);
+    return typeof name === 'string' ? [name] : [];
+  });
+  function matchesProject(parents: Array<string>): boolean {
     const concrete = parents.filter((parent) => parent !== '**');
     if (concrete.length === 0) {
       return true;
@@ -290,12 +305,12 @@ export function migrateWebdriverioDependencies(
     }
     const pattern = concrete[0]
       .split('*')
-      .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .map((part) => part.replaceAll(/[.+?^${}()|[\]\\]/g, String.raw`\$&`))
       .join('.*');
     const expression = new RegExp(`^${pattern}$`);
     return projectNames.some((name) => expression.test(name));
   }
-  const overrideMap = (file: string, keys: string[], parents: string[] = []) => {
+  const overrideMap = (file: string, keys: Array<string>, parents: Array<string> = []) => {
     for (const [key, value] of Object.entries(object(get(file, keys)))) {
       const target = extractOverrideTargetName(key);
       const ancestors = [...parents, ...(extractOverrideParentSegments(key) ?? [])];
@@ -334,8 +349,9 @@ export function migrateWebdriverioDependencies(
           const after = get(file, versionPath);
           const field = INSTALL_FIELDS.find(
             (field) => get(rootManifest, [field, WEBDRIVERIO_PROVIDER]) !== undefined,
-          )!;
+          );
           if (
+            field !== undefined &&
             typeof after === 'string' &&
             !after.startsWith('$') &&
             webdriverioMigrationSpec(after) === after

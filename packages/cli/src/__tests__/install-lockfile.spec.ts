@@ -61,12 +61,14 @@ describe('release installation lockfile', () => {
           NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH: '1000',
         });
         // A repository workspace lockfile cannot be reused for this wrapper.
-        await expect(access(join(directory, 'pnpm-lock.yaml'))).rejects.toThrow();
+        await expect(access(join(directory, 'pnpm-lock.yaml'))).rejects.toMatchObject({
+          code: 'ENOENT',
+        });
         await writeFile(join(directory, 'pnpm-lock.yaml'), lockfile);
       },
     );
     expect(result).toBe(lockfile);
-    await expect(access(temporary)).rejects.toThrow();
+    await expect(access(temporary)).rejects.toMatchObject({ code: 'ENOENT' });
     const rust = await readFile(
       new URL('../../../../crates/vp_setup/src/install.rs', import.meta.url),
       'utf8',
@@ -88,7 +90,7 @@ describe('release installation lockfile', () => {
         throw new Error('registry unavailable');
       }),
     ).rejects.toThrow('registry unavailable');
-    await expect(access(temporary)).rejects.toThrow();
+    await expect(access(temporary)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('rejects a lockfile for a different wrapper or without the CLI integrity', () => {

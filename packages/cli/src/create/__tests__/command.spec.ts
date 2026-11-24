@@ -4,8 +4,10 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { runCommand as runCommandImplementation } from '../../../binding/index.js';
+
 const { mockRunCommand } = vi.hoisted(() => ({
-  mockRunCommand: vi.fn(),
+  mockRunCommand: vi.fn<typeof runCommandImplementation>(),
 }));
 
 vi.mock('../../../binding/index.js', () => ({
@@ -14,7 +16,7 @@ vi.mock('../../../binding/index.js', () => ({
 
 const { runCommandAndDetectProjectDir } = await import('../command.js');
 
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 function makeTempDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-create-command-'));
@@ -37,7 +39,7 @@ describe('runCommandAndDetectProjectDir', () => {
     mockRunCommand.mockResolvedValueOnce({
       exitCode: 0,
       pathAccesses: {
-        'package.json': { write: true },
+        'package.json': { read: false, write: true, readDir: false },
       },
     });
 
@@ -55,8 +57,8 @@ describe('runCommandAndDetectProjectDir', () => {
     mockRunCommand.mockResolvedValueOnce({
       exitCode: 0,
       pathAccesses: {
-        'package.json': { write: true },
-        'my-app/package.json': { write: true },
+        'package.json': { read: false, write: true, readDir: false },
+        'my-app/package.json': { read: false, write: true, readDir: false },
       },
     });
 
@@ -75,7 +77,7 @@ describe('runCommandAndDetectProjectDir', () => {
     mockRunCommand.mockResolvedValueOnce({
       exitCode: 0,
       pathAccesses: {
-        'package.json': { write: true },
+        'package.json': { read: false, write: true, readDir: false },
       },
     });
 

@@ -6,7 +6,8 @@ import { readJsonFile } from '../utils/json.ts';
 import { isBingoTemplate } from '../utils/workspace.ts';
 import { prependToPathToEnvs } from './command.ts';
 import { isRelativePath } from './org-manifest.ts';
-import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.ts';
+import type { TemplateInfo } from './templates/types.ts';
+import { BuiltinTemplate, TemplateType } from './templates/types.ts';
 
 // Check if template name is a GitHub URL
 export function isGitHubUrl(templateName: string): boolean {
@@ -93,7 +94,7 @@ function resolveLocalBinPath(
 // Discover and identify a template
 export function discoverTemplate(
   templateName: string,
-  templateArgs: string[],
+  templateArgs: Array<string>,
   workspaceInfo: WorkspaceInfo,
   interactive?: boolean,
   bundledLocalPath?: string,

@@ -1,19 +1,18 @@
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log } from '@voidzero-dev/vite-plus-prompts';
 
 import { findMonorepoRoot } from '../../binding/index.js';
 import { hasViteConfig, resolveViteConfig } from '../resolve-vite-config.ts';
+import { errorMessage } from '../utils/error.ts';
 import { cancelAndExit } from '../utils/prompts.ts';
+import type { CreateTemplateEntry, OrgManifest, OrgTemplateEntry } from './org-manifest.ts';
 import {
   CreateConfigSchemaError,
-  type CreateTemplateEntry,
   filterManifestForContext,
   isRelativePath,
   OrgManifestSchemaError,
   parseOrgScopedSpec,
   readOrgManifest,
   validateCreateTemplates,
-  type OrgManifest,
-  type OrgTemplateEntry,
 } from './org-manifest.ts';
 import {
   formatManifestTable,
@@ -56,7 +55,7 @@ function printNonInteractiveTable(
 ): void {
   const { lines, filteredCount } = formatManifestTable(manifest, isMonorepo);
   const [firstVisible] = filterManifestForContext(manifest.templates, isMonorepo);
-  const body: string[] = [
+  const body: Array<string> = [
     '',
     `A template name is required when running \`vp create ${orgSpec.scope}\` in non-interactive mode.`,
     '',
@@ -90,7 +89,7 @@ function printNonInteractiveTable(
 
 function rejectMonorepoEntryInsideMonorepo(entry: OrgTemplateEntry, isMonorepo: boolean): void {
   if (entry.monorepo && isMonorepo) {
-    prompts.log.info(
+    log.info(
       'You are already in a monorepo workspace.\nUse a different template or run this command outside the monorepo',
     );
     cancelAndExit('Cannot create a monorepo inside an existing monorepo', 1);
@@ -104,13 +103,16 @@ async function resolveEntry(
   if (isRelativePath(entry.template)) {
     const extracted = await ensureOrgPackageExtracted(manifest);
     const bundledLocalPath = resolveBundledPath(extracted, entry.template);
-    return {
+    const resolution: Extract<OrgResolution, { kind: 'bundled' }> = {
       kind: 'bundled',
       bundledLocalPath,
       entryName: entry.name,
       scope: manifest.scope,
-      ...(entry.monorepo === true ? { monorepo: true as const } : {}),
     };
+    if (entry.monorepo === true) {
+      resolution.monorepo = true;
+    }
+    return resolution;
   }
   return { kind: 'replaced', templateName: entry.template };
 }
@@ -142,7 +144,7 @@ export async function resolveOrgManifestForCreate(args: {
     const message =
       error instanceof OrgManifestSchemaError
         ? error.message
-        : `Failed to read ${orgSpec.scope}/create manifest: ${(error as Error).message}`;
+        : `Failed to read ${orgSpec.scope}/create manifest: ${errorMessage(error)}`;
     cancelAndExit(message, 1);
   }
 
@@ -157,7 +159,7 @@ export async function resolveOrgManifestForCreate(args: {
     // Scope-only input (`vp create @org`) strongly implies the user
     // expected the picker. Be explicit about why it didn't engage, so a
     // later `ERR_NO_BIN` from the package manager doesn't look mysterious.
-    prompts.log.info(
+    log.info(
       `No \`createConfig.templates\` manifest in ${orgSpec.scope}/create — running it as a normal package.`,
     );
     return { kind: 'passthrough' };
@@ -176,7 +178,7 @@ export async function resolveOrgManifestForCreate(args: {
       // Only the in-monorepo filter can empty the list today; the message
       // stays in sync if more context-specific filters are added here.
       if (args.isMonorepo && manifest.templates.every((t) => t.monorepo)) {
-        prompts.log.info(
+        log.info(
           `No templates from ${manifest.packageName} are applicable inside a monorepo — showing Vite+ built-in templates instead.`,
         );
       }
@@ -223,7 +225,7 @@ export async function resolveOrgManifestForCreate(args: {
 export async function getConfiguredCreate(
   startDir: string,
   options?: { walkUp?: boolean; throwOnReadError?: boolean },
-): Promise<{ defaultTemplate?: string; templates: CreateTemplateEntry[] }> {
+): Promise<{ defaultTemplate?: string; templates: Array<CreateTemplateEntry> }> {
   const projectRoot =
     options?.walkUp === false ? startDir : (findMonorepoRoot(startDir) ?? startDir);
   if (!hasViteConfig(projectRoot)) {
@@ -249,7 +251,7 @@ export async function getConfiguredCreate(
   // Validation errors are intentionally NOT swallowed: a malformed
   // `create.templates` should be reported, not silently dropped.
   const templates = validateCreateTemplates(create?.templates);
-  return { ...(defaultTemplate !== undefined ? { defaultTemplate } : {}), templates };
+  return defaultTemplate === undefined ? { templates } : { defaultTemplate, templates };
 }
 
 /**

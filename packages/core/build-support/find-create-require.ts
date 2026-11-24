@@ -1,14 +1,7 @@
 import { builtinModules } from 'node:module';
 
-import {
-  parse,
-  type ParseResult,
-  Visitor,
-  type CallExpression,
-  type Expression,
-  type StaticMemberExpression,
-  type VariableDeclarator,
-} from 'oxc-parser';
+import type { ParseResult, CallExpression, Expression, VariableDeclarator } from 'oxc-parser';
+import { parse, Visitor } from 'oxc-parser';
 
 import { createModuleEntryFileName } from './build-cjs-deps.js';
 
@@ -57,7 +50,7 @@ export async function replaceThirdPartyCjsRequires(
   const results = [findCreateRequireInStaticImports(ast), findCreateRequireInGlobalModule(ast)];
 
   // Collect all third-party require calls
-  const replacements: RequireCall[] = [];
+  const replacements: Array<RequireCall> = [];
   for (const calls of results) {
     for (const call of calls) {
       if (isThirdPartyModule(call.module)) {
@@ -93,8 +86,8 @@ interface RequireCall {
 /**
  * Find all calls to a specific require function and return the module specifiers with positions
  */
-function findRequireCalls(ast: ParseResult, requireVarName: string): RequireCall[] {
-  const calls: RequireCall[] = [];
+function findRequireCalls(ast: ParseResult, requireVarName: string): Array<RequireCall> {
+  const calls: Array<RequireCall> = [];
 
   const visitor = new Visitor({
     CallExpression(node: CallExpression) {
@@ -136,8 +129,8 @@ function getLiteralRequireArgument(node: CallExpression): RequireCall | undefine
 function findDirectCreateRequireCalls(
   ast: ParseResult,
   isCreateRequireCall: (node: CallExpression) => boolean,
-): RequireCall[] {
-  const calls: RequireCall[] = [];
+): Array<RequireCall> {
+  const calls: Array<RequireCall> = [];
 
   const visitor = new Visitor({
     CallExpression(node: CallExpression) {
@@ -160,7 +153,7 @@ function findDirectCreateRequireCalls(
  * Find createRequire from static imports and return the require variable name + all require calls
  * Handles: `import { createRequire } from "node:module"` then `const require = createRequire(...)`
  */
-function findCreateRequireInStaticImports(ast: ParseResult): RequireCall[] {
+function findCreateRequireInStaticImports(ast: ParseResult): Array<RequireCall> {
   // Find import from 'module' or 'node:module'
   const importFromModule = ast.module.staticImports.find((imt) => {
     const { value } = imt.moduleRequest;
@@ -217,7 +210,7 @@ function isProcessExpression(expr: Expression): boolean {
   }
   // Check for `globalThis.process`
   if (expr.type === 'MemberExpression' && !expr.computed) {
-    const memberExpr = expr as StaticMemberExpression;
+    const memberExpr = expr;
     return (
       memberExpr.object.type === 'Identifier' &&
       memberExpr.object.name === 'globalThis' &&
@@ -238,7 +231,7 @@ function isGetBuiltinModuleCall(expr: Expression): boolean {
   if (call.callee.type !== 'MemberExpression' || call.callee.computed) {
     return false;
   }
-  const callee = call.callee as StaticMemberExpression;
+  const callee = call.callee;
   if (callee.property.name !== 'getBuiltinModule') {
     return false;
   }
@@ -256,7 +249,7 @@ function isGetBuiltinModuleCall(expr: Expression): boolean {
   if (arg.type !== 'Literal') {
     return false;
   }
-  const value = (arg as { value: unknown }).value;
+  const value = arg.value;
   return value === 'module' || value === 'node:module';
 }
 
@@ -265,7 +258,7 @@ function isGetBuiltinModuleCall(expr: Expression): boolean {
  * Handles: `const require = globalThis.process.getBuiltinModule("module").createRequire(import.meta.url)`
  * Or: `const require = process.getBuiltinModule("module").createRequire(import.meta.url)`
  */
-function findCreateRequireInGlobalModule(ast: ParseResult): RequireCall[] {
+function findCreateRequireInGlobalModule(ast: ParseResult): Array<RequireCall> {
   let requireVarName: string | undefined;
 
   const visitor = new Visitor({
@@ -280,7 +273,7 @@ function findCreateRequireInGlobalModule(ast: ParseResult): RequireCall[] {
       if (call.callee.type !== 'MemberExpression' || call.callee.computed) {
         return;
       }
-      const callee = call.callee as StaticMemberExpression;
+      const callee = call.callee;
       if (callee.property.name !== 'createRequire') {
         return;
       }
@@ -305,7 +298,7 @@ function findCreateRequireInGlobalModule(ast: ParseResult): RequireCall[] {
       if (node.callee.type !== 'MemberExpression' || node.callee.computed) {
         return false;
       }
-      const callee = node.callee as StaticMemberExpression;
+      const callee = node.callee;
       return callee.property.name === 'createRequire' && isGetBuiltinModuleCall(callee.object);
     }),
   );

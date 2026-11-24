@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { autocomplete, CANCEL_SYMBOL, isCancel, password, path, text } from '../index.js';
 
-const cleanup: (() => void)[] = [];
+const cleanup: Array<() => void> = [];
 function terminal() {
   const input = Object.assign(new PassThrough(), {
     isTTY: true,
@@ -21,7 +21,7 @@ function terminal() {
   let content = '';
   const output = Object.assign(
     new Writable({
-      write(chunk, _, done) {
+      write(chunk: Buffer, _, done) {
         content += chunk.toString();
         done();
       },
@@ -29,7 +29,7 @@ function terminal() {
     { isTTY: true, columns: 52, rows: 24 },
   );
   cleanup.push(() => {
-    input.write('\x03');
+    input.write('\u0003');
     input.destroy();
     output.destroy();
   });
@@ -74,7 +74,7 @@ describe('real prompt behavior', () => {
     await vi.waitFor(() => expect(t.text()).toContain('Validating…'));
     resolve('Try another name');
     await vi.waitFor(() => expect(t.text()).toContain('Try another name'));
-    t.input.write('\x15good\r');
+    t.input.write('\u0015good\r');
     await expect(result).resolves.toBe('good');
   });
 
@@ -93,7 +93,7 @@ describe('real prompt behavior', () => {
     });
     t.input.write('wrong\r');
     await vi.waitFor(() => expect(t.text()).toContain('Use ok'));
-    t.input.write('\x03');
+    t.input.write('\u0003');
     expect(await result).toBe(CANCEL_SYMBOL);
     expect(isCancel(CANCEL_SYMBOL)).toBe(true);
   });
@@ -150,7 +150,7 @@ describe('real prompt behavior', () => {
     expect(t.text()).toContain('Tab complete');
     t.input.write('\t');
     await vi.waitFor(() => expect(t.text()).toContain('child█'));
-    t.input.write('\x03');
+    t.input.write('\u0003');
     await expect(result).resolves.toBe(CANCEL_SYMBOL);
   });
 });

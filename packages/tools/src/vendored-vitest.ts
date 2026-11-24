@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // This module runs before dependency installation in CI.
 // Keep it independent of installed project dependencies, with only built-in imports.
@@ -23,10 +22,27 @@ export const VITEST_EXACT_VERSION_PACKAGES = new Set([
 ]);
 export const REMOVED_VITEST_PACKAGES = new Set(['@vitest/runner', '@vitest/expect']);
 
-interface PackageJson {
+function isPackageJson(value: unknown): value is {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
+} {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+  const sections = [
+    'dependencies' in value ? value.dependencies : undefined,
+    'devDependencies' in value ? value.devDependencies : undefined,
+    'optionalDependencies' in value ? value.optionalDependencies : undefined,
+  ];
+  return sections.every(
+    (section) =>
+      section === undefined ||
+      (typeof section === 'object' &&
+        section !== null &&
+        !Array.isArray(section) &&
+        Object.values(section).every((v: unknown) => typeof v === 'string')),
+  );
 }
 
 export function alignVendoredVitestDependencies(rootDir: string, version: string): void {
@@ -45,7 +61,10 @@ export function alignVendoredVitestDependencies(rootDir: string, version: string
       continue;
     }
     const source = readFileSync(file, 'utf8');
-    const pkg: PackageJson = JSON.parse(source);
+    const pkg: unknown = JSON.parse(source);
+    if (!isPackageJson(pkg)) {
+      throw new Error(`Invalid dependency declarations in ${file}`);
+    }
     let changed = false;
     for (const field of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
       const dependencies = pkg[field] ?? {};
@@ -72,7 +91,7 @@ export function alignVendoredVitestDependencies(rootDir: string, version: string
 if (
   process.argv[1] &&
   existsSync(process.argv[1]) &&
-  fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
+  import.meta.filename === realpathSync(process.argv[1])
 ) {
   const rootDir = process.cwd();
   // upgrade-deps.ts keeps this exact runtime pin in sync with the root catalog.

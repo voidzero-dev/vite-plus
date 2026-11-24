@@ -57,7 +57,10 @@ function expectedRoot(root: string): string {
   }
 }
 
-function writeConfig(config: Record<string, unknown>, dir = configDir): string {
+function writeConfig(
+  config: { root?: string; resolve?: { preserveSymlinks: boolean } },
+  dir = configDir,
+): string {
   const file = path.join(dir, 'vite.config.mjs');
   writeFileSync(file, `export default ${JSON.stringify(config)};\n`);
   return file;

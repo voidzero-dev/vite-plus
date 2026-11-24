@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-import { type OxlintConfig } from 'oxlint';
+import type { OxlintConfig } from 'oxlint';
 import { describe, expect, it } from 'vitest';
 
 import { sanitizeMigratedOxlintConfig } from '../migrator.ts';
@@ -37,7 +37,7 @@ describe('React Refresh option migration', () => {
           },
         },
       ],
-    } as unknown as OxlintConfig;
+    } satisfies OxlintConfig;
     const expected = structuredClone(config);
     const report = createMigrationReport();
 

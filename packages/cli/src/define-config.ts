@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { types } from 'node:util';
 
 import { ignoreInput, ignoreOutput } from '@voidzero-dev/vite-task-client';
 import type { OxfmtConfig } from 'oxfmt';
@@ -15,14 +16,16 @@ import type {
   UserConfig,
 } from 'vite';
 import { resolveConfig, searchForWorkspaceRoot } from 'vite';
+import type {
+  ConfigEnv,
+  TestProjectConfiguration,
+  UserProjectConfigExport,
+  UserProjectConfigFn,
+  UserWorkspaceConfig,
+} from 'vitest/config';
 import {
   defineConfig as viteDefineConfig,
   defineProject as viteDefineProject,
-  type ConfigEnv,
-  type TestProjectConfiguration,
-  type UserProjectConfigExport,
-  type UserProjectConfigFn,
-  type UserWorkspaceConfig,
 } from 'vitest/config';
 import type { InlineConfig as VitestInlineConfig } from 'vitest/node';
 
@@ -31,6 +34,8 @@ import type { PackUserConfig } from './pack.ts';
 import type { RunConfig } from './run-config.ts';
 import type { StagedConfig } from './staged-config.ts';
 import { CONFIG_METADATA_ENV, VITEST_VERSION } from './utils/constants.ts';
+import type { JsonObject } from './utils/json-value.ts';
+import { parseJsonObject, isObjectValue } from './utils/json-value.ts';
 import { VITEST_RESOLVER_PACKAGES } from './utils/vitest-ecosystem.ts';
 
 declare module 'vite' {
@@ -62,7 +67,7 @@ declare module 'vite' {
       lint?: boolean;
     };
 
-    pack?: PackUserConfig | PackUserConfig[];
+    pack?: PackUserConfig | Array<PackUserConfig>;
 
     /**
      * Default target directory for `vp dev` / `build` / `preview` / `pack`
@@ -101,7 +106,7 @@ declare module 'vite' {
        * `template` resolves like any specifier (a workspace package name, a
        * relative `./path`, a `vite:*` builtin, a GitHub URL, or an npm package).
        */
-      templates?: CreateTemplateEntry[];
+      templates?: Array<CreateTemplateEntry>;
     };
 
     /**
@@ -165,6 +170,7 @@ const vitePlusRequire = createRequire(
  * `pathToFileURL(__filename).href` in the CJS bundle, so it is a valid file URL
  * in both.
  */
+// oxlint-disable-next-line unicorn/prefer-import-meta-properties -- The CommonJS build rewrites import.meta.url for this dual-format module.
 const vitePlusModuleFile = fileURLToPath(import.meta.url);
 
 /**
@@ -190,21 +196,28 @@ function getVitestAnchor(): string | null {
 
 // The bundled manifest is fixed for this module's lifetime. Share it across
 // browser entry points and project configs, just like the cached package path.
-let vitestExports: Record<string, unknown> | undefined;
+function isAliasArray(
+  value: ReadonlyArray<Alias> | Record<string, string> | undefined,
+): value is ReadonlyArray<Alias> {
+  return Array.isArray(value);
+}
+
+let vitestExports: JsonObject | undefined;
 function getVitestImportTarget(id: string): string {
   const anchor = getVitestAnchor();
   if (!anchor) {
     throw new Error('Cannot resolve the bundled Vitest package. Reinstall vite-plus.');
   }
-  vitestExports ??= (
-    JSON.parse(readFileSync(anchor, 'utf8')) as {
-      exports: Record<string, unknown>;
+  if (!vitestExports) {
+    const { exports } = parseJsonObject(readFileSync(anchor, 'utf8'));
+    if (!isObjectValue(exports)) {
+      throw new Error('Expected the bundled Vitest manifest to define exports.');
     }
-  ).exports;
+    vitestExports = exports;
+  }
   let target = vitestExports[id === 'vitest' ? '.' : `.${id.slice('vitest'.length)}`];
-  while (target && typeof target === 'object') {
-    const conditions = target as Record<string, unknown>;
-    target = conditions.import ?? conditions.default;
+  while (isObjectValue(target)) {
+    target = target.import ?? target.default;
   }
   if (typeof target !== 'string' || !target.startsWith('./')) {
     throw new Error(`The bundled Vitest has no ESM export for ${id}.`);
@@ -298,10 +311,14 @@ function vitePlusVitestResolverPlugin(): PluginOption {
         // resolver, without user resolveId hooks. Keep its runtime entry points
         // on the same graph as the browser runner in isolated installs.
         const aliases = config.resolve?.alias;
-        const entries: Alias[] = Array.isArray(aliases)
+        const entries: Array<Alias> = isAliasArray(aliases)
           ? [...aliases]
           : Object.entries(aliases ?? {}).map(([find, replacement]) => ({ find, replacement }));
-        const runtimeRequire = createRequire(getVitestAnchor()!);
+        const anchor = getVitestAnchor();
+        if (!anchor) {
+          throw new Error('Cannot resolve the bundled Vitest package. Reinstall vite-plus.');
+        }
+        const runtimeRequire = createRequire(anchor);
         const targets = new Map(
           [
             'vitest',
@@ -347,7 +364,8 @@ function vitePlusVitestResolverPlugin(): PluginOption {
       // Vite merges plugin arrays from inherited and referenced configs. Remove
       // duplicate Vite+ hooks before it creates the server's plugin container.
       const seen = new Set<string>();
-      const plugins = config.plugins as Plugin[];
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Vite exposes resolved plugins as readonly; deduplication must preserve the array identity.
+      const plugins = config.plugins as Array<Plugin>;
       const unique = plugins.filter((plugin) => {
         if (!VITE_PLUS_TEST_PLUGIN_NAMES.has(plugin.name)) {
           return true;
@@ -440,11 +458,11 @@ export const AUTO_INLINE_DEPS: ReadonlyArray<string> = [
  * Callers may share installation results for the same root within one config load.
  */
 export function computeAutoInlineList(
-  existingInline: (string | RegExp)[] | true | undefined,
+  existingInline: Array<string | RegExp> | true | undefined,
   projectRoot: string,
   _createRequire: (from: string) => { resolve: (id: string) => string } = createRequire,
   installedPackages = new Map<string, boolean>(),
-): (string | RegExp)[] | null {
+): Array<string | RegExp> | null {
   // User opted into "inline everything" — don't touch.
   if (existingInline === true) {
     return null;
@@ -454,10 +472,10 @@ export function computeAutoInlineList(
   let projectRequire: ReturnType<typeof _createRequire> | undefined;
   // Start from a copy of the user-supplied array (or a fresh array when
   // none was provided) so the originating user-config object is not mutated.
-  const merged: (string | RegExp)[] = Array.isArray(existingInline) ? [...existingInline] : [];
+  const merged: Array<string | RegExp> = Array.isArray(existingInline) ? [...existingInline] : [];
   for (const pkg of AUTO_INLINE_DEPS) {
     // Skip if already covered by a string or regexp entry.
-    if (merged.some((entry) => entry === pkg || (entry instanceof RegExp && entry.test(pkg)))) {
+    if (merged.some((entry) => entry === pkg || (types.isRegExp(entry) && entry.test(pkg)))) {
       continue;
     }
     let installed = installedPackages.get(pkg);
@@ -489,7 +507,7 @@ function vitePlusAutoInlineMatcherPlugin(): PluginOption {
   let isVitestServer = false;
   const installedByRoot = new Map<string, Map<string, boolean>>();
   type TestConfig = Pick<VitestInlineConfig, 'server'>;
-  function inlineList(existing: (string | RegExp)[] | true | undefined, root: string) {
+  function inlineList(existing: Array<string | RegExp> | true | undefined, root: string) {
     root = resolve(root);
     let installed = installedByRoot.get(root);
     if (!installed) {
@@ -517,7 +535,7 @@ function vitePlusAutoInlineMatcherPlugin(): PluginOption {
       }
       const existing = config.resolve?.noExternal;
       const merged = inlineList(
-        typeof existing === 'string' || existing instanceof RegExp ? [existing] : existing,
+        typeof existing === 'string' || types.isRegExp(existing) ? [existing] : existing,
         projectRoot,
       );
       if (merged !== null) {
@@ -642,8 +660,8 @@ function readInstalledCoverageProviderVersion(
     try {
       const req = _createRequire(anchor);
       const pkgJsonPath = req.resolve(`${providerPackageName}/package.json`);
-      const parsed = JSON.parse(_readFile(pkgJsonPath)) as { version?: string };
-      if (parsed.version) {
+      const parsed = parseJsonObject(_readFile(pkgJsonPath));
+      if (typeof parsed.version === 'string' && parsed.version) {
         return parsed.version;
       }
     } catch {
@@ -863,7 +881,7 @@ function withoutVitePlusTestPlugins(plugin: PluginOption): PluginOption {
     return plugin.filter(keepUserPlugin).map(withoutVitePlusTestPlugins);
   }
   // Injected plugins are never async, and re-wrapping with `.then` drops own props that tools like Vike look up.
-  if (plugin instanceof Promise) {
+  if (types.isPromise(plugin)) {
     return plugin;
   }
   return plugin && VITE_PLUS_TEST_PLUGIN_NAMES.has(plugin.name) ? false : plugin;
@@ -917,14 +935,14 @@ function injectPluginIntoProject(project: TestProjectConfiguration): TestProject
   if (typeof project === 'function') {
     const wrapped: UserProjectConfigFn = (env: ConfigEnv) => {
       const result = project(env);
-      if (result instanceof Promise) {
+      if (types.isPromise(result)) {
         return result.then(injectIndependentProject);
       }
       return injectIndependentProject(result);
     };
     return wrapped;
   }
-  if (project instanceof Promise) {
+  if (types.isPromise(project)) {
     return project.then(injectIndependentProject);
   }
   if (typeof project === 'object' && project !== null) {
@@ -960,13 +978,13 @@ function injectPluginIntoConfig(config: ViteUserConfigExport): ViteUserConfigExp
   if (typeof config === 'function') {
     return (env: ConfigEnv) => {
       const result = config(env);
-      if (result instanceof Promise) {
+      if (types.isPromise(result)) {
         return result.then(injectPlugin);
       }
       return injectPlugin(result);
     };
   }
-  if (config instanceof Promise) {
+  if (types.isPromise(config)) {
     return config.then(injectPlugin);
   }
   return injectPlugin(config);
@@ -979,6 +997,7 @@ function injectPluginIntoConfig(config: ViteUserConfigExport): ViteUserConfigExp
  * Oxlint rule severity of `'warn'` becomes `string`).
  */
 export function defineConfig<T extends ViteUserConfigExport>(config: T): DefinedViteUserConfig<T> {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Injection preserves the caller’s config overload while Vite returns the broader union.
   return viteDefineConfig(injectPluginIntoConfig(config)) as DefinedViteUserConfig<T>;
 }
 
@@ -992,10 +1011,10 @@ function injectPluginIntoProjectExport(config: UserProjectConfigExport): UserPro
   if (typeof config === 'function') {
     return (env: ConfigEnv) => {
       const result = config(env);
-      return result instanceof Promise ? result.then(injectPlugin) : injectPlugin(result);
+      return types.isPromise(result) ? result.then(injectPlugin) : injectPlugin(result);
     };
   }
-  if (config instanceof Promise) {
+  if (types.isPromise(config)) {
     return config.then(injectPlugin);
   }
   return injectPlugin(config);
@@ -1014,6 +1033,7 @@ export function defineProject(config: Promise<UserWorkspaceConfig>): Promise<Use
 export function defineProject(config: UserProjectConfigFn): UserProjectConfigFn;
 export function defineProject(config: UserProjectConfigExport): UserProjectConfigExport;
 export function defineProject(config: UserProjectConfigExport): UserProjectConfigExport {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Vitest has separate overloads for the members of this validated config union.
   return viteDefineProject(injectPluginIntoProjectExport(config) as never);
 }
 
@@ -1069,7 +1089,7 @@ type ResolveConfigWithInternalOptions = (
   defaultNodeEnv?: string,
   isPreview?: boolean,
   patchConfig?: (config: ResolvedConfig) => void,
-  patchPlugins?: (plugins: Plugin[]) => void,
+  patchPlugins?: (plugins: Array<Plugin>) => void,
   internalOptions?: { rootBase?: string },
 ) => Promise<ResolvedConfig>;
 
@@ -1125,16 +1145,18 @@ export async function resolveConfigFromFile(
   );
 }
 
-export function lazyPlugins(cb: () => PluginOption[]): PluginOption[] | undefined;
-export function lazyPlugins(cb: () => Promise<PluginOption[]>): PluginOption[] | undefined;
+export function lazyPlugins(cb: () => Array<PluginOption>): Array<PluginOption> | undefined;
 export function lazyPlugins(
-  cb: () => PluginOption[] | Promise<PluginOption[]>,
-): PluginOption[] | undefined {
+  cb: () => Promise<Array<PluginOption>>,
+): Array<PluginOption> | undefined;
+export function lazyPlugins(
+  cb: () => Array<PluginOption> | Promise<Array<PluginOption>>,
+): Array<PluginOption> | undefined {
   if (process.env[CONFIG_METADATA_ENV] === '1') {
     return undefined;
   }
   const result = cb();
-  if (result instanceof Promise) {
+  if (types.isPromise(result)) {
     return [result];
   }
   return result;

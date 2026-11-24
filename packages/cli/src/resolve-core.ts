@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 import { VITE_PLUS_CORE_NAME, coreAliasVersion } from './utils/constants.ts';
+import { errorCode } from './utils/error.ts';
+import { isObjectValue } from './utils/json-value.ts';
+import { readJsonFile } from './utils/json.ts';
 import { readNearestPackageJson } from './utils/package.ts';
 
 /**
@@ -13,10 +15,7 @@ function checkCoreVersion(
   packageJsonPath: string,
   expectedVersion: string | undefined,
 ): string | undefined {
-  const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
-    name?: string;
-    version?: string;
-  };
+  const pkg = readJsonFile(packageJsonPath);
   if (
     pkg.name !== VITE_PLUS_CORE_NAME ||
     (expectedVersion !== undefined && pkg.version !== expectedVersion)
@@ -26,11 +25,11 @@ function checkCoreVersion(
         ? VITE_PLUS_CORE_NAME
         : `${VITE_PLUS_CORE_NAME}@${expectedVersion}`;
     throw new Error(
-      `Expected ${expected}, but found ${pkg.name}@${pkg.version} at ${packageJsonPath}. ` +
+      `Expected ${expected}, but found ${typeof pkg.name === 'string' ? pkg.name : JSON.stringify(pkg.name)}@${typeof pkg.version === 'string' ? pkg.version : JSON.stringify(pkg.version)} at ${packageJsonPath}. ` +
         'Run `vp migrate` to align the Vite alias, then run `vp install`.',
     );
   }
-  return pkg.version;
+  return typeof pkg.version === 'string' ? pkg.version : undefined;
 }
 
 /**
@@ -40,10 +39,12 @@ function checkCoreVersion(
  * `workspace:` spec into the exact alias. Any other spec pins no version.
  */
 function readAliasCoreVersion(cliPackageJsonPath: string): string | undefined {
-  const { dependencies } = JSON.parse(readFileSync(cliPackageJsonPath, 'utf8')) as {
-    dependencies?: Record<string, string>;
-  };
-  return coreAliasVersion(dependencies?.vite);
+  const { dependencies } = readJsonFile(cliPackageJsonPath);
+  return coreAliasVersion(
+    isObjectValue(dependencies) && typeof dependencies.vite === 'string'
+      ? dependencies.vite
+      : undefined,
+  );
 }
 
 function checkProjectCoreVersion(
@@ -59,7 +60,10 @@ function checkProjectCoreVersion(
     'devDependencies',
     'optionalDependencies',
     'peerDependencies',
-  ].some((field) => Object.hasOwn(projectPackage?.[field] ?? {}, 'vite'));
+  ].some((field) => {
+    const dependencies = projectPackage?.[field];
+    return isObjectValue(dependencies) && Object.hasOwn(dependencies, 'vite');
+  });
   if (!declaresVite) {
     return;
   }
@@ -68,9 +72,9 @@ function checkProjectCoreVersion(
   let projectPackageJsonPath: string | undefined;
   try {
     projectPackageJsonPath = projectRequire.resolve('vite/package.json');
-  } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code !== 'MODULE_NOT_FOUND') {
-      throw cause;
+  } catch (error) {
+    if (errorCode(error) !== 'MODULE_NOT_FOUND') {
+      throw error;
     }
   }
   if (projectPackageJsonPath && projectPackageJsonPath !== corePackageJsonPath) {
@@ -88,8 +92,10 @@ export function resolveCore(
   let corePackageJsonPath: string;
   try {
     corePackageJsonPath = cliRequire.resolve('vite/package.json');
-  } catch (cause) {
-    throw new Error('Could not resolve the bundled Vite dependency. Run `vp install`.', { cause });
+  } catch (error) {
+    throw new Error('Could not resolve the bundled Vite dependency. Run `vp install`.', {
+      cause: error,
+    });
   }
   // Read the selected CLI's installed manifest. A static JSON import is inlined
   // during the build, before CI and preview packers can stamp a new version.

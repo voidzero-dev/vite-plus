@@ -3,11 +3,14 @@ import fsPromises from 'node:fs/promises';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import { type FormattingOptions, type JSONPath, parse as parseJsonc } from 'jsonc-parser';
+import { isCancel, log, multiselect, select } from '@voidzero-dev/vite-plus-prompts';
+import type { FormattingOptions, JSONPath } from 'jsonc-parser';
+import { parse as parseJsonc } from 'jsonc-parser';
 
 import { getVpDirs } from '../../binding/index.js';
 import { PackageManager } from '../types/package.ts';
+import type { JsonObject } from './json-value.ts';
+import { isJsonObject, isObjectValue } from './json-value.ts';
 import {
   appendMissingJsoncArrayItems,
   applyJsoncEdit,
@@ -21,7 +24,7 @@ const VSCODE_LANGUAGE_OVERRIDES = {
   '[javascriptreact]': { 'editor.defaultFormatter': 'oxc.oxc-vscode' },
   '[typescript]': { 'editor.defaultFormatter': 'oxc.oxc-vscode' },
   '[typescriptreact]': { 'editor.defaultFormatter': 'oxc.oxc-vscode' },
-} as const;
+} satisfies JsonObject;
 
 const VSCODE_SETTINGS = {
   'editor.defaultFormatter': 'oxc.oxc-vscode',
@@ -34,11 +37,11 @@ const VSCODE_SETTINGS = {
   'editor.codeActionsOnSave': {
     'source.fixAll.oxc': 'explicit',
   },
-} as const;
+} satisfies JsonObject;
 
 const VSCODE_EXTENSIONS = {
   recommendations: ['VoidZero.vite-plus-extension-pack'],
-} as const;
+} satisfies JsonObject;
 
 const ZED_SETTINGS = {
   lsp: {
@@ -91,7 +94,7 @@ const ZED_SETTINGS = {
       },
     ]),
   ),
-} as const;
+} satisfies JsonObject;
 
 const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
@@ -133,7 +136,7 @@ const JETBRAINS_OXFMT_SETTINGS = `<?xml version="1.0" encoding="UTF-8"?>
 </project>
 `;
 
-type EditorConfigValue = Record<string, unknown> | string;
+type EditorConfigValue = JsonObject | string;
 
 export const EDITORS = [
   {
@@ -141,8 +144,8 @@ export const EDITORS = [
     label: 'VSCode',
     targetDir: '.vscode',
     files: {
-      'settings.json': VSCODE_SETTINGS as Record<string, unknown>,
-      'extensions.json': VSCODE_EXTENSIONS as Record<string, unknown>,
+      'settings.json': VSCODE_SETTINGS,
+      'extensions.json': VSCODE_EXTENSIONS,
     },
   },
   {
@@ -150,7 +153,7 @@ export const EDITORS = [
     label: 'Zed',
     targetDir: '.zed',
     files: {
-      'settings.json': ZED_SETTINGS as Record<string, unknown>,
+      'settings.json': ZED_SETTINGS,
     },
   },
   {
@@ -173,7 +176,7 @@ const EDITOR_ALIASES = [
 ] as const;
 
 export type EditorId = (typeof EDITORS)[number]['id'];
-type EditorSelection = EditorId | readonly EditorId[] | undefined;
+type EditorSelection = EditorId | ReadonlyArray<EditorId> | undefined;
 
 export async function selectEditor({
   interactive,
@@ -200,7 +203,7 @@ export async function selectEditor({
       value: null,
       hint: 'Skip writing editor configs',
     };
-    const selectedEditor = await prompts.select({
+    const selectedEditor = await select({
       message:
         'Which editor are you using?\n  ' +
         styleText(
@@ -211,7 +214,7 @@ export async function selectEditor({
       initialValue: 'vscode',
     });
 
-    if (prompts.isCancel(selectedEditor)) {
+    if (isCancel(selectedEditor)) {
       onCancel();
       return undefined;
     }
@@ -237,13 +240,13 @@ export async function selectEditors({
   interactive: boolean;
   editor?: string | false;
   onCancel: () => void;
-}): Promise<EditorId[] | undefined> {
+}): Promise<Array<EditorId> | undefined> {
   if (editor === false) {
     return undefined;
   }
 
   if (interactive && !editor) {
-    const selectedEditors = await prompts.multiselect({
+    const selectedEditors = await multiselect({
       message:
         'Which editors are you using?\n  ' +
         styleText(
@@ -259,7 +262,7 @@ export async function selectEditors({
       required: false,
     });
 
-    if (prompts.isCancel(selectedEditors)) {
+    if (isCancel(selectedEditors)) {
       onCancel();
       return undefined;
     }
@@ -275,8 +278,8 @@ export async function selectEditors({
   return undefined;
 }
 
-export function detectExistingEditors(projectRoot: string): EditorId[] | undefined {
-  const editors: EditorId[] = [];
+export function detectExistingEditors(projectRoot: string): Array<EditorId> | undefined {
+  const editors: Array<EditorId> = [];
   for (const option of EDITORS) {
     for (const fileName of Object.keys(option.files)) {
       const filePath = path.join(projectRoot, option.targetDir, fileName);
@@ -304,7 +307,7 @@ export function detectEditorConflicts({
 }: {
   projectRoot: string;
   editorId: EditorId | undefined;
-}): EditorConflictInfo[] {
+}): Array<EditorConflictInfo> {
   if (!editorId) {
     return [];
   }
@@ -314,7 +317,7 @@ export function detectEditorConflicts({
     return [];
   }
 
-  const conflicts: EditorConflictInfo[] = [];
+  const conflicts: Array<EditorConflictInfo> = [];
   for (const fileName of Object.keys(editorConfig.files)) {
     const filePath = path.join(projectRoot, editorConfig.targetDir, fileName);
     if (fs.existsSync(filePath)) {
@@ -388,9 +391,12 @@ async function writeEditorConfig({
   const targetDir = path.join(projectRoot, editorConfig.targetDir);
   await fsPromises.mkdir(targetDir, { recursive: true });
 
-  for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
+  for (const [fileName, baseIncoming] of Object.entries<EditorConfigValue>(editorConfig.files)) {
     const incoming: EditorConfigValue =
-      editorId === 'vscode' && fileName === 'settings.json' && extraVsCodeSettings
+      editorId === 'vscode' &&
+      fileName === 'settings.json' &&
+      extraVsCodeSettings &&
+      typeof baseIncoming !== 'string'
         ? { ...extraVsCodeSettings, ...baseIncoming }
         : editorId === 'jetbrains' && fileName === 'workspace.xml'
           ? jetbrainsWorkspaceConfig(packageManager)
@@ -407,7 +413,7 @@ async function writeEditorConfig({
       if (preResolved) {
         conflictAction = preResolved;
       } else if (interactive) {
-        const action = await prompts.select({
+        const action = await select({
           message:
             `${displayPath} already exists.\n  ` +
             styleText(
@@ -432,7 +438,7 @@ async function writeEditorConfig({
           ],
           initialValue: 'skip',
         });
-        conflictAction = prompts.isCancel(action) || action === 'skip' ? 'skip' : 'merge';
+        conflictAction = isCancel(action) || action === 'skip' ? 'skip' : 'merge';
       } else {
         // Non-interactive: merge JSON safely, skip non-JSON to avoid destructive overwrite.
         conflictAction = jsonFormat ? 'merge' : 'skip';
@@ -440,7 +446,7 @@ async function writeEditorConfig({
 
       if (conflictAction === 'merge') {
         if (jsonFormat) {
-          if (!isPlainObject(incoming)) {
+          if (!isObjectValue(incoming)) {
             throw new Error(
               `Cannot merge editor config: ${displayPath} incoming value is not JSON`,
             );
@@ -451,14 +457,14 @@ async function writeEditorConfig({
         }
       } else {
         if (!silent) {
-          prompts.log.info(`Skipped writing ${displayPath}`);
+          log.info(`Skipped writing ${displayPath}`);
         }
       }
       continue;
     }
 
     if (jsonFormat) {
-      if (!isPlainObject(incoming)) {
+      if (!isObjectValue(incoming)) {
         throw new Error(
           `Cannot write editor config: ${editorConfig.targetDir}/${fileName} must be JSON`,
         );
@@ -468,7 +474,7 @@ async function writeEditorConfig({
       writeTextEditorConfig(filePath, incoming, `${editorConfig.targetDir}/${fileName}`, silent);
     }
     if (!silent) {
-      prompts.log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
+      log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
     }
   }
 }
@@ -488,22 +494,22 @@ function writeTextEditorConfig(
     throw new Error(`Cannot write editor config: ${displayPath} must be text content`);
   }
 
-  const existingText = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : undefined;
+  const existingText = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : undefined;
   if (existingText === incoming) {
     if (!silent) {
-      prompts.log.info(`No changes needed for ${displayPath}`);
+      log.info(`No changes needed for ${displayPath}`);
     }
     return;
   }
 
-  fs.writeFileSync(filePath, incoming, 'utf-8');
+  fs.writeFileSync(filePath, incoming, 'utf8');
 }
 
-function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
+function normalizeEditorSelection(editorId: EditorSelection): Array<EditorId> {
   if (!editorId) {
     return [];
   }
-  return [...new Set(Array.isArray(editorId) ? editorId : [editorId])];
+  return [...new Set(typeof editorId === 'string' ? [editorId] : editorId)];
 }
 
 /**
@@ -514,14 +520,14 @@ function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
  */
 function mergeAndWriteEditorConfig(
   filePath: string,
-  incoming: Record<string, unknown>,
+  incoming: JsonObject,
   fileName: string,
   displayPath: string,
   silent = false,
 ) {
-  const originalText = fs.readFileSync(filePath, 'utf-8');
-  const existing = parseJsonc(originalText) as unknown;
-  if (!isPlainObject(existing)) {
+  const originalText = fs.readFileSync(filePath, 'utf8');
+  const existing: unknown = parseJsonc(originalText);
+  if (!isJsonObject(existing)) {
     throw new Error(`Cannot merge editor config: ${displayPath} is not a JSON object`);
   }
 
@@ -543,19 +549,15 @@ function mergeAndWriteEditorConfig(
   // Do not rewrite when the merge produced no changes (keeps the operation idempotent).
   if (newText === originalText) {
     if (!silent) {
-      prompts.log.info(`No changes needed for ${displayPath}`);
+      log.info(`No changes needed for ${displayPath}`);
     }
     return;
   }
 
-  fs.writeFileSync(filePath, newText, 'utf-8');
+  fs.writeFileSync(filePath, newText, 'utf8');
   if (!silent) {
-    prompts.log.success(`Merged editor config into ${displayPath}`);
+    log.success(`Merged editor config into ${displayPath}`);
   }
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -565,21 +567,21 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 function mergeSettingsText(
   text: string,
-  existing: Record<string, unknown>,
-  incoming: Record<string, unknown>,
+  existing: JsonObject,
+  incoming: JsonObject,
   formattingOptions: FormattingOptions,
 ): string {
   let currentText = text;
   const insertMissing = (
-    existingNode: Record<string, unknown>,
-    incomingNode: Record<string, unknown>,
+    existingNode: JsonObject,
+    incomingNode: JsonObject,
     basePath: JSONPath,
   ) => {
     for (const [key, value] of Object.entries(incomingNode)) {
       const fullPath = [...basePath, key];
       if (!(key in existingNode)) {
         currentText = applyJsoncEdit(currentText, fullPath, value, { formattingOptions });
-      } else if (isPlainObject(existingNode[key]) && isPlainObject(value)) {
+      } else if (isObjectValue(existingNode[key]) && isObjectValue(value)) {
         insertMissing(existingNode[key], value, fullPath);
       }
       // Otherwise the existing value wins and is left untouched.
@@ -600,7 +602,7 @@ function resolveEditorId(editor: string): EditorId | undefined {
 
   const aliasMatch = EDITOR_ALIASES.find((option) => option.id === normalized);
   if (aliasMatch) {
-    prompts.log.warn(
+    log.warn(
       `--editor ${aliasMatch.id} was passed; use --editor ${aliasMatch.alias} instead, as it's the canonical ID for that editor.`,
     );
     return aliasMatch.alias;
@@ -609,7 +611,7 @@ function resolveEditorId(editor: string): EditorId | undefined {
   return undefined;
 }
 
-function resolveEditorIds(editors: readonly string[]): EditorId[] | undefined {
+function resolveEditorIds(editors: ReadonlyArray<string>): Array<EditorId> | undefined {
   const editorIds = editors.flatMap((editor) => {
     const editorId = resolveEditorId(editor);
     return editorId ? [editorId] : [];

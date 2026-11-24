@@ -2,17 +2,29 @@
  * Shared pieces of the `vpx <script>` loader (see `script-preload.ts`).
  */
 
+import type { LoadHook, LoadHookSync, LoadFnOutput } from 'node:module';
 import { createRequire } from 'node:module';
 
-import { type WatchSink, watchSink } from '../../../oxc-node/packages/core/watch-report.mjs';
-import type { FrozenTsconfig } from '../binding/index.js';
+import type { WatchSink } from '../../../oxc-node/packages/core/watch-report.mjs';
+import { watchSink } from '../../../oxc-node/packages/core/watch-report.mjs';
+import type { FrozenTsconfig, oxcNode } from '../binding/index.js';
 
 // oxc-node's watch reporting for a loader of its own (`@oxc-node/core/watch-report`),
 // bundled from the vendored source, so it matches the binding. `script-preload.ts` also
 // imports `@oxc-node/core/signal-ack` this way.
 export { createRelay, flush, withFlush } from '../../../oxc-node/packages/core/watch-report.mjs';
 
-type OxcNodeBinding = typeof import('../binding/index.js').oxcNode;
+// The generated N-API types merge Node's synchronous and asynchronous hooks.
+// The native functions follow nextLoad/nextResolve and preserve their return mode.
+type OxcNodeBinding = Omit<typeof oxcNode, 'load' | 'createResolve'> & {
+  load(...args: [...Parameters<LoadHookSync>, string]): LoadFnOutput & { responseURL?: string };
+  load(...args: [...Parameters<LoadHook>, string]): ReturnType<LoadHook>;
+  createResolve<Context, Result>(
+    specifier: string,
+    context: Context,
+    nextResolve: (specifier: string, context?: Context) => Result,
+  ): Result;
+};
 
 /**
  * The oxc-node hooks compiled into the Vite+ binding. Required, not imported: importing
@@ -20,9 +32,10 @@ type OxcNodeBinding = typeof import('../binding/index.js').oxcNode;
  * binding for ESM, and `module.register()` waits for that (5-13 ms).
  */
 export function loadOxcNode(): OxcNodeBinding {
-  const binding = createRequire(import.meta.url)(
+  // oxlint-disable-next-line typescript/no-unsafe-assignment -- The CommonJS entry is the same generated binding as the imported declarations.
+  const binding: { oxcNode: OxcNodeBinding } = createRequire(import.meta.url)(
     '../binding/index.cjs',
-  ) as typeof import('../binding/index.js');
+  );
   return binding.oxcNode;
 }
 
@@ -35,7 +48,7 @@ const SCRIPT_CONFIG = Symbol.for('vite-plus:script-config');
  * the parent's variables. Both emitted preload entries share this selection.
  */
 export function threadScriptConfig(): FrozenTsconfig {
-  const holder = globalThis as { [SCRIPT_CONFIG]?: FrozenTsconfig };
+  const holder: typeof globalThis & { [SCRIPT_CONFIG]?: FrozenTsconfig } = globalThis;
   if (holder[SCRIPT_CONFIG] === undefined) {
     const source = [
       'VP_SCRIPT_TSCONFIG',
@@ -57,7 +70,7 @@ export function threadScriptConfig(): FrozenTsconfig {
  * the preload and the `--import` entry are separate bundles and share it here.
  */
 export function threadWatchSink(): WatchSink | null {
-  const holder = globalThis as { [WATCH_SINK]?: WatchSink | null };
+  const holder: typeof globalThis & { [WATCH_SINK]?: WatchSink | null } = globalThis;
   if (holder[WATCH_SINK] === undefined) {
     holder[WATCH_SINK] = watchSink();
   }
@@ -169,9 +182,9 @@ const REQUIRE_ASYNC_MODULE_MESSAGE =
  * code catches to fall back to `import()`; the binding can only report `GenericFailure`.
  * Mirrors upstream's `register.mjs` (oxc-project/oxc-node#842).
  */
-export function withRequireAsyncModuleCode(error: unknown): unknown {
+export function withRequireAsyncModuleCode<T>(error: T): T {
   if (error instanceof Error && error.message.startsWith(REQUIRE_ASYNC_MODULE_MESSAGE)) {
-    (error as NodeJS.ErrnoException).code = 'ERR_REQUIRE_ASYNC_MODULE';
+    Object.assign(error, { code: 'ERR_REQUIRE_ASYNC_MODULE' });
   }
   return error;
 }
@@ -204,5 +217,5 @@ export function resolveWithOxcNode<Context extends { importAttributes?: unknown 
   if (helper) {
     return nextResolve(helper, { ...context, parentURL: HELPERS_PARENT_URL });
   }
-  return oxcNode.createResolve(specifier, context as never, nextResolve as never) as Result;
+  return oxcNode.createResolve(specifier, context, nextResolve);
 }

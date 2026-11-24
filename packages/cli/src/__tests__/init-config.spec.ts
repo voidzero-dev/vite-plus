@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from '../init-config.js';
 
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 const originalVpCliBin = process.env.VP_CLI_BIN;
 
 function createTempDir() {

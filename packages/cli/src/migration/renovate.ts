@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { findNodeAtLocation, parseTree, type Node, type ParseError } from 'jsonc-parser';
+import type { Node, ParseError } from 'jsonc-parser';
+import { findNodeAtLocation, parseTree } from 'jsonc-parser';
 
 import { appendMissingJsoncArrayItems, detectFormattingOptions } from '../utils/json.ts';
 import { withJson5Preset } from './renovate-json5.ts';
@@ -30,7 +31,10 @@ const CONFIG_FILES = [...STANDALONE_RENOVATE_CONFIG_FILES, 'package.json'];
 function hasDuplicateKeys(node: Node): boolean {
   const children = node.children ?? [];
   if (node.type === 'object') {
-    const keys = children.map((property) => property.children![0].value);
+    const keys = children.map((property) => {
+      const key: unknown = property.children?.[0]?.value;
+      return typeof key === 'string' ? key : undefined;
+    });
     if (keys.length !== new Set(keys).size) {
       return true;
     }
@@ -43,7 +47,7 @@ async function withVitePlusPreset(file: string, source: string): Promise<string 
     return withJson5Preset(source, PRESET);
   }
   const embedded = path.basename(file) === 'package.json';
-  const errors: ParseError[] = [];
+  const errors: Array<ParseError> = [];
   const tree = parseTree(source, errors, {
     allowTrailingComma: !embedded,
     disallowComments: embedded,
@@ -71,8 +75,11 @@ async function withVitePlusPreset(file: string, source: string): Promise<string 
   if (config?.type !== 'object' || (extendsNode && extendsNode.type !== 'array')) {
     return undefined;
   }
-  const presets: unknown[] | undefined = extendsNode?.children?.map((item) => item.value);
-  if (presets?.some((preset) => typeof preset !== 'string' || preset === PRESET)) {
+  const presets = extendsNode?.children?.map((item) => {
+    const value: unknown = item.value;
+    return typeof value === 'string' ? value : undefined;
+  });
+  if (presets?.some((preset) => preset === undefined || preset === PRESET)) {
     return undefined;
   }
   // Keep a compact config or preset list on one line.
@@ -95,7 +102,9 @@ export async function findRenovateConfigToUpdate(rootDir: string): Promise<strin
       const updated = await withVitePlusPreset(file, source);
       return updated === undefined ? undefined : file;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if (
+        !(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')
+      ) {
         return undefined;
       }
     }
@@ -109,7 +118,7 @@ export async function addVitePlusRenovatePreset(file: string): Promise<boolean> 
   try {
     source = await fs.readFile(file, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
       return false;
     }
     throw error;
