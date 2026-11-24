@@ -13,3 +13,14 @@ steps = [
   { argv = ["vp", "help", "dev", "--"], timeout = 30000, continue-on-failure = true },
   ["vp", "help", "build", "--"],
 ]
+
+[[case]]
+name = "help_background_job"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["bash"]
+env = { COLORTERM = "truecolor" }
+comment = "A background job must not touch the terminal, or SIGTTOU stops it before help is printed. Interactive Bash enables job control, and `wait` returns 150 if the job stops."
+steps = [
+  ["bash", "--noprofile", "--norc", "-ic", '{ vp --help & } 2>/dev/null; wait %1; echo "exit status: $?"'],
+]
