@@ -1258,7 +1258,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
 
     // The package list predates scaffolding, so an overwritten target can still appear in it.
-    const projectPackagePath = projectDir.split(path.sep).join('/');
+    const projectPackagePath = path
+      .relative(workspaceInfo.rootDir, fullPath)
+      .split(path.sep)
+      .join('/');
     const dependencyCandidates = workspaceInfo.packages.filter(
       (pkg) => pkg.path !== projectPackagePath,
     );
