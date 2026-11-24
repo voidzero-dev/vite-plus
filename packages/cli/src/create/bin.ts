@@ -1257,7 +1257,15 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       prompts.log.step('Monorepo integration...');
     }
 
-    if (workspaceInfo.packages.length > 0) {
+    // The package list predates scaffolding, so an overwritten target can still appear in it.
+    const projectPackagePath = path
+      .relative(workspaceInfo.rootDir, fullPath)
+      .split(path.sep)
+      .join('/');
+    const dependencyCandidates = workspaceInfo.packages.filter(
+      (pkg) => pkg.path !== projectPackagePath,
+    );
+    if (dependencyCandidates.length > 0) {
       if (options.interactive) {
         pauseCreateProgress();
         const selectedDepTypeOptions = await prompts.multiselect({
@@ -1289,8 +1297,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
             message: `Which packages should be added as ${selectedDepType} to ${success(
               projectDir,
             )}?`,
-            // FIXME: ignore itself as dependency
-            options: workspaceInfo.packages.map((pkg) => ({
+            options: dependencyCandidates.map((pkg) => ({
               value: pkg.name,
               label: pkg.path,
             })),
