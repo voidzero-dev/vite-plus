@@ -74,8 +74,8 @@ export default defineConfig({
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     overrides: [
       {
-        // The create-vite demo asserts that its two DOM elements exist.
-        files: ["apps/website/src/main.ts"],
+        // create-vite's vanilla-ts entry point asserts that its two DOM elements exist.
+        files: ["**/*/src/main.ts"],
         rules: { "typescript/no-non-null-assertion": "off" },
       },
     ],
@@ -300,9 +300,9 @@ monorepo package create without --editor should not write VS Code config
 vite-plus-monorepo/apps/vite-plus-application/.vscode: missing
 ```
 
-## `cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/no-editor --no-editor`
+## `cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/no-editor --no-editor -- --template vanilla-ts`
 
-create application with explicit editor opt-out inside monorepo
+create a vanilla-ts application with explicit editor opt-out inside monorepo
 
 
 ## `vpt stat-file vite-plus-monorepo/apps/no-editor/.vscode --assert missing`
@@ -312,6 +312,11 @@ create application with explicit editor opt-out inside monorepo
 ```
 vite-plus-monorepo/apps/no-editor/.vscode: missing
 ```
+
+## `cd vite-plus-monorepo && vp lint --format unix apps/no-editor/src/main.ts`
+
+the additional vanilla-ts app passes the workspace lint rules
+
 
 ## `cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/editor-opt-in --editor vscode`
 

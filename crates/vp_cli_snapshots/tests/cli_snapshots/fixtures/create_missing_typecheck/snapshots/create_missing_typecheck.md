@@ -52,8 +52,8 @@ export default defineConfig({
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     overrides: [
       {
-        // The create-vite demo asserts that its two DOM elements exist.
-        files: ["apps/website/src/main.ts"],
+        // create-vite's vanilla-ts entry point asserts that its two DOM elements exist.
+        files: ["**/*/src/main.ts"],
         rules: { "typescript/no-non-null-assertion": "off" },
       },
     ],
