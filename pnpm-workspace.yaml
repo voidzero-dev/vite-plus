@@ -14,10 +14,10 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^1.0.2
   '@oxc-node/core': ^1.0.2
-  '@oxc-project/runtime': =0.159.0
-  '@oxc-project/types': =0.159.0
+  '@oxc-project/runtime': =0.160.0
+  '@oxc-project/types': =0.160.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
-  '@oxlint/plugins': =1.94.0
+  '@oxlint/plugins': =1.95.0
   '@rolldown/pluginutils': ^1.0.0
   '@tsdown/css': =0.23.4
   '@tsdown/exe': =0.23.4
@@ -50,9 +50,9 @@ catalog:
   lint-staged: ^17.6.2
   minimatch: ^11.0.0
   nanotar: ^0.3.0
-  oxc-parser: =0.159.0
-  oxfmt: =0.79.0
-  oxlint: =1.94.0
+  oxc-parser: =0.160.0
+  oxfmt: =0.80.0
+  oxlint: =1.95.0
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -66,7 +66,7 @@ catalog:
   source-map: 0.8.0
   tinyglobby: ^0.2.15
   tsdown: =0.23.4
-  tsrs: =7.1.0-beta.tsrs4
+  tsrs: =7.1.0-beta.tsrs5
   typescript: ~7.0.2
   valibot: 1.5.0
   validate-npm-package-name: ^8.0.0

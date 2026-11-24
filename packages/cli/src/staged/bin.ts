@@ -9,8 +9,8 @@
 // lint-staged's dependency tree includes CJS modules that use require('node:events')
 // etc., which breaks when bundled to ESM format by rolldown.
 
-import lintStaged from 'lint-staged';
 import type { Options } from 'lint-staged';
+import lintStaged from 'lint-staged';
 
 import { parseStagedArgs } from '../../binding/index.js';
 import { resolveViteConfig } from '../resolve-vite-config.ts';

@@ -43,7 +43,7 @@ describe('StagedConfig type', () => {
       '*.ts': {
         title: 'Run eslint',
         task: (files: readonly string[]) => {
-          void files;
+          assertType<readonly string[]>(files);
         },
       },
     });
