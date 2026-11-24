@@ -287,6 +287,45 @@ fn read_until_either(
     }
 }
 
+/// Waits up to `timeout` for `fd` to become readable. Returns `false` on timeout.
+///
+/// macOS `poll()` does not support `/dev/tty`: it returns `POLLNVAL` at once
+/// instead of waiting, so a following `read()` blocks until the terminal sends
+/// something. A terminal that never answers the DA1 query would then hang `vp`.
+/// `select()` works with `/dev/tty` on macOS, as terminal-colorsaurus also does.
+#[cfg(target_os = "macos")]
+fn wait_readable(fd: std::os::fd::BorrowedFd<'_>, timeout: Duration) -> std::io::Result<bool> {
+    use std::os::fd::AsRawFd;
+
+    use nix::sys::{
+        select::{FD_SETSIZE, FdSet, select},
+        time::TimeVal,
+    };
+
+    // `FdSet::insert` panics for descriptors that don't fit in an fd_set.
+    if usize::try_from(fd.as_raw_fd()).map_or(true, |raw| raw >= FD_SETSIZE) {
+        return Ok(false);
+    }
+    let mut readfds = FdSet::new();
+    readfds.insert(fd);
+    let micros = i64::try_from(timeout.as_micros()).unwrap_or(i64::MAX);
+    let mut timeval = TimeVal::new(micros / 1_000_000, (micros % 1_000_000) as _);
+    let ready = select(None, &mut readfds, None, None, &mut timeval)?;
+    Ok(ready > 0 && readfds.contains(fd))
+}
+
+/// Waits up to `timeout` for `fd` to become readable. Returns `false` on timeout.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn wait_readable(fd: std::os::fd::BorrowedFd<'_>, timeout: Duration) -> std::io::Result<bool> {
+    use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
+
+    let Ok(timeout) = PollTimeout::try_from(timeout) else {
+        return Ok(false);
+    };
+    let mut fds = [PollFd::new(fd, PollFlags::POLLIN)];
+    Ok(poll(&mut fds, timeout)? > 0)
+}
+
 /// Queries terminal colors using the DA1 sandwich technique with
 /// stream-based response parsing (modelled after `terminal-colorsaurus`).
 ///
@@ -301,10 +340,7 @@ fn query_terminal_colors(palette_indices: &[u8]) -> (Option<Rgb>, Vec<(u8, Rgb)>
         os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd},
     };
 
-    use nix::{
-        poll::{PollFd, PollFlags, PollTimeout, poll},
-        sys::termios::{SetArg, Termios, cfmakeraw, tcgetattr, tcsetattr},
-    };
+    use nix::sys::termios::{SetArg, Termios, cfmakeraw, tcgetattr, tcsetattr};
 
     if is_osc_query_unsupported() {
         return (None, vec![]);
@@ -380,14 +416,7 @@ fn query_terminal_colors(palette_indices: &[u8]) -> (Option<Rgb>, Vec<(u8, Rgb)>
     impl io::Read for TtyReader<'_> {
         fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
             let remaining = self.deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err(io::Error::new(io::ErrorKind::TimedOut, "tty read timed out"));
-            }
-            let mut fds = [PollFd::new(self.tty.as_fd(), PollFlags::POLLIN)];
-            let timeout = PollTimeout::try_from(remaining)
-                .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "tty read timed out"))?;
-            let ready = poll(&mut fds, timeout).map_err(io::Error::from)?;
-            if ready == 0 {
+            if remaining.is_zero() || !wait_readable(self.tty.as_fd(), remaining)? {
                 return Err(io::Error::new(io::ErrorKind::TimedOut, "tty read timed out"));
             }
             io::Read::read(&mut &*self.tty, buf)

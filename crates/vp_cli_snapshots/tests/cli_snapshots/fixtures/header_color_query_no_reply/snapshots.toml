@@ -1,0 +1,10 @@
+# The runner's terminal never answers the header's color queries or the DA1
+# sentinel. `COLORTERM=truecolor` makes `vp` send them, so the query must give
+# up at its deadline instead of blocking the command.
+[[case]]
+name = "header_color_query_no_reply"
+vp = "global"
+env = { COLORTERM = "truecolor" }
+steps = [
+  { argv = ["vp", "--definitely-invalid"], comment = "The header falls back to default colors and the command finishes, although the terminal never answers", continue-on-failure = true },
+]
