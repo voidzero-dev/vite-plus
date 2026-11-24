@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { WorkspaceInfo, WorkspaceInfoOptional } from '../../types/index.js';
+import type { WorkspaceInfo, WorkspaceInfoOptional } from '../../types/index.ts';
 import type { JsonObject } from '../../utils/json-value.ts';
 import {
   discoverTemplate,
@@ -12,7 +12,7 @@ import {
   inferGitHubRepoName,
   inferParentDir,
   parseGitHubUrl,
-} from '../discovery.js';
+} from '../discovery.ts';
 import { makeWorkspaceInfo } from './workspace-fixture.ts';
 
 // The local-package branch only engages for a resolved create.templates entry.

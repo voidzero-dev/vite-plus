@@ -4,13 +4,13 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { WorkspaceInfo } from '../../types/index.js';
-import { PackageManager } from '../../types/index.js';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
 import { readJsonFile as readJson } from '../../utils/json.ts';
 import { fixtureObject } from './fixture-json.ts';
 
 // Mock with file: protocol paths (simulating VP_OVERRIDE_PACKAGES in CI)
-vi.mock(import('../../utils/constants.js'), async (importOriginal) => {
+vi.mock(import('../../utils/constants.ts'), async (importOriginal) => {
   const mod = await importOriginal();
   return {
     ...mod,
@@ -22,7 +22,7 @@ vi.mock(import('../../utils/constants.js'), async (importOriginal) => {
   };
 });
 
-const { rewriteMonorepo, rewritePackageJson } = await import('../migrator.js');
+const { rewriteMonorepo, rewritePackageJson } = await import('../migrator.ts');
 
 function makeWorkspaceInfo(rootDir: string, packageManager: PackageManager): WorkspaceInfo {
   return {

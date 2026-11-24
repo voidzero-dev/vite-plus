@@ -14,7 +14,7 @@ import {
   selectEditor,
   selectEditors,
   writeEditorConfigs,
-} from '../editor.js';
+} from '../editor.ts';
 import { isJsonObject } from '../json-value.ts';
 import { readJsonFile } from '../json.ts';
 

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { lint, resolveWindowsLintBackendExecutable } from '../resolve-lint.js';
+import { lint, resolveWindowsLintBackendExecutable } from '../resolve-lint.ts';
 
 describe('resolve-lint', () => {
   it('should resolve binPath and OXLINT_TSGOLINT_PATH to existing files', async () => {

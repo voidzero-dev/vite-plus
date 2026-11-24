@@ -31,7 +31,7 @@ vi.mock('../../utils/terminal.ts', () => ({
 }));
 
 const { checkProjectDirExists, isTargetDirAvailable, promptTargetDir, suggestAvailableTargetDir } =
-  await import('../prompts.js');
+  await import('../prompts.ts');
 
 const tempDirs: Array<string> = [];
 

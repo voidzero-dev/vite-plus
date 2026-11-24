@@ -6,9 +6,9 @@ import path from 'node:path';
 import { log } from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveViteConfig } from '../../resolve-vite-config.js';
-import type { CreateTemplateEntry } from '../org-manifest.js';
-import { registerLocalTemplate } from '../register-template.js';
+import { resolveViteConfig } from '../../resolve-vite-config.ts';
+import type { CreateTemplateEntry } from '../org-manifest.ts';
+import { registerLocalTemplate } from '../register-template.ts';
 
 const ENTRY_A: CreateTemplateEntry = {
   name: 'my-generator',

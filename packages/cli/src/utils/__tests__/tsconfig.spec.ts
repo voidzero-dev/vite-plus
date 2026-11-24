@@ -9,7 +9,7 @@ import {
   hasTypesToRewriteInTsconfig,
   removeDeprecatedTsconfigFalseOption,
   rewriteTypesInTsconfig,
-} from '../tsconfig.js';
+} from '../tsconfig.ts';
 
 describe('findTsconfigFiles', () => {
   let tmpDir: string;

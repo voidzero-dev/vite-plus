@@ -17,9 +17,9 @@ import {
   selectAgentTargets,
   writeAgentInstructions,
   writeCopilotSetupWorkflow,
-} from '../agent.js';
-import { SETUP_VP_VERSION } from '../constants.js';
-import { pkgRoot } from '../path.js';
+} from '../agent.ts';
+import { SETUP_VP_VERSION } from '../constants.ts';
+import { pkgRoot } from '../path.ts';
 
 type MockNode =
   | { kind: 'dir' }

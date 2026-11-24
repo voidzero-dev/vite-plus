@@ -1,6 +1,6 @@
 import { expect, describe, it } from 'vitest';
 
-import { defineConfig } from '../index.js';
+import { defineConfig } from '../index.ts';
 
 describe('defineConfig test field typing', () => {
   it('accepts test config without TS error', () => {

@@ -30,7 +30,7 @@ async function loadMilestone(value: string | undefined) {
   } else {
     process.env.VP_EMIT_MILESTONES = value;
   }
-  return import('../milestone.js');
+  return import('../milestone.ts');
 }
 
 afterEach(() => {

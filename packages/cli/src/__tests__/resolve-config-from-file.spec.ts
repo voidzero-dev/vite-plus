@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { normalizePath } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { resolveConfigFromFile } from '../index.js';
+import { resolveConfigFromFile } from '../index.ts';
 
 let tempDir: string;
 const exec = promisify(execFile);

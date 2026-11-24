@@ -2,7 +2,7 @@ import type { PluginOption } from 'vite';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import { withConfigMetadataResolution } from '../define-config.ts';
-import { defineConfig, lazyPlugins } from '../index.js';
+import { defineConfig, lazyPlugins } from '../index.ts';
 
 let originalMetadataEnv: string | undefined;
 

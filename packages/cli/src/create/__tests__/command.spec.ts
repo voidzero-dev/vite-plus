@@ -14,7 +14,7 @@ vi.mock('../../../binding/index.js', () => ({
   runCommand: mockRunCommand,
 }));
 
-const { runCommandAndDetectProjectDir } = await import('../command.js');
+const { runCommandAndDetectProjectDir } = await import('../command.ts');
 
 const tempDirs: Array<string> = [];
 

@@ -4,7 +4,7 @@ import { createTarGzip } from 'nanotar';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { JsonObject } from '../../utils/json-value.ts';
-import type { OrgTemplateEntry } from '../org-manifest.js';
+import type { OrgTemplateEntry } from '../org-manifest.ts';
 import {
   CreateConfigSchemaError,
   filterManifestForContext,
@@ -12,7 +12,7 @@ import {
   parseOrgScopedSpec,
   readOrgManifest,
   validateCreateTemplates,
-} from '../org-manifest.js';
+} from '../org-manifest.ts';
 
 describe('validateCreateTemplates', () => {
   it('returns an empty array when create.templates is absent', () => {

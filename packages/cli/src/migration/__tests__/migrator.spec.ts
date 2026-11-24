@@ -9,18 +9,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
 import { rewriteScripts } from '../../../binding/index.js';
-import type { WorkspaceInfo } from '../../types/index.js';
-import { PackageManager } from '../../types/index.js';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
 import {
   SETUP_VP_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITEST_VERSION,
-} from '../../utils/constants.js';
+} from '../../utils/constants.ts';
 import type { JsonObject } from '../../utils/json.ts';
 import { readJsonFile as readJson } from '../../utils/json.ts';
 import type { RetainedImportDependencies } from '../migrator/shared.ts';
 import { DISABLED_IMPORT_RULE_CONFIG } from '../migrator/shared.ts';
-import { createMigrationReport } from '../report.js';
+import { createMigrationReport } from '../report.ts';
 import { fixtureObject, fixtureString } from './fixture-json.ts';
 
 // A different bundled version verifies that migration follows dependency updates.
@@ -29,7 +29,7 @@ vi.mock('tsrs/package.json', () => ({ default: { version: '99.0.0-test' } }));
 // Mock VITE_PLUS_VERSION to a stable value for snapshot tests.
 // When tests run via `vp test`, the env var is injected with the actual version,
 // which would cause snapshot mismatches.
-vi.mock(import('../../utils/constants.js'), async (importOriginal) => {
+vi.mock(import('../../utils/constants.ts'), async (importOriginal) => {
   const mod = await importOriginal();
   return {
     ...mod,
@@ -79,7 +79,7 @@ const {
   pnpmSupportsWorkspaceSettings,
   pnpmOverrideKey,
   setPackageManager,
-} = await import('../migrator.js');
+} = await import('../migrator.ts');
 
 // pnpm's managed override keys are range-qualified so they never rewrite an
 // importer's `catalog:` spec (issue #2309). npm/bun `overrides` and yarn
@@ -87,7 +87,7 @@ const {
 const PNPM_VITE_OVERRIDE_KEY = pnpmOverrideKey('vite');
 const PNPM_VITEST_OVERRIDE_KEY = pnpmOverrideKey('vitest');
 
-const { collectMigrationSetupPlan } = await import('../setup-plan.js');
+const { collectMigrationSetupPlan } = await import('../setup-plan.ts');
 
 describe('pnpm workspace settings support', () => {
   it.each([

@@ -29,7 +29,7 @@ import {
   isHooksUserDisabled,
   resolveHooksDir,
   status,
-} from '../hooks.js';
+} from '../hooks.ts';
 
 // Unmodified upstream dispatcher; retained to verify safe migration against real Husky output.
 const HUSKY_DISPATCHER = readFileSync(new URL('./fixtures/husky-9.1.7/h', import.meta.url), 'utf8');

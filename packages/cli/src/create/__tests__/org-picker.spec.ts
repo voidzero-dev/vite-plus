@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { OrgManifest } from '../org-manifest.js';
+import type { OrgManifest } from '../org-manifest.ts';
 import {
   formatManifestTable,
   ORG_PICKER_BUILTIN_ESCAPE,
   ORG_PICKER_CANCEL,
   pickOrgTemplate,
-} from '../org-picker.js';
+} from '../org-picker.ts';
 
 const { mockSelect, mockIsCancel } = vi.hoisted(() => ({
   mockSelect:

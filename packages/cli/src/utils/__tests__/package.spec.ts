@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { checkNpmPackageExists, hasPackageManagerDeclaration } from '../package.js';
+import { checkNpmPackageExists, hasPackageManagerDeclaration } from '../package.ts';
 
 // Pin the registry: getNpmRegistry reads the developer's real `.npmrc`, so
 // the URL assertions below would fail for anyone using a mirror registry.
-vi.mock(import('../npm-config.js'), async (importOriginal) => {
+vi.mock(import('../npm-config.ts'), async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,

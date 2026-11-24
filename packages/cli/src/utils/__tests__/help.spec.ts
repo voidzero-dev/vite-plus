@@ -2,7 +2,7 @@ import { stripVTControlCharacters } from 'node:util';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderCliDoc } from '../help.js';
+import { renderCliDoc } from '../help.ts';
 
 describe('renderCliDoc', () => {
   it('renders usage, rows, and sections with stable spacing', () => {

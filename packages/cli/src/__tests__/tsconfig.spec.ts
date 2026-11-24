@@ -8,7 +8,7 @@ import {
   findTsconfigFilesWithBaseUrl,
   fixBaseUrlInTsconfig,
   hasBaseUrlInTsconfig,
-} from '../utils/tsconfig.js';
+} from '../utils/tsconfig.ts';
 
 const tempDirs: Array<string> = [];
 const originalVpCliBin = process.env.VP_CLI_BIN;

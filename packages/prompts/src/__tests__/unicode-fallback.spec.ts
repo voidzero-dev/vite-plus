@@ -3,9 +3,9 @@ import { stripVTControlCharacters } from 'node:util';
 
 import { describe, expect, it, vi } from 'vite-plus/test';
 
-import { promptTitle } from '../common.js';
-import { log } from '../log.js';
-import { spinner } from '../spinner.js';
+import { promptTitle } from '../common.ts';
+import { log } from '../log.ts';
+import { spinner } from '../spinner.ts';
 
 // Select fallback symbols before common.ts and its consumers initialize.
 vi.mock('is-unicode-supported', () => ({ default: () => false }));

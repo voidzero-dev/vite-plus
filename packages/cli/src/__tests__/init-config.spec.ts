@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { vi } from 'vitest';
 
-import { applyToolInitConfigToViteConfig, inspectInitCommand } from '../init-config.js';
+import { applyToolInitConfigToViteConfig, inspectInitCommand } from '../init-config.ts';
 
 const tempDirs: Array<string> = [];
 const originalVpCliBin = process.env.VP_CLI_BIN;

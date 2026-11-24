@@ -1,6 +1,6 @@
 import { assertType, describe, it } from 'vitest';
 
-import type { StagedConfig } from '../../staged-config.js';
+import type { StagedConfig } from '../../staged-config.ts';
 
 describe('StagedConfig type', () => {
   it('accepts string commands', () => {

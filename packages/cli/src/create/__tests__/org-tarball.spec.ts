@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createTarGzip } from 'nanotar';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { OrgManifest } from '../org-manifest.js';
+import type { OrgManifest } from '../org-manifest.ts';
 import {
   cleanupStaleStagingDirs,
   ensureOrgPackageExtracted,
@@ -15,7 +15,7 @@ import {
   resolveBundledPath,
   resolveExtractionDir,
   sanitizeHostForPath,
-} from '../org-tarball.js';
+} from '../org-tarball.ts';
 
 const { mockGetVpDirs } = vi.hoisted(() => ({ mockGetVpDirs: vi.fn<() => { cache: string }>() }));
 

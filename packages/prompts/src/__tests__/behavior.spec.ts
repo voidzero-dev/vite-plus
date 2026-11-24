@@ -6,7 +6,7 @@ import { stripVTControlCharacters } from 'node:util';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { autocomplete, CANCEL_SYMBOL, isCancel, password, path, text } from '../index.js';
+import { autocomplete, CANCEL_SYMBOL, isCancel, password, path, text } from '../index.ts';
 
 const cleanup: Array<() => void> = [];
 function terminal() {

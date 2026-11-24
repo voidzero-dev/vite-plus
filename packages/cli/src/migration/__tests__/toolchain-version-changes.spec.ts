@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { VITE_PLUS_VERSION, VITEST_VERSION } from '../../utils/constants.js';
+import { VITE_PLUS_VERSION, VITEST_VERSION } from '../../utils/constants.ts';
 
 // `collectToolchainVersionChanges` reads the bundled raw Vite version via
 // `await import('../versions.js')`. In the built CLI that resolves to
@@ -22,7 +22,7 @@ if (createdVersionsStub) {
   );
 }
 
-const { collectToolchainVersionChanges } = await import('../migrator.js');
+const { collectToolchainVersionChanges } = await import('../migrator.ts');
 
 afterAll(() => {
   if (createdVersionsStub && fs.existsSync(versionsSourcePath)) {

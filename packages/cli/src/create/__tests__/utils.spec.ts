@@ -14,7 +14,7 @@ import {
   getProjectDirFromPackageName,
   renameFiles,
   shouldConfigureEditorsForCreate,
-} from '../utils.js';
+} from '../utils.ts';
 
 describe('getProjectDirFromPackageName', () => {
   it('should get project dir from package name', () => {

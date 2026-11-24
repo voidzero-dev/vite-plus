@@ -4,14 +4,14 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { PackageManager } from '../../types/index.js';
+import { PackageManager } from '../../types/index.ts';
 import { isStringRecord } from '../../utils/json-value.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import {
   alignMonorepoTypeScriptVersion,
   dropAliasedRuntimeDevDeps,
   removeNestedLibraryToolConfig,
-} from '../templates/monorepo.js';
+} from '../templates/monorepo.ts';
 
 function writePackageJson(directory: string, devDependencies: Record<string, string>): void {
   fs.writeFileSync(

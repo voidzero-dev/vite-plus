@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { executeBuiltinTemplate } from '../templates/builtin.js';
-import type { runRemoteTemplateCommand as runRemoteTemplateCommandImplementation } from '../templates/remote.js';
+import { executeBuiltinTemplate } from '../templates/builtin.ts';
+import type { runRemoteTemplateCommand as runRemoteTemplateCommandImplementation } from '../templates/remote.ts';
 import { makeWorkspaceInfo } from './workspace-fixture.ts';
 
 const { mockLogError } = vi.hoisted(() => ({ mockLogError: vi.fn<(message: string) => void>() }));
 
-vi.mock('../templates/remote.js', () => ({
+vi.mock('../templates/remote.ts', () => ({
   runRemoteTemplateCommand: vi.fn<typeof runRemoteTemplateCommandImplementation>(),
 }));
 
@@ -27,7 +27,7 @@ const baseTemplateInfo = {
 
 describe('executeBuiltinTemplate', () => {
   it('returns exitCode 1 for unknown vite: template', async () => {
-    const { runRemoteTemplateCommand } = await import('../templates/remote.js');
+    const { runRemoteTemplateCommand } = await import('../templates/remote.ts');
 
     const result = await executeBuiltinTemplate(workspaceInfo, {
       ...baseTemplateInfo,

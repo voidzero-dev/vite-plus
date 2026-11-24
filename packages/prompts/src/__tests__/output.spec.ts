@@ -5,13 +5,13 @@ import stringWidth from 'fast-string-width';
 import color from 'picocolors';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
-import { box } from '../box.js';
-import { settings, updateSettings } from '../index.js';
-import { log } from '../log.js';
-import { note } from '../note.js';
-import { spinner } from '../spinner.js';
-import { stream } from '../stream.js';
-import { taskLog } from '../task-log.js';
+import { box } from '../box.ts';
+import { settings, updateSettings } from '../index.ts';
+import { log } from '../log.ts';
+import { note } from '../note.ts';
+import { spinner } from '../spinner.ts';
+import { stream } from '../stream.ts';
+import { taskLog } from '../task-log.ts';
 
 // common.ts selects symbols at module load, before test hooks run.
 vi.mock('is-unicode-supported', () => ({ default: () => true }));

@@ -5,16 +5,16 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 
-import type { WorkspaceInfo } from '../../types/index.js';
-import { PackageManager } from '../../types/index.js';
-import { VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.js';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
+import { VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
 import { readJsonFile as readJson } from '../../utils/json.ts';
-import type { PnpmPeerDependencyRules as PeerDependencyRules } from '../migrator/shared.js';
-import { createMigrationReport } from '../report.js';
+import type { PnpmPeerDependencyRules as PeerDependencyRules } from '../migrator/shared.ts';
+import { createMigrationReport } from '../report.ts';
 import { fixtureObject } from './fixture-json.ts';
 
 // Keep the vite-plus spec stable; each test selects the core alias it needs.
-vi.mock(import('../../utils/constants.js'), async (importOriginal) => {
+vi.mock(import('../../utils/constants.ts'), async (importOriginal) => {
   const mod = await importOriginal();
   return {
     ...mod,
@@ -28,7 +28,7 @@ const {
   ensureVitePlusBootstrap,
   rewriteStandaloneProject,
   vitePeerDependencyRuleRequired,
-} = await import('../migrator.js');
+} = await import('../migrator.ts');
 
 const STABLE_CORE = 'npm:@voidzero-dev/vite-plus-core@8.3.5000';
 const PREVIEW_CORE = 'npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3';
