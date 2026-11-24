@@ -93,6 +93,94 @@ describe('install', () => {
     },
   );
 
+  it('ends the generated dispatcher and hook stubs with a newline', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-newline-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      process.chdir(tmp);
+
+      expect(install('.vite-hooks').isError).toBe(false);
+      const internal = join(tmp, '.vite-hooks', '_');
+      // Shells re-read a sourced file past its old EOF when the final line is
+      // unterminated, so a mid-hook rewrite corrupts a running hook (#3567).
+      expect(readFileSync(join(internal, 'h'), 'utf8')).toMatch(/\n$/);
+      for (const hook of SUPPORTED_GIT_HOOK_NAMES) {
+        expect(readFileSync(join(internal, hook), 'utf8')).toMatch(/\n$/);
+      }
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'replaces the dispatcher with a new file instead of rewriting it in place',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-atomic-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+
+        const dispatcherPath = join(tmp, '.vite-hooks', '_', 'h');
+        expect(install('.vite-hooks').isError).toBe(false);
+        const firstInode = statSync(dispatcherPath).ino;
+
+        // A second install must hand a running shell the old bytes until the
+        // new file replaces the path: rewrites in place feed the shell the new
+        // content past the old EOF (#3567).
+        expect(install('.vite-hooks').isError).toBe(false);
+        expect(statSync(dispatcherPath).ino).not.toBe(firstInode);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a running hook shell healthy when the dispatcher is rewritten mid-hook',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-rewrite-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+        expect(install('.vite-hooks').isError).toBe(false);
+
+        // Stand-in for `pnpm install` whose `prepare: vp config` writes a
+        // longer dispatcher, as when switching between branches that pin
+        // different vite-plus versions (#3567).
+        writeFileSync(
+          join(tmp, '.vite-hooks', 'post-checkout'),
+          [
+            '#!/usr/bin/env sh',
+            String.raw`{ printf '# simulated newer dispatcher\n'; cat .vite-hooks/_/h; } > .vite-hooks/_/h.new`,
+            'cat .vite-hooks/_/h.new > .vite-hooks/_/h',
+            '',
+          ].join('\n'),
+          { mode: 0o755 },
+        );
+        execSync('git add -A', { cwd: tmp, stdio: 'ignore' });
+        // A real commit is required: on an unborn HEAD, `git checkout -b`
+        // creates the branch without updating the worktree and never runs
+        // the post-checkout hook.
+        expect(runCommit(tmp, 'init').status).toBe(0);
+
+        const checkout = spawnSync('git', ['checkout', '-b', 'other'], {
+          cwd: tmp,
+          encoding: 'utf8',
+        });
+        expect(checkout.status).toBe(0);
+        expect(checkout.stderr).not.toMatch(/Syntax error/i);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('skips install when VP_GIT_HOOKS=0', () => {
     const prev = process.env.VP_GIT_HOOKS;
     process.env.VP_GIT_HOOKS = '0';

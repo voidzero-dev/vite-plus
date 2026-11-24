@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -51,6 +52,9 @@ function nestedDirname(depth: number): string {
 
 // The shell script that dispatches to user-defined hooks in <dir>/
 // `depth` = number of path segments in `dir` + 2 (for `_` subdir + hook filename)
+// The script must end with a newline: shells (dash) re-read the sourced file
+// past its old EOF when the final line is unterminated, so an in-flight rewrite
+// that appends bytes corrupts a running hook (see #3567).
 export function hookScript(dir: string): string {
   // Count segments: ".vite-hooks" → 1, ".config/husky" → 2
   // Git accepts forward slashes on every platform; Windows also accepts its
@@ -92,11 +96,11 @@ c=$?
 
 [ $c != 0 ] && echo "VITE+ - $n script failed (code $c)"
 [ $c = 127 ] && echo "VITE+ - command not found in PATH=$PATH"
-exit $c`;
+exit $c\n`;
 }
 
 /** The per-hook stub written to `<dir>/_/<hook>`; it sources the `h` dispatcher. */
-export const HOOK_STUB_SCRIPT = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"';
+export const HOOK_STUB_SCRIPT = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"\n';
 
 export interface InstallResult {
   message: string;
@@ -210,6 +214,26 @@ function describeUnsafeHookInstallPath(unsafePath: UnsafeHookInstallPath): strin
     return `hook path "${unsafePath.relativePath}" is not a directory`;
   }
   return `hook path "${unsafePath.relativePath}" is not a file`;
+}
+
+/**
+ * Write a generated hook file without disturbing a shell that still has the
+ * old file open: `writeFileSync` truncates in place, so a hook shell that
+ * sourced the dispatcher and re-reads past the old EOF sees the new bytes
+ * (see #3567). Renaming a fully written temp file over the target replaces
+ * the inode on POSIX instead. Fall back to an in-place write when the rename
+ * cannot replace the target (e.g. a locked destination on Windows).
+ */
+function writeGeneratedHookFile(filePath: string, content: string): void {
+  const tempPath = `${filePath}.${process.pid}.tmp`;
+  writeFileSync(tempPath, content, { mode: 0o755 });
+  try {
+    renameSync(tempPath, filePath);
+  } catch {
+    rmSync(tempPath, { force: true });
+    writeFileSync(filePath, content, { mode: 0o755 });
+  }
+  chmodSync(filePath, 0o755);
 }
 
 function gitConfigGet(key: string, options?: { local?: boolean; bool?: boolean }): string | null {
@@ -765,11 +789,9 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
   rmSync(internal('husky.sh'), { force: true });
   mkdirSync(internal(), { recursive: true });
   writeFileSync(internal('.gitignore'), '*');
-  writeFileSync(internal('h'), hookScript(location.dir), { mode: 0o755 });
-  chmodSync(internal('h'), 0o755);
+  writeGeneratedHookFile(internal('h'), hookScript(location.dir));
   for (const hook of SUPPORTED_GIT_HOOK_NAMES) {
-    writeFileSync(internal(hook), HOOK_STUB_SCRIPT, { mode: 0o755 });
-    chmodSync(internal(hook), 0o755);
+    writeGeneratedHookFile(internal(hook), HOOK_STUB_SCRIPT);
   }
   const storeHooksPath = gitConfigSet('core.hooksPath', location.target);
   if (!storeHooksPath.ok) {
