@@ -1,13 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleInstallResult } from '../install-result.ts';
 import { createMigrationReport } from '../report.ts';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
+const here = import.meta.dirname;
 const binPath = path.resolve(here, '..', 'bin.ts');
 
 /**
@@ -17,17 +16,19 @@ const binPath = path.resolve(here, '..', 'bin.ts');
  * `status`, which left the project's `node_modules` desynced from a freshly
  * mutated `package.json` while still printing "Dependencies installed".
  */
+const spyConsole = () => vi.spyOn(console, 'error').mockImplementation(() => {});
+
 describe('handleInstallResult', () => {
   const rootDir = '/project';
   const failureMessage = (exitCode: number) =>
     `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
   let originalExitCode: typeof process.exitCode;
-  let consoleError: ReturnType<typeof vi.spyOn>;
+  let consoleError: ReturnType<typeof spyConsole>;
 
   beforeEach(() => {
     originalExitCode = process.exitCode;
     process.exitCode = undefined;
-    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleError = spyConsole();
   });
 
   afterEach(() => {

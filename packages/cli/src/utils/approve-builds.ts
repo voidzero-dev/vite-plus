@@ -1,10 +1,12 @@
 import path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { isCancel, log, multiselect } from '@voidzero-dev/vite-plus-prompts';
 
 import { PackageManager } from '../types/index.ts';
 import { getVpCommand, runCommandSilently } from './command.ts';
+import type { JsonObject } from './json-value.ts';
+import { isObjectValue } from './json-value.ts';
 import { readJsonFile, writeJsonFile } from './json.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
@@ -49,8 +51,8 @@ export function stripPackageVersion(spec: string): string {
 function dedupeNames<T>(
   items: Iterable<T>,
   extract: (item: T) => string | null | undefined,
-): string[] {
-  const names: string[] = [];
+): Array<string> {
+  const names: Array<string> = [];
   const seen = new Set<string>();
   for (const item of items) {
     const name = extract(item);
@@ -69,7 +71,7 @@ function dedupeNames<T>(
  * the pnpm 10 boxed warning, strips version suffixes, and dedupes while
  * preserving first-seen order. Returns `[]` when the marker is absent.
  */
-export function parseIgnoredBuilds(output: string): string[] {
+export function parseIgnoredBuilds(output: string): Array<string> {
   if (!output) {
     return [];
   }
@@ -87,7 +89,7 @@ export function parseIgnoredBuilds(output: string): string[] {
   // a box-bordered continuation (pnpm 11's blank separator, or trailing install
   // output like "Done in 171ms").
   const lines = clean.slice(markerIndex + IGNORED_BUILDS_MARKER.length).split('\n');
-  const listLines: string[] = [];
+  const listLines: Array<string> = [];
   for (const line of lines) {
     if (listLines.length > 0 && (/approve-builds/u.test(line) || !BOX_LINE.test(line))) {
       break;
@@ -97,7 +99,7 @@ export function parseIgnoredBuilds(output: string): string[] {
   // Box borders become separators; the pnpm-10 form ends the list with a period.
   const segment = listLines
     .join(' ')
-    .replace(BOX_CHARS, ' ')
+    .replaceAll(BOX_CHARS, ' ')
     .replace(/[.\s]+$/u, '')
     .trim();
   if (!segment) {
@@ -118,7 +120,7 @@ export function parseIgnoredBuilds(output: string): string[] {
  * is what `bun pm trust` expects. Returns deduped names in first-seen order;
  * `[]` when nothing is blocked.
  */
-export function parseBunUntrusted(output: string): string[] {
+export function parseBunUntrusted(output: string): Array<string> {
   if (!output) {
     return [];
   }
@@ -166,7 +168,7 @@ const NPM_BLOCKED_ENTRY = /^npm warn install-scripts\s+(\S+) \((?:pre|post)?inst
  * dedupes while preserving first-seen order. Returns `[]` when the warning is
  * absent (including the npm 11.x advisory variant, where scripts still run).
  */
-export function parseNpmBlockedScripts(output: string): string[] {
+export function parseNpmBlockedScripts(output: string): Array<string> {
   if (!output) {
     return [];
   }
@@ -188,7 +190,7 @@ const YARN_DISABLED_BUILDS_MARKER = 'lists build scripts, but all build scripts 
  * all build scripts have been disabled` (e.g. `core-js@npm:3.39.0 lists build
  * scripts...`). Yarn does not fail the install. Returns deduped package names.
  */
-export function parseYarnDisabledBuilds(output: string): string[] {
+export function parseYarnDisabledBuilds(output: string): Array<string> {
   if (!output) {
     return [];
   }
@@ -232,7 +234,7 @@ function yarnDescriptorName(descriptor: string): string {
 export function parseInstallGatedBuilds(
   output: string,
   packageManager: PackageManager | undefined,
-): string[] {
+): Array<string> {
   if (packageManager === PackageManager.pnpm) {
     return parseIgnoredBuilds(output);
   }
@@ -250,17 +252,15 @@ export function parseInstallGatedBuilds(
  * meaningfully approve). peerDependencies are intentionally excluded: they are
  * not installed into the project's own tree.
  */
-export function collectDirectDependencyNames(
-  pkg: Record<string, unknown> | undefined,
-): Set<string> {
+export function collectDirectDependencyNames(pkg: JsonObject | undefined): Set<string> {
   const names = new Set<string>();
   if (!pkg) {
     return names;
   }
   for (const field of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
     const deps = pkg[field];
-    if (deps && typeof deps === 'object') {
-      for (const [name, spec] of Object.entries(deps as Record<string, unknown>)) {
+    if (isObjectValue(deps)) {
+      for (const [name, spec] of Object.entries(deps)) {
         names.add(name);
         // An `npm:` alias installs under the aliased package's real name, which
         // is what the package manager reports as the gated build (e.g.
@@ -277,7 +277,10 @@ export function collectDirectDependencyNames(
   return names;
 }
 
-export function filterToDirectDependencies(ignored: string[], direct: Set<string>): string[] {
+export function filterToDirectDependencies(
+  ignored: Array<string>,
+  direct: Set<string>,
+): Array<string> {
   return ignored.filter((name) => direct.has(name));
 }
 
@@ -313,9 +316,9 @@ const GATED_BUILD_PACKAGE_MANAGERS: ReadonlySet<PackageManager> = new Set([
  */
 export function resolveApproveBuildTargets(
   projectDir: string,
-  pendingBuilds: string[] | undefined,
+  pendingBuilds: Array<string> | undefined,
   packageManager: PackageManager | undefined,
-): string[] {
+): Array<string> {
   if (
     !packageManager ||
     !GATED_BUILD_PACKAGE_MANAGERS.has(packageManager) ||
@@ -324,7 +327,7 @@ export function resolveApproveBuildTargets(
   ) {
     return [];
   }
-  let pkg: Record<string, unknown>;
+  let pkg: JsonObject;
   try {
     pkg = readJsonFile(path.join(projectDir, 'package.json'));
   } catch {
@@ -349,8 +352,8 @@ export function resolveApproveBuildTargets(
 export async function detectGatedBuilds(
   installCwd: string,
   packageManager: PackageManager | undefined,
-  pendingBuildsFromInstall: string[] | undefined,
-): Promise<string[]> {
+  pendingBuildsFromInstall: Array<string> | undefined,
+): Promise<Array<string>> {
   if (
     packageManager === PackageManager.pnpm ||
     packageManager === PackageManager.yarn ||
@@ -378,13 +381,13 @@ function lastLines(text: string, count: number): string {
 }
 
 function printApproveBuildsGuidance(
-  targets: string[],
+  targets: Array<string>,
   packageManager: PackageManager | undefined,
 ): void {
-  prompts.log.warn(`Build scripts were not run for: ${accent(targets.join(', '))}.`);
+  log.warn(`Build scripts were not run for: ${accent(targets.join(', '))}.`);
   // yarn has no `approve-builds` command, so point at its own workflow instead.
   if (packageManager === PackageManager.yarn) {
-    prompts.log.info(
+    log.info(
       `These dependencies may not work until built. Enable them in the workspace root ` +
         `package.json (${accent('dependenciesMeta.<pkg>.built: true')}) and reinstall, or ` +
         `re-create with ${accent('--approve-builds')}.`,
@@ -399,7 +402,7 @@ function printApproveBuildsGuidance(
     packageManager === PackageManager.bun || packageManager === PackageManager.npm
       ? `vp pm approve-builds ${targets.join(' ')}`
       : 'vp pm approve-builds';
-  prompts.log.info(
+  log.info(
     `These dependencies may not work until built. Run ${accent(command)} in the ` +
       `project to approve them, or re-create with ${accent('--approve-builds')}.`,
   );
@@ -413,9 +416,9 @@ function printApproveBuildsGuidance(
  * `true` when the command succeeded, `false` when the build exited non-zero.
  */
 async function runBuildAndReport(
-  args: string[],
+  args: Array<string>,
   cwd: string,
-  packages: string[],
+  packages: Array<string>,
   interactive: boolean,
   silent: boolean,
   extraEnv?: Record<string, string>,
@@ -435,9 +438,9 @@ async function runBuildAndReport(
   spinner.stop(`Build failed for ${packages.join(', ')}`);
   const output = `${stdout.toString()}\n${stderr.toString()}`.trim();
   if (output) {
-    prompts.log.info(lastLines(output, 20));
+    log.info(lastLines(output, 20));
   }
-  prompts.log.warn(
+  log.warn(
     `Build scripts failed for ${accent(packages.join(', '))}. They were approved; fix the ` +
       `build toolchain and run ${accent(retryCommand)} to retry.`,
   );
@@ -454,7 +457,7 @@ async function runBuildAndReport(
  */
 async function approveNpmScripts(
   installCwd: string,
-  packages: string[],
+  packages: Array<string>,
   interactive: boolean,
   silent: boolean,
 ): Promise<boolean> {
@@ -467,9 +470,9 @@ async function approveNpmScripts(
   if (exitCode !== 0) {
     const output = `${stdout.toString()}\n${stderr.toString()}`.trim();
     if (output) {
-      prompts.log.info(lastLines(output, 20));
+      log.info(lastLines(output, 20));
     }
-    prompts.log.warn(
+    log.warn(
       `Approving build scripts failed for ${accent(packages.join(', '))}. Run ` +
         `${accent(approveCommand)} in the project to retry.`,
     );
@@ -492,19 +495,12 @@ async function approveNpmScripts(
  * per-package value so a hand-authored scalar doesn't corrupt package.json.
  * Mutates and returns `pkg`.
  */
-export function addYarnBuiltDependenciesMeta(
-  pkg: Record<string, unknown>,
-  packages: string[],
-): Record<string, unknown> {
+export function addYarnBuiltDependenciesMeta(pkg: JsonObject, packages: Array<string>): JsonObject {
   const existing = pkg.dependenciesMeta;
-  const meta: Record<string, unknown> =
-    existing && typeof existing === 'object' ? { ...(existing as Record<string, unknown>) } : {};
+  const meta: JsonObject = isObjectValue(existing) ? { ...existing } : {};
   for (const name of packages) {
     const current = meta[name];
-    meta[name] = {
-      ...(current && typeof current === 'object' ? current : {}),
-      built: true,
-    };
+    meta[name] = isObjectValue(current) ? { ...current, built: true } : { built: true };
   }
   pkg.dependenciesMeta = meta;
   return pkg;
@@ -521,12 +517,12 @@ export function addYarnBuiltDependenciesMeta(
  */
 async function approveYarnBuilds(
   installCwd: string,
-  packages: string[],
+  packages: Array<string>,
   interactive: boolean,
   silent: boolean,
 ): Promise<boolean> {
   const pkgPath = path.join(installCwd, 'package.json');
-  let pkg: Record<string, unknown>;
+  let pkg: JsonObject;
   try {
     pkg = readJsonFile(pkgPath);
   } catch {
@@ -555,7 +551,7 @@ export interface ApproveBuildsOptions {
   /** Resolved package-manager version, used to gate version-specific behavior. */
   packageManagerVersion?: string;
   /** Direct-dependency packages with gated build scripts (already filtered). */
-  targets: string[];
+  targets: Array<string>;
   interactive: boolean;
   /** `--approve-builds`: approve and build every target without prompting. */
   autoApprove: boolean;
@@ -589,11 +585,11 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<bool
     return true;
   }
 
-  let selected: string[];
+  let selected: Array<string>;
   if (autoApprove) {
     selected = targets;
   } else if (interactive) {
-    const answer = await prompts.multiselect<string>({
+    const answer = await multiselect<string>({
       message:
         'These dependencies have build scripts (e.g. native builds) that were not run. ' +
         'Select which to approve and build:',
@@ -602,7 +598,7 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<bool
       required: false,
     });
     // Cancelling or selecting nothing both mean "approve nothing" -> guidance.
-    selected = prompts.isCancel(answer) ? [] : answer;
+    selected = isCancel(answer) ? [] : answer;
   } else {
     selected = [];
   }

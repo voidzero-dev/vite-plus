@@ -9,8 +9,8 @@ export interface InitialTemplateOption {
 
 export function getInitialTemplateOptions(
   isMonorepo: boolean,
-  templates: CreateTemplateEntry[] = [],
-): InitialTemplateOption[] {
+  templates: Array<CreateTemplateEntry> = [],
+): Array<InitialTemplateOption> {
   return [
     ...(!isMonorepo
       ? [

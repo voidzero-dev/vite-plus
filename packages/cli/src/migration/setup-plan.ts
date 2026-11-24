@@ -1,19 +1,20 @@
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  isCancel,
+  log as promptLog,
+  select as promptSelect,
+} from '@voidzero-dev/vite-plus-prompts';
 
-import { PackageManager, type WorkspacePackage } from '../types/index.ts';
+import type { PackageManager } from '../types/index.ts';
+import type { WorkspacePackage } from '../types/index.ts';
 import {
   detectAgentConflicts,
   detectExistingAgentTargetPaths,
   selectAgentTargetPaths,
 } from '../utils/agent.ts';
-import {
-  detectEditorConflicts,
-  type EditorId,
-  isJsonLikeFile,
-  selectEditor,
-} from '../utils/editor.ts';
+import type { EditorId } from '../utils/editor.ts';
+import { detectEditorConflicts, isJsonLikeFile, selectEditor } from '../utils/editor.ts';
 import { cancelAndExit, promptGitHooks } from '../utils/prompts.ts';
 import { log, muted } from '../utils/terminal.ts';
 import {
@@ -34,7 +35,7 @@ import type { MigrationOptions } from './options.ts';
 
 export interface MigrationSetupPlan {
   shouldSetupHooks: boolean;
-  selectedAgentTargetPaths?: string[];
+  selectedAgentTargetPaths?: Array<string>;
   agentConflictDecisions: Map<string, 'append' | 'skip'>;
   selectedEditor?: EditorId;
   editorConflictDecisions: Map<string, 'merge' | 'skip'>;
@@ -46,7 +47,7 @@ async function collectGitHooksDecision(
   rootDir: string,
   packageManager: PackageManager | undefined,
   options: MigrationOptions,
-  packages: readonly WorkspacePackage[] = [],
+  packages: ReadonlyArray<WorkspacePackage> = [],
 ): Promise<boolean> {
   const hasExistingHooks = options.hooks === undefined && hasExistingViteHooksPolicy(rootDir);
   if (hasExistingHooks && isViteHooksSetupComplete(rootDir)) {
@@ -60,7 +61,7 @@ async function collectGitHooksDecision(
   }
   const reason = preflightGitHooksSetup(rootDir, packageManager, packages);
   if (reason) {
-    prompts.log.warn(`⚠ ${reason}`);
+    promptLog.warn(`⚠ ${reason}`);
     return false;
   }
   return true;
@@ -70,7 +71,7 @@ async function collectAgentInstructionPlan(
   rootDir: string,
   options: MigrationOptions,
 ): Promise<{
-  selectedAgentTargetPaths?: string[];
+  selectedAgentTargetPaths?: Array<string>;
   agentConflictDecisions: Map<string, 'append' | 'skip'>;
 }> {
   const existingAgentTargetPaths =
@@ -93,7 +94,7 @@ async function collectAgentInstructionPlan(
   const agentConflictDecisions = new Map<string, 'append' | 'skip'>();
   for (const conflict of agentConflicts) {
     if (options.interactive) {
-      const action = await prompts.select({
+      const action = await promptSelect({
         message:
           `Agent instructions already exist at ${conflict.targetPath}.\n  ` +
           styleText(
@@ -106,7 +107,7 @@ async function collectAgentInstructionPlan(
         ],
         initialValue: 'skip' as const,
       });
-      if (prompts.isCancel(action)) {
+      if (isCancel(action)) {
         cancelAndExit();
       }
       agentConflictDecisions.set(conflict.targetPath, action);
@@ -138,7 +139,7 @@ async function collectEditorConfigPlan(
   const editorConflictDecisions = new Map<string, 'merge' | 'skip'>();
   for (const conflict of editorConflicts) {
     if (options.interactive) {
-      const action = await prompts.select({
+      const action = await promptSelect({
         message:
           `${conflict.displayPath} already exists.\n  ` +
           styleText(
@@ -155,7 +156,7 @@ async function collectEditorConfigPlan(
         ],
         initialValue: 'skip' as const,
       });
-      if (prompts.isCancel(action)) {
+      if (isCancel(action)) {
         cancelAndExit();
       }
       editorConflictDecisions.set(conflict.fileName, action);
@@ -174,7 +175,7 @@ async function collectEditorConfigPlan(
 async function collectEslintMigrationDecision(
   rootDir: string,
   options: MigrationOptions,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): Promise<{ migrateEslint: boolean; eslintConfigFile?: string }> {
   const eslintProject = detectEslintProject(rootDir, packages);
   const incompatibleEslintIntegration = detectIncompatibleEslintIntegration(rootDir, packages);
@@ -204,7 +205,7 @@ async function collectEslintMigrationDecision(
 export async function collectTsupMigrationDecision(
   rootDir: string,
   options: MigrationOptions,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): Promise<{ migrateTsup: boolean; tsupConfigFile?: string }> {
   const tsupProject = detectTsupProject(rootDir, packages);
   let migrateTsup = false;
@@ -221,7 +222,7 @@ export async function collectMigrationSetupPlan(
   rootDir: string,
   packageManager: PackageManager | undefined,
   options: MigrationOptions,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
   includeEslint = true,
 ): Promise<MigrationSetupPlan> {
   const shouldSetupHooks = await collectGitHooksDecision(

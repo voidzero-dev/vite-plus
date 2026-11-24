@@ -2,20 +2,20 @@ import { stripVTControlCharacters, styleText } from 'node:util';
 
 export type CliDoc = {
   usage?: string;
-  summary?: readonly string[] | string;
-  sections: readonly CliSection[];
+  summary?: ReadonlyArray<string> | string;
+  sections: ReadonlyArray<CliSection>;
   documentationUrl?: string;
 };
 
 export type CliSection = {
   title: string;
-  lines?: readonly string[] | string;
-  rows?: readonly CliRow[];
+  lines?: ReadonlyArray<string> | string;
+  rows?: ReadonlyArray<CliRow>;
 };
 
 export type CliRow = {
   label: string;
-  description: readonly string[] | string;
+  description: ReadonlyArray<string> | string;
 };
 
 export type RenderCliDocOptions = {
@@ -24,12 +24,12 @@ export type RenderCliDocOptions = {
 
 const HELP_RIGHT_MARGIN = 4;
 
-function toLines(value?: readonly string[] | string): string[] {
+function toLines(value?: ReadonlyArray<string> | string): Array<string> {
   if (!value) {
     return [];
   }
 
-  return Array.isArray(value) ? [...value] : [value as string];
+  return typeof value === 'string' ? [value] : [...value];
 }
 
 function visibleLength(value: string): number {
@@ -46,7 +46,7 @@ function contentWidth(): number {
   return Number.isFinite(terminalWidth) ? Math.max(0, terminalWidth - HELP_RIGHT_MARGIN) : Infinity;
 }
 
-function wrapLine(line: string, width: number): string[] {
+function wrapLine(line: string, width: number): Array<string> {
   if (!Number.isFinite(width) || width <= 0 || visibleLength(line) <= width) {
     return [line];
   }
@@ -57,7 +57,7 @@ function wrapLine(line: string, width: number): string[] {
   }
 
   const indent = line.slice(0, line.length - line.trimStart().length);
-  const output: string[] = [];
+  const output: Array<string> = [];
   let current = indent;
 
   for (const [, whitespace, word] of content.matchAll(/(\s*)(\S+)/gu)) {
@@ -76,14 +76,14 @@ function wrapLine(line: string, width: number): string[] {
   return output;
 }
 
-function renderRows(rows: readonly CliRow[]): string[] {
+function renderRows(rows: ReadonlyArray<CliRow>): Array<string> {
   if (rows.length === 0) {
     return [];
   }
 
   const labelWidth = Math.max(...rows.map((row) => visibleLength(row.label)));
   const descriptionWidth = contentWidth() - labelWidth - 4;
-  const output: string[] = [];
+  const output: Array<string> = [];
 
   for (const row of rows) {
     const descriptionLines = toLines(row.description).flatMap((line) =>
@@ -131,7 +131,7 @@ function renderMutedCommentSuffix(line: string, color: boolean): string {
 
 export function renderCliDoc(doc: CliDoc, options: RenderCliDocOptions = {}): string {
   const color = options.color ?? true;
-  const output: string[] = [];
+  const output: Array<string> = [];
 
   if (doc.usage) {
     const usage = color ? styleText('bold', doc.usage) : doc.usage;

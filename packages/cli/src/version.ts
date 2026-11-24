@@ -1,10 +1,11 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import cliPkg from '../package.json' with { type: 'json' };
 import { VITE_PLUS_NAME } from './utils/constants.ts';
 import { renderCliDoc } from './utils/help.ts';
+import { isStringRecord } from './utils/json-value.ts';
+import { readJsonFile } from './utils/json.ts';
 import { detectPackageMetadata, hasVitePlusDependency } from './utils/package.ts';
 import { accent, log, printHeader } from './utils/terminal.ts';
 
@@ -21,7 +22,7 @@ const TOOL_DISPLAY_ORDER = [
 
 interface LocalPackageMetadata {
   name: string;
-  version: string;
+  version: string | undefined;
   path: string;
 }
 
@@ -45,7 +46,7 @@ function isVitePlusDeclaredInAncestors(cwd: string): boolean {
   while (true) {
     const packageJsonPath = path.join(currentDir, 'package.json');
     try {
-      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      const pkg = readJsonFile(packageJsonPath);
       if (hasVitePlusDependency(pkg)) {
         return true;
       }
@@ -68,9 +69,9 @@ function isVitePlusDeclaredInAncestors(cwd: string): boolean {
 async function resolveToolVersions(localPackagePath: string): Promise<Record<string, string>> {
   try {
     const file = path.join(localPackagePath, 'dist', 'versions.js');
-    const mod = await import(pathToFileURL(file).href);
-    if (mod.versions && typeof mod.versions === 'object') {
-      return mod.versions as Record<string, string>;
+    const mod: unknown = await import(pathToFileURL(file).href);
+    if (mod && typeof mod === 'object' && 'versions' in mod && isStringRecord(mod.versions)) {
+      return mod.versions;
     }
   } catch {
     // versions module not available

@@ -1,24 +1,49 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 
+import type { parseConfigArgs as parseConfigArgsImplementation } from '../../../binding/index.js';
+import type { updateExistingAgentInstructions as updateExistingAgentInstructionsImplementation } from '../../utils/agent.ts';
+import type {
+  defaultInteractive as defaultInteractiveImplementation,
+  promptGitHooks as promptGitHooksImplementation,
+} from '../../utils/prompts.ts';
+import type {
+  log as logImplementation,
+  printHeader as printHeaderImplementation,
+} from '../../utils/terminal.ts';
+import type {
+  install as installImplementation,
+  isGitHooksEnvDisabled as isGitHooksEnvDisabledImplementation,
+  isHooksUserDisabled as isHooksUserDisabledImplementation,
+  resolveHooksLocation as resolveHooksLocationImplementation,
+} from '../hooks.ts';
+
 const hooks = vi.hoisted(() => ({
-  install: vi.fn(() => ({ message: '', isError: false })),
-  isGitHooksEnvDisabled: vi.fn(() => true),
-  isHooksUserDisabled: vi.fn(() => false),
-  resolveHooksLocation: vi.fn((): unknown => {
+  install: vi.fn<typeof installImplementation>(() => ({ message: '', isError: false })),
+  isGitHooksEnvDisabled: vi.fn<typeof isGitHooksEnvDisabledImplementation>(() => true),
+  isHooksUserDisabled: vi.fn<typeof isHooksUserDisabledImplementation>(() => false),
+  resolveHooksLocation: vi.fn<typeof resolveHooksLocationImplementation>(() => {
     throw new Error('git command not found');
   }),
 }));
-const terminal = vi.hoisted(() => ({ log: vi.fn(), printHeader: vi.fn() }));
+const terminal = vi.hoisted(() => ({
+  log: vi.fn<typeof logImplementation>(),
+  printHeader: vi.fn<typeof printHeaderImplementation>(),
+}));
 const binding = vi.hoisted(() => ({
-  parseConfigArgs: vi.fn(() => ({ status: 'ok', value: { agent: false } })),
+  parseConfigArgs: vi.fn<typeof parseConfigArgsImplementation>(() => ({
+    status: 'ok',
+    value: { agent: false },
+  })),
 }));
 const prompts = vi.hoisted(() => ({
-  defaultInteractive: vi.fn(() => false),
-  promptGitHooks: vi.fn(async () => true),
+  defaultInteractive: vi.fn<typeof defaultInteractiveImplementation>(() => false),
+  promptGitHooks: vi.fn<typeof promptGitHooksImplementation>(async () => true),
 }));
 
 vi.mock('../../../binding/index.js', () => binding);
-vi.mock('../../utils/agent.ts', () => ({ updateExistingAgentInstructions: vi.fn() }));
+vi.mock('../../utils/agent.ts', () => ({
+  updateExistingAgentInstructions: vi.fn<typeof updateExistingAgentInstructionsImplementation>(),
+}));
 vi.mock('../../utils/prompts.ts', () => prompts);
 vi.mock('../../utils/terminal.ts', () => terminal);
 vi.mock('../hooks.ts', () => hooks);

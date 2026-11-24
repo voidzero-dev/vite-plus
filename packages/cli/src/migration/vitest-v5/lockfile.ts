@@ -1,24 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
+import type { ParseError } from 'jsonc-parser';
+import { parse as parseJsonc } from 'jsonc-parser';
 import { normalize, normalizeRange, satisfies } from 'verkit';
 import { parseDocument } from 'yaml';
 
 import { PackageManager } from '../../types/index.ts';
+import type { YamlMapping } from '../../utils/yaml-value.ts';
+import { isYamlMapping } from '../../utils/yaml-value.ts';
 
-function record(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+function record(value: unknown): YamlMapping | undefined {
+  return isYamlMapping(value) ? value : undefined;
 }
 
-export type LockfileReader = <T>(file: string, parse: (source: string) => T) => T | undefined;
-
-/** Create one reader per preflight, with a single parser for each lockfile path. */
-export function createLockfileReader(): LockfileReader {
-  const locks = new Map<string, unknown>();
-  return <T>(file: string, parse: (source: string) => T): T | undefined => {
+function cacheParsedFiles<T>() {
+  const locks = new Map<string, T | undefined>();
+  return (file: string, parse: (source: string) => T) => {
     if (!locks.has(file)) {
       // Cache failed reads and parses too, until the next preflight.
       locks.set(file, undefined);
@@ -28,9 +26,18 @@ export function createLockfileReader(): LockfileReader {
         // Missing or malformed locks are not evidence of a runner version.
       }
     }
-    return locks.get(file) as T | undefined;
+    return locks.get(file);
   };
 }
+
+/** Cache parsed manifests and Yarn's different lock format for one preflight. */
+export function createLockfileReader() {
+  return {
+    manifest: cacheParsedFiles<YamlMapping | undefined>(),
+    yarn: cacheParsedFiles<ReturnType<typeof parseYarnLockfile>>(),
+  };
+}
+export type LockfileReader = ReturnType<typeof createLockfileReader>;
 
 function parseYarnLockfile(text: string) {
   if (/^__metadata:/m.test(text)) {
@@ -42,7 +49,7 @@ function parseYarnLockfile(text: string) {
   }
   // Classic's quoted descriptor lists are YAML flow scalars, but its entry
   // bodies are not YAML. Read only the exact descriptor and version field.
-  const entries: { keys: unknown[]; version: string | undefined }[] = [];
+  const entries: Array<{ keys: Array<unknown>; version: string | undefined }> = [];
   for (const block of text.split(/\r?\n(?=[^\s#])/)) {
     const [header] = block.split(/\r?\n/);
     if (!header.endsWith(':')) {
@@ -51,13 +58,13 @@ function parseYarnLockfile(text: string) {
     const document = parseDocument(`[${header.slice(0, -1)}]`);
     const keys: unknown = document.errors.length ? undefined : document.toJS();
     if (Array.isArray(keys)) {
-      entries.push({ keys, version: /^  version "([^"]+)"\r?$/m.exec(block)?.[1] });
+      entries.push({ keys, version: /^ {2}version "([^"]+)"\r?$/m.exec(block)?.[1] });
     }
   }
   return { modern: false as const, entries };
 }
 
-function declaredVitest(pkg: unknown): unknown {
+function declaredVitest(pkg: unknown): string | undefined {
   const manifest = record(pkg);
   for (const field of [
     'dependencies',
@@ -99,7 +106,7 @@ export function lockedVitestVersion(
   const relative = path.relative(root, directory).replaceAll('\\', '/');
   try {
     if (manager === PackageManager.npm) {
-      const lock = readLockfile(
+      const lock = readLockfile.manifest(
         path.join(
           root,
           fs.existsSync(path.join(root, 'npm-shrinkwrap.json'))
@@ -132,7 +139,7 @@ export function lockedVitestVersion(
       }
     }
     if (manager === PackageManager.yarn) {
-      const lock = readLockfile(path.join(root, 'yarn.lock'), parseYarnLockfile);
+      const lock = readLockfile.yarn(path.join(root, 'yarn.lock'), parseYarnLockfile);
       if (!lock) {
         return undefined;
       }
@@ -149,7 +156,7 @@ export function lockedVitestVersion(
           ? valid(entry.resolution.slice('vitest@npm:'.length))
           : undefined;
       }
-      const matches: string[] = [];
+      const matches: Array<string> = [];
       for (const { keys, version } of lock.entries) {
         if (keys.includes(`vitest@${spec}`)) {
           if (!version) {
@@ -161,8 +168,8 @@ export function lockedVitestVersion(
       return matches.length === 1 ? valid(matches[0]) : undefined;
     }
     if (manager === PackageManager.bun) {
-      const lock = readLockfile(path.join(root, 'bun.lock'), (source) => {
-        const errors: ParseError[] = [];
+      const lock = readLockfile.manifest(path.join(root, 'bun.lock'), (source) => {
+        const errors: Array<ParseError> = [];
         const parsed = record(parseJsonc(source, errors, { allowTrailingComma: true }));
         return errors.length ? undefined : parsed;
       });

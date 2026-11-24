@@ -1,27 +1,28 @@
-import type * as t from '@oxc-project/types';
+import type {
+  BindingProperty,
+  CallExpression,
+  ImportSpecifier,
+  Node,
+  Span,
+} from '@oxc-project/types';
 
 import { isString, propertyName, memberName } from '../ast-utils.ts';
-import { SourceEditor, isImportMetaVitest, testApiName } from './ast.ts';
+import type { SourceEditor } from './ast.ts';
+import { isImportMetaVitest, testApiName } from './ast.ts';
 
 interface BenchmarkCall {
-  call: t.CallExpression;
+  call: CallExpression;
+  statement: Node;
   modifier?: string;
 }
 
 /** Keep the workload as a separate callback: making it the test callback
  * would measure nothing, and inlining it into a new closure can change scope. */
-export function migrateBenchmarks(
-  editor: SourceEditor,
-  globals = false,
-): {
-  imports: Set<t.ImportSpecifier>;
-  bindings: Set<t.BindingProperty>;
-  calls: Set<t.CallExpression>;
-} {
-  const imports = new Set<t.ImportSpecifier>();
-  const bindings = new Set<t.BindingProperty>();
-  const calls = new Set<t.CallExpression>();
-  const benchIdentifiers: t.Span[] = [];
+export function migrateBenchmarks(editor: SourceEditor, globals = false) {
+  const imports = new Set<ImportSpecifier>();
+  const bindings = new Set<BindingProperty>();
+  const calls = new Set<CallExpression>();
+  const benchIdentifiers: Array<Span> = [];
   let fixtureAlias: string | undefined;
   let shadowedGlobalThis = false;
   editor.visit({
@@ -35,7 +36,7 @@ export function migrateBenchmarks(
     },
   });
 
-  function workload(node: t.Node, seen = new Set<t.Node>()): boolean {
+  function workload(node: Node, seen = new Set<Node>()): boolean {
     if (
       node.type === 'ArrowFunctionExpression' ||
       node.type === 'FunctionExpression' ||
@@ -62,7 +63,7 @@ export function migrateBenchmarks(
     );
   }
 
-  function directCall(reference: t.Node): BenchmarkCall | undefined {
+  function directCall(reference: Node): BenchmarkCall | undefined {
     let callee = reference;
     let modifier: string | undefined;
     const member = editor.parent(reference);
@@ -74,12 +75,13 @@ export function migrateBenchmarks(
       callee = member;
     }
     const call = editor.parent(callee);
+    const statement = call && editor.parent(call);
     if (
       call?.type !== 'CallExpression' ||
       call.callee !== callee ||
       call.optional ||
       call.typeArguments ||
-      editor.parent(call)?.type !== 'ExpressionStatement' ||
+      statement?.type !== 'ExpressionStatement' ||
       !call.arguments[0] ||
       call.arguments[0].type === 'SpreadElement'
     ) {
@@ -121,10 +123,10 @@ export function migrateBenchmarks(
       }
       fn = editor.functionParent(registration);
     }
-    return { call, modifier };
+    return { call, modifier, statement };
   }
 
-  function rewrite({ call, modifier }: BenchmarkCall, test: string) {
+  function rewrite({ call, modifier, statement }: BenchmarkCall, test: string) {
     calls.add(call);
     editor.replace(call.callee, `${test}${modifier ? `.${modifier}` : ''}`);
     const callback = call.arguments[1];
@@ -132,7 +134,7 @@ export function migrateBenchmarks(
       return;
     }
     let name = editor.text(call.arguments[0]);
-    const captures: string[] = [];
+    const captures: Array<string> = [];
     if (!isString(call.arguments[0])) {
       const captured = editor.uniqueName('benchName');
       captures.push(`const ${captured} = (${name});`);
@@ -147,7 +149,6 @@ export function migrateBenchmarks(
     if (captures.length) {
       // Capture at registration, in the original lexical scope and argument
       // order. A test executes later, after names or callback bindings may change.
-      const statement = editor.parent(call)!;
       editor.edit(statement.start, statement.start, `{ ${captures.join(' ')} `);
       editor.edit(statement.end, statement.end, ' }');
     }
@@ -171,7 +172,7 @@ export function migrateBenchmarks(
     editor.edit(callback.end, callback.end, ').run(); }');
   }
 
-  function unsupportedInSource(node: t.Node) {
+  function unsupportedInSource(node: Node) {
     editor.report(
       node,
       'benchmark-api',
@@ -197,7 +198,7 @@ export function migrateBenchmarks(
           !binding?.constant ||
           node.id.properties.some((prop) => prop.type === 'RestElement') ||
           !registrations ||
-          registrations.some((registration) => !registration)
+          !registrations.every((registration) => registration !== undefined)
         ) {
           unsupportedInSource(property);
           continue;
@@ -208,7 +209,7 @@ export function migrateBenchmarks(
         editor.replace(property, test === 'test' ? 'test' : `test: ${test}`);
         bindings.add(property);
         for (const registration of registrations) {
-          rewrite(registration!, test);
+          rewrite(registration, test);
         }
       }
     },
@@ -231,14 +232,14 @@ export function migrateBenchmarks(
         const registrations = binding.references.map(directCall);
         // Retarget an import only when all uses are understood. A callback
         // passed to a wrapper or a re-export must not become a test function.
-        if (registrations.some((registration) => !registration)) {
+        if (!registrations.every((registration) => registration !== undefined)) {
           continue;
         }
         const test = editor.uniqueName('test', true);
         editor.replace(specifier, test === 'test' ? 'test' : `test as ${test}`);
         imports.add(specifier);
         for (const registration of registrations) {
-          rewrite(registration!, test);
+          rewrite(registration, test);
         }
       }
     },

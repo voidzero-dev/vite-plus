@@ -15,8 +15,8 @@ export const targets = [
   ['linux', 'intel', 'x86_64-unknown-linux-gnu', 'linux-x64-gnu'],
 ];
 const repository = 'voidzero-dev/vite-plus';
-const assetBlock = /  # BEGIN RELEASE ASSETS\n[\s\S]*?  # END RELEASE ASSETS/;
-const launchGate = /  # The updater removes this gate[^\n]*\n  disable! [^\n]*\n\n/;
+const assetBlock = / {2}# BEGIN RELEASE ASSETS\n[\s\S]*? {2}# END RELEASE ASSETS/;
+const launchGate = / {2}# The updater removes this gate[^\n]*\n {2}disable! [^\n]*\n\n/;
 
 // Published-artifact tests must use the candidate's actual URLs and lockfile.
 // Reject mixed releases instead of deriving an expected version from the checkout.
@@ -101,7 +101,7 @@ export function updateFormula(source, version, assets) {
     .replace(assetBlock, `  # BEGIN RELEASE ASSETS\n${blocks}\n  # END RELEASE ASSETS`)
     .replace(launchGate, '');
   if (difference > 0) {
-    updated = updated.replace(/^  revision \d+\n/m, '');
+    updated = updated.replace(/^ {2}revision \d+\n/m, '');
   }
   return updated;
 }

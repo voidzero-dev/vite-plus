@@ -3,12 +3,13 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import url from 'node:url';
 
-import { Lang, parse as parseAst, type SgNode } from '@ast-grep/napi';
+import type { SgNode } from '@ast-grep/napi';
+import { Lang, parse as parseAst } from '@ast-grep/napi';
 import { init, parse } from 'es-module-lexer';
 import { glob } from 'tinyglobby';
 import { describe, expect, it } from 'vite-plus/test';
 
-const coreDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
+const coreDir = path.resolve(import.meta.dirname, '..');
 const distDir = path.join(coreDir, 'dist');
 
 const referenceContexts = new Set<ReturnType<SgNode['kind']>>([
@@ -27,14 +28,14 @@ function referenceContext(node: SgNode): string {
     node = parent;
     parent = node.parent();
   }
-  return node.text().replace(/\s+/g, ' ');
+  return node.text().replaceAll(/\s+/g, ' ');
 }
 
 describe('build artifacts', () => {
   it('snapshots remaining Rolldown package names and their uses in all built code', async () => {
     const files = (await glob('**/*.{js,mjs,cjs,ts,mts,cts}', { cwd: distDir })).toSorted();
     expect(files.length).toBeGreaterThan(0);
-    const references: { file: string; code: string }[] = [];
+    const references: Array<{ file: string; code: string }> = [];
 
     for (const file of files) {
       const source = fs.readFileSync(path.join(distDir, file), 'utf8');
@@ -157,7 +158,7 @@ describe('build artifacts', () => {
     expect(pkg.dependencies['yuku-parser']).toBe(parserVersion);
     expect(coreRequire('yuku-parser/package.json').version).toBe(parserVersion);
     for (const name of ['yuku-ast', 'yuku-codegen']) {
-      expect(pluginRequire(`${name}/package.json`).version, name).toBe(parserVersion);
+      expect(pluginRequire(`${name}/package.json`).version).toBe(parserVersion);
     }
   });
 
@@ -176,8 +177,8 @@ describe('build artifacts', () => {
     const peers = Object.keys(dtsPkg.peerDependencies).filter((name) => name !== 'rolldown');
     expect(peers).toContain('vue-tsc');
     for (const name of peers) {
-      expect(pkg.peerDependencies, name).toHaveProperty([name]);
-      expect(pkg.peerDependenciesMeta[name], name).toEqual({ optional: true });
+      expect(pkg.peerDependencies).toHaveProperty([name]);
+      expect(pkg.peerDependenciesMeta).toHaveProperty([name], { optional: true });
     }
   });
 });

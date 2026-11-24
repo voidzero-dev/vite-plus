@@ -3,15 +3,8 @@
  * `crates/vp_global_cli/src/commands/vpx_script.rs`; keep the two in sync.
  */
 
-import {
-  accessSync,
-  closeSync,
-  constants,
-  openSync,
-  readSync,
-  type Stats,
-  statSync,
-} from 'node:fs';
+import type { Stats } from 'node:fs';
+import { accessSync, closeSync, constants, openSync, readSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 export const SCRIPT_EXTENSIONS = ['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'];
@@ -154,7 +147,7 @@ function takesNextArg(name: string, next: string): boolean {
 }
 
 export interface VpxFlags {
-  packages: string[];
+  packages: Array<string>;
   shellMode: boolean;
   silent: boolean;
   tsconfig?: string;
@@ -163,7 +156,7 @@ export interface VpxFlags {
 }
 
 /** npx-style: flags come before the first positional or unknown flag. */
-export function parseVpxArgs(args: string[]): { flags: VpxFlags; positional: string[] } {
+export function parseVpxArgs(args: Array<string>) {
   const flags: VpxFlags = {
     packages: [],
     shellMode: false,
@@ -203,7 +196,7 @@ export function parseVpxArgs(args: string[]): { flags: VpxFlags; positional: str
 
 export interface ScriptInvocation {
   /** Node.js options, the script, and its arguments, in the order given. */
-  nodeArgs: string[];
+  nodeArgs: Array<string>;
   /** `--tsconfig` given among the Node.js options. */
   tsconfig?: string;
   /**
@@ -221,7 +214,7 @@ export class ScriptError extends Error {}
  * Throws {@link ScriptError} for a missing script, which must never fall
  * through to a remote package download.
  */
-export function detectScript(positional: string[], cwd: string): ScriptInvocation | undefined {
+export function detectScript(positional: Array<string>, cwd: string): ScriptInvocation | undefined {
   const [first] = positional;
   if (first === undefined) {
     return undefined;
@@ -231,7 +224,7 @@ export function detectScript(positional: string[], cwd: string): ScriptInvocatio
   }
 
   // A leading option never named a package bin, so this always runs Node.js.
-  const nodeArgs: string[] = [];
+  const nodeArgs: Array<string> = [];
   let tsconfig: string | undefined;
   let watch = false;
   let entry = true;
@@ -422,8 +415,8 @@ export function commandName(spec: string): string {
 }
 
 /** Every `node_modules/.bin` path from `cwd` up to the root, nearest first, whether or not it exists. */
-export function nodeModulesBinPaths(cwd: string): string[] {
-  const paths: string[] = [];
+export function nodeModulesBinPaths(cwd: string): Array<string> {
+  const paths: Array<string> = [];
   for (let dir = cwd; ; dir = path.dirname(dir)) {
     paths.push(path.join(dir, 'node_modules', '.bin'));
     if (path.dirname(dir) === dir) {
@@ -479,8 +472,8 @@ export function checkExplicitProgram(token: string, cwd: string): ProgramError |
 }
 
 export type PackageInvocation =
-  | { command: 'run'; file: string; args: string[] }
-  | { command: 'dlx'; args: string[] }
+  | { command: 'run'; file: string; args: Array<string> }
+  | { command: 'dlx'; args: Array<string> }
   | ProgramError;
 
 /**
@@ -492,7 +485,7 @@ export type PackageInvocation =
  */
 export function packageInvocation(
   flags: VpxFlags,
-  [spec, ...rest]: [string, ...string[]],
+  [spec, ...rest]: [string, ...Array<string>],
   cwd: string,
 ): PackageInvocation {
   const silent = flags.silent ? ['--silent'] : [];

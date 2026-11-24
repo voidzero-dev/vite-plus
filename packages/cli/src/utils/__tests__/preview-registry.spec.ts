@@ -73,7 +73,9 @@ describe('reconcilePreviewBridgeRegistry', () => {
     reconcilePreviewBridgeRegistry(dir, PREVIEW);
     const npmrc = fs.readFileSync(path.join(dir, '.npmrc'), 'utf8');
     expect(
-      npmrc.match(new RegExp(`registry=${BRIDGE.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}`, 'g')),
+      npmrc.match(
+        new RegExp(`registry=${BRIDGE.replaceAll(/[.*+?^${}()|[\]\\/]/g, String.raw`\$&`)}`, 'g'),
+      ),
     ).toHaveLength(1);
   });
 

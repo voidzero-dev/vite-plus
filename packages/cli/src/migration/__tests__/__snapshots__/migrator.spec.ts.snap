@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`rewritePackageJson > should rewrite package.json scripts and extract staged config 1`] = `
+exports[`rewritePackageJson > should rewrite package.json scripts and extract staged config > package manifest 1`] = `
 {
   "lint-staged": {
     "*.js": [
@@ -56,7 +56,7 @@ exports[`rewritePackageJson > should rewrite package.json scripts and extract st
 }
 `;
 
-exports[`rewritePackageJson > should rewrite package.json scripts and extract staged config 2`] = `
+exports[`rewritePackageJson > should rewrite package.json scripts and extract staged config > staged commands 1`] = `
 {
   "*.js": [
     "vp lint --fix --type-aware",

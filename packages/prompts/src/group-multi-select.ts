@@ -1,9 +1,8 @@
-import type { CANCEL_SYMBOL } from '@clack/core';
 import { GroupMultiSelectPrompt } from '@clack/core';
 import color from 'picocolors';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   formatInstructionFooter,
   MULTISELECT_INSTRUCTIONS,
@@ -19,12 +18,13 @@ import {
   S_POINTER_INACTIVE,
 } from './common.js';
 import { limitOptions } from './limit-options.js';
+import { runPrompt } from './prompt-result.js';
 import type { Option } from './select.js';
 
 export interface GroupMultiSelectOptions<Value> extends CommonOptions {
   message: string;
-  options: Record<string, Option<Value>[]>;
-  initialValues?: Value[];
+  options: Record<string, Array<Option<Value>>>;
+  initialValues?: Array<Value>;
   required?: boolean;
   cursorAt?: Value;
   selectableGroups?: boolean;
@@ -36,7 +36,6 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
   const { selectableGroups = true, groupSpacing = 0 } = opts;
   const hasGuide = getGuide(opts);
   const nestedPrefix = '  ';
-  // eslint-disable-next-line unicorn/consistent-function-scoping -- kept inline for readability
   const withMarkerAndPrefix = (
     marker: string,
     prefix: string,
@@ -62,7 +61,7 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
       | 'group-active-selected'
       | 'submitted'
       | 'cancelled',
-    options: (Option<Value> & { group: string | boolean })[] = [],
+    options: Array<Option<Value> & { group: string | boolean }> = [],
   ) => {
     const label = option.label ?? String(option.value);
     const hint =
@@ -128,7 +127,7 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
   };
   const required = opts.required ?? true;
 
-  return new GroupMultiSelectPrompt({
+  const prompt = new GroupMultiSelectPrompt({
     options: opts.options,
     signal: opts.signal,
     input: opts.input,
@@ -138,7 +137,7 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
     required,
     cursorAt: opts.cursorAt,
     selectableGroups,
-    validate(selected: Value[] | undefined) {
+    validate(selected: Array<Value> | undefined) {
       if (required && (selected === undefined || selected.length === 0)) {
         return 'Please select at least one option.';
       }
@@ -228,5 +227,6 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
         }
       }
     },
-  }).prompt() as Promise<Value[] | typeof CANCEL_SYMBOL>;
+  });
+  return runPrompt<Array<Value>>(prompt);
 };

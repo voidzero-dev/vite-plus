@@ -1,10 +1,14 @@
-import type { Logger } from 'lint-staged';
-import { describe, expect, it, vi, type Mocked } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 
 import { createStagedLogger } from './logger.ts';
 
-function setup(): { output: Mocked<Logger>; logger: Logger } {
-  const output = { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+function setup() {
+  const output = {
+    log: vi.fn<Console['log']>(),
+    warn: vi.fn<Console['warn']>(),
+    error: vi.fn<Console['error']>(),
+    debug: vi.fn<Console['debug']>(),
+  };
   return { output, logger: createStagedLogger(output) };
 }
 
@@ -33,11 +37,11 @@ describe('staged logger', () => {
 
   it('filters colored progress and preserves colored command results', () => {
     const { output, logger } = setup();
-    logger.log('\x1b[2m⋯ Backing up original state…\x1b[22m');
-    logger.log('\x1b[32m✔\x1b[39m Done backing up original state (abc1234)!');
-    logger.log('\x1b[2m    *.ts — 7 files\x1b[22m');
-    logger.log('      \x1b[34m⋯\x1b[39m vp check --fix');
-    const result = '\x1b[32m✔\x1b[39m vp check --fix';
+    logger.log('\u001b[2m⋯ Backing up original state…\u001b[22m');
+    logger.log('\u001b[32m✔\u001b[39m Done backing up original state (abc1234)!');
+    logger.log('\u001b[2m    *.ts — 7 files\u001b[22m');
+    logger.log('      \u001b[34m⋯\u001b[39m vp check --fix');
+    const result = '\u001b[32m✔\u001b[39m vp check --fix';
     logger.log(result);
     expect(output.log.mock.calls).toEqual([[result]]);
   });

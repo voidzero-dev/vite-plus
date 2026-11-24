@@ -27,7 +27,7 @@ export function createTarball(files) {
     blocks.push(header, contents, Buffer.alloc((512 - (contents.length % 512)) % 512));
   }
   const archive = Buffer.concat([...blocks, Buffer.alloc(1024)]);
-  const padding = Buffer.alloc((10240 - (archive.length % 10240)) % 10240);
+  const padding = Buffer.alloc((10_240 - (archive.length % 10_240)) % 10_240);
   const tarball = gzipSync(Buffer.concat([archive, padding]), { level: 9 });
   // The gzip OS byte must not depend on the machine that packs the fixtures.
   tarball[9] = 255;

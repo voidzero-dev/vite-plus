@@ -5,12 +5,13 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
-  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+
+import { readJsonFile } from '../utils/json.ts';
 
 export const SUPPORTED_GIT_HOOK_NAMES = [
   'pre-commit',
@@ -113,8 +114,8 @@ export interface HooksStatus {
   hooksPath: string | null;
   ownsHooksPath: boolean;
   dispatcherInstalled: boolean;
-  projectHooks: string[];
-  lines: string[];
+  projectHooks: Array<string>;
+  lines: Array<string>;
 }
 
 export function normalizeHooksPath(hooksPath: string): string {
@@ -125,9 +126,9 @@ export function normalizeHooksPath(hooksPath: string): string {
   return normalized;
 }
 
-function gitRevParse(...flags: string[]): string | InstallResult {
+function gitRevParse(...flags: Array<string>): string | InstallResult {
   const result = spawnSync('git', ['rev-parse', ...flags]);
-  if (result.status == null) {
+  if (result.status === null || result.status === undefined) {
     return { message: 'git command not found', isError: true };
   }
   if (result.status !== 0) {
@@ -244,7 +245,7 @@ function gitConfigLocalMissing(key: string): boolean {
 // Git 2.37+ keeps the low 8 bits on every platform, so -1 becomes 255. Older Git for
 // Windows can keep the full 32-bit value.
 // https://github.com/git/git/blob/47fdf2208c5b94c8cc01c106b8f7c85efb91c926/common-exit.c#L14-L20
-const GIT_CONFIG_LOCK_STATUSES: ReadonlySet<number | null> = new Set([255, 0xffffffff]);
+const GIT_CONFIG_LOCK_STATUSES: ReadonlySet<number | null> = new Set([255, 0xff_ff_ff_ff]);
 
 // Git 2.56+ retries the lock for `core.configLockTimeout` (1s by default) and older Git
 // does not retry. Turn off the Git retry so the wait below is the same on every version.
@@ -262,10 +263,7 @@ function sleepSync(ms: number): void {
 
 // First runs in linked worktrees race for the shared lock. Every worktree writes
 // the same values, so wait and stop as soon as another run has applied ours.
-function writeGitConfig(
-  args: string[],
-  isApplied: () => boolean,
-): { status: number | null; stderr: string } {
+function writeGitConfig(args: Array<string>, isApplied: () => boolean) {
   const gitArgs = [...GIT_CONFIG_NO_LOCK_RETRY, ...args];
   let result = spawnSync('git', gitArgs);
   for (const delay of GIT_CONFIG_LOCK_RETRY_DELAYS_MS) {
@@ -281,14 +279,14 @@ function writeGitConfig(
   return { status: result.status, stderr: result.stderr?.toString().trim() ?? '' };
 }
 
-function gitConfigSet(key: string, value: string): { ok: boolean; error?: string } {
+function gitConfigSet(key: string, value: string) {
   if (gitConfigLocalHas(key, value)) {
     return { ok: true };
   }
   const result = writeGitConfig(['config', '--local', key, value], () =>
     gitConfigLocalHas(key, value),
   );
-  if (result.status == null) {
+  if (result.status === null || result.status === undefined) {
     return { ok: false, error: 'git command not found' };
   }
   if (result.status !== 0) {
@@ -297,14 +295,14 @@ function gitConfigSet(key: string, value: string): { ok: boolean; error?: string
   return { ok: true };
 }
 
-function gitConfigUnset(key: string): { ok: boolean; error?: string } {
+function gitConfigUnset(key: string) {
   if (gitConfigLocalMissing(key)) {
     return { ok: true };
   }
   const result = writeGitConfig(['config', '--local', '--unset-all', key], () =>
     gitConfigLocalMissing(key),
   );
-  if (result.status == null) {
+  if (result.status === null || result.status === undefined) {
     return { ok: false, error: 'git command not found' };
   }
   // status 5 = key not found
@@ -332,7 +330,7 @@ export function getStoredHooksDir(): string | null {
 
 function getStoredHooksPrefix(): string | null {
   const value = gitConfigGet(PREFERENCE_PREFIX_KEY, { local: true });
-  if (value == null) {
+  if (value === null || value === undefined) {
     return null;
   }
   if (value === ROOT_PREFIX_TOKEN) {
@@ -589,16 +587,18 @@ function getHuskyReplacement(
     }
     // Include ancestor manifests when hooks are configured from a workspace package.
     const relativeBase = relative(location.toplevel, location.baseDir);
-    const directories = [location.toplevel];
+    let currentDirectory = location.toplevel;
+    const directories = [currentDirectory];
     for (const segment of relativeBase.split(sep).filter(Boolean)) {
-      directories.push(join(directories.at(-1)!, segment));
+      currentDirectory = join(currentDirectory, segment);
+      directories.push(currentDirectory);
     }
     for (const directory of directories) {
       const manifest = join(directory, 'package.json');
       if (!existsSync(manifest)) {
         continue;
       }
-      const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as Record<string, unknown>;
+      const pkg = readJsonFile(manifest);
       if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg) || 'husky' in pkg) {
         return null;
       }
@@ -635,7 +635,7 @@ function getHuskyReplacement(
 
 function unsetScopedHooksPath(scope: 'local' | 'worktree'): InstallResult | null {
   const result = spawnSync('git', ['config', `--${scope}`, '--unset-all', 'core.hooksPath']);
-  if (result.status == null) {
+  if (result.status === null || result.status === undefined) {
     return { message: 'git command not found', isError: true };
   }
   // status 5 = key not found at that scope
@@ -860,8 +860,8 @@ export function disable(dir?: string): InstallResult {
   const foreignHooksPath =
     !!existingHooksPath && !hooksPathsEqual(existingHooksPath, location.target, location.toplevel);
 
-  const actions: string[] = [];
-  const notes: string[] = [];
+  const actions: Array<string> = [];
+  const notes: Array<string> = [];
 
   // Persist preference *before* teardown so a later unset/rm failure still
   // blocks prepare / `vp config` from reinstalling the dispatcher.
@@ -923,7 +923,7 @@ export function status(dir?: string): InstallResult & { status?: HooksStatus } {
   const ownsHooksPath =
     !!existingHooksPath && hooksPathsEqual(existingHooksPath, location.target, location.toplevel);
 
-  let projectHooks: string[] = [];
+  let projectHooks: Array<string> = [];
   const hooksDirPath = join(location.baseDir, location.dir);
   if (existsSync(hooksDirPath)) {
     try {

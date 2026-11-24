@@ -110,7 +110,9 @@ const server = createServer((request, response) => {
   }
 
   const platformMatch = decodedPath.match(
-    new RegExp(`^/(@voidzero-dev/vite-plus-cli-[a-z0-9-]+)/${version.replaceAll('.', '\\.')}$`),
+    new RegExp(
+      `^/(@voidzero-dev/vite-plus-cli-[a-z0-9-]+)/${version.replaceAll('.', String.raw`\.`)}$`,
+    ),
   );
   if (platformMatch) {
     sendJson(response, 200, platformMetadata(platformMatch[1], registryBase));

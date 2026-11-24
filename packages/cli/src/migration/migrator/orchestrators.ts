@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspaceInfo, WorkspacePackage } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
 import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import { VITE_PLUS_NAME, VITE_PLUS_VERSION, isForceOverrideMode } from '../../utils/constants.ts';
+import type { JsonObject } from '../../utils/json.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import {
   applyBuildAllowanceToPackageJsonPnpm,
@@ -68,14 +70,13 @@ import {
   yarnSupportsPreapprovedPackages,
   wrapLazyPluginsInViteConfig,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
-import {
-  PROVIDER_OVERRIDE_DROP_NAMES,
-  pnpmMajor,
-  type PnpmPackageJsonSettings,
-  type PreparedOxlintConfigs,
-  type RetainedImportDependencies,
+import type { MigrationReport } from '../report.ts';
+import type {
+  PnpmPackageJsonSettings,
+  PreparedOxlintConfigs,
+  RetainedImportDependencies,
 } from './shared.ts';
+import { PROVIDER_OVERRIDE_DROP_NAMES, pnpmMajor } from './shared.ts';
 
 export function rewriteStandaloneProject(
   projectPath: string,
@@ -132,8 +133,8 @@ export function rewriteStandaloneProject(
     new Map([[projectPath, providerSourceModes]]),
   );
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
-  let extractedStagedConfig: Record<string, string | string[]> | null = null;
-  let movedPnpmSettings: Record<string, unknown> | undefined;
+  let extractedStagedConfig: Record<string, string | Array<string>> | null = null;
+  let movedPnpmSettings: JsonObject | undefined;
   let shouldAddPnpmWorkspaceVitePlusOverride = false;
   let shouldAllowBrowserProviderBuilds = false;
   // Whether the project uses vitest directly (a required-peer consumer, an
@@ -157,7 +158,7 @@ export function rewriteStandaloneProject(
     workspaceInfo.downloadPackageManager.version,
   );
   editJsonFile<{
-    overrides?: Record<string, unknown>;
+    overrides?: JsonObject;
     resolutions?: Record<string, string>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
@@ -241,7 +242,7 @@ export function rewriteStandaloneProject(
       for (const key in pkg.pnpm?.overrides) {
         if (key.includes('>')) {
           const splits = key.split('>');
-          if (splits.at(-1)!.trim() === 'vite') {
+          if (splits.at(-1)?.trim() === 'vite') {
             delete pkg.pnpm.overrides[key];
           }
         }
@@ -579,7 +580,7 @@ export function rewriteMonorepoProject(
   catalogDependencyResolver?: CatalogDependencyResolver,
   workspaceContext?: {
     rootDir: string;
-    packages: WorkspacePackage[];
+    packages: Array<WorkspacePackage>;
     oxlintConfigs?: PreparedOxlintConfigs;
     retainedImportDependencies?: RetainedImportDependencies;
   },
@@ -618,7 +619,7 @@ export function rewriteMonorepoProject(
       ? findYarnWorkspaceHoisting(workspaceContext?.rootDir ?? projectPath)
       : undefined;
 
-  let extractedStagedConfig: Record<string, string | string[]> | null = null;
+  let extractedStagedConfig: Record<string, string | Array<string>> | null = null;
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;

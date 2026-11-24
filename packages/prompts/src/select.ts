@@ -1,9 +1,8 @@
-import type { CANCEL_SYMBOL } from '@clack/core';
 import { SelectPrompt } from '@clack/core';
 import color from 'picocolors';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   formatInstructionFooter,
   SELECT_INSTRUCTIONS,
@@ -17,64 +16,23 @@ import {
 } from './common.js';
 import { limitOptions } from './limit-options.js';
 import { promptMilestone } from './milestone.js';
+import { runPrompt } from './prompt-result.js';
 
 type Primitive = Readonly<string | boolean | number>;
 
-export type Option<Value> = Value extends Primitive
-  ? {
-      /**
-       * Internal data for this option.
-       */
-      value: Value;
-      /**
-       * The optional, user-facing text for this option.
-       *
-       * By default, the `value` is converted to a string.
-       */
-      label?: string;
-      /**
-       * An optional hint to display to the user when
-       * this option might be selected.
-       *
-       * By default, no `hint` is displayed.
-       */
-      hint?: string;
-      /**
-       * Whether this option is disabled.
-       * Disabled options are visible but cannot be selected.
-       *
-       * By default, options are not disabled.
-       */
-      disabled?: boolean;
-    }
-  : {
-      /**
-       * Internal data for this option.
-       */
-      value: Value;
-      /**
-       * Required. The user-facing text for this option.
-       */
-      label: string;
-      /**
-       * An optional hint to display to the user when
-       * this option might be selected.
-       *
-       * By default, no `hint` is displayed.
-       */
-      hint?: string;
-      /**
-       * Whether this option is disabled.
-       * Disabled options are visible but cannot be selected.
-       *
-       * By default, options are not disabled.
-       */
-      disabled?: boolean;
-    };
+/** Primitive options use their string value as the default label. Other values require a label. */
+export type Option<Value> = {
+  /** Internal data for this option. */
+  value: Value;
+  /** Optional hint to show when the option can be selected. */
+  hint?: string;
+  /** Disabled options remain visible but cannot be selected. */
+  disabled?: boolean;
+} & (Value extends Primitive ? { value: Value; label?: string } : { value: Value; label: string });
 
 export interface SelectOptions<Value> extends CommonOptions {
   message: string;
-  options: Option<Value>[];
+  options: Array<Option<Value>>;
   initialValue?: Value;
   maxItems?: number;
   /** Show keyboard instructions (default: true). */
@@ -131,7 +89,7 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
     }
   };
 
-  return new SelectPrompt({
+  const prompt = new SelectPrompt({
     options: opts.options,
     signal: opts.signal,
     input: opts.input,
@@ -190,5 +148,6 @@ export const select = <Value>(opts: SelectOptions<Value>) => {
         }
       }
     },
-  }).prompt() as Promise<Value | typeof CANCEL_SYMBOL>;
+  });
+  return runPrompt<Value>(prompt);
 };

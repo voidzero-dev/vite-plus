@@ -3,10 +3,11 @@ import fsPromises from 'node:fs/promises';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { isCancel, log, multiselect, select } from '@voidzero-dev/vite-plus-prompts';
 
 import { SETUP_VP_VERSION } from './constants.ts';
 import { rewriteDocumentationLinks } from './documentation.ts';
+import { errorCode } from './error.ts';
 import { pkgRoot } from './path.ts';
 
 // --- Backward-compatible exports ---
@@ -71,7 +72,7 @@ export const AGENTS = [
 export type AgentOption = (typeof AGENTS)[number];
 export type AgentId = AgentOption['id'];
 
-type AgentSelection = string | string[] | false;
+type AgentSelection = string | Array<string> | false;
 const AGENT_DEFAULT_ID = 'agents' satisfies AgentId;
 const AGENT_STANDARD_PATH = 'AGENTS.md';
 export const COPILOT_AGENT_ID = 'copilot' satisfies AgentId;
@@ -130,19 +131,22 @@ export async function selectAgentTargets({
   }
 
   if (interactive && !agent) {
-    const selectedAgentIds = await prompts.multiselect({
+    const selectedAgentIds = await multiselect({
       message: 'Which coding agent instruction files should Vite+ create?',
       // Keep CLAUDE.md available for explicit --agent values and existing projects.
-      options: AGENTS.filter((option) => option.id !== 'claude').map((option) => ({
-        label: option.label,
-        value: option.id,
-        hint: option.hint,
-      })),
+      options: AGENTS.values()
+        .filter((option) => option.id !== 'claude')
+        .map((option) => ({
+          label: option.label,
+          value: option.id,
+          hint: option.hint,
+        }))
+        .toArray(),
       initialValues: [AGENT_DEFAULT_ID],
       required: false,
     });
 
-    if (prompts.isCancel(selectedAgentIds)) {
+    if (isCancel(selectedAgentIds)) {
       onCancel();
       return { targetPaths: undefined, selectedAgents: [] };
     }
@@ -178,7 +182,7 @@ export async function selectAgentTargetPaths({
 }
 
 export function detectExistingAgentTargetPaths(projectRoot: string) {
-  const detectedPaths: string[] = [];
+  const detectedPaths: Array<string> = [];
   const seenTargetPaths = new Set<string>();
   for (const option of AGENTS) {
     if (seenTargetPaths.has(option.targetPath)) {
@@ -199,7 +203,7 @@ export function hasExistingAgentInstructions(projectRoot: string): boolean {
     return false;
   }
   for (const targetPath of targetPaths) {
-    const content = fs.readFileSync(path.join(projectRoot, targetPath), 'utf-8');
+    const content = fs.readFileSync(path.join(projectRoot, targetPath), 'utf8');
     if (content.includes(AGENT_INSTRUCTIONS_START_MARKER)) {
       return true;
     }
@@ -225,12 +229,12 @@ export function updateExistingAgentInstructions(projectRoot: string): void {
     return;
   }
 
-  const templateContent = rewriteDocumentationLinks(fs.readFileSync(templatePath, 'utf-8'));
+  const templateContent = rewriteDocumentationLinks(fs.readFileSync(templatePath, 'utf8'));
 
   for (const targetPath of targetPaths) {
     try {
       const fullPath = path.join(projectRoot, targetPath);
-      const existing = fs.readFileSync(fullPath, 'utf-8');
+      const existing = fs.readFileSync(fullPath, 'utf8');
       const updated = replaceMarkedAgentInstructionsSection(existing, templateContent);
       if (updated !== undefined && updated !== existing) {
         fs.writeFileSync(fullPath, updated);
@@ -241,14 +245,14 @@ export function updateExistingAgentInstructions(projectRoot: string): void {
   }
 }
 
-export function resolveAgentTargetPaths(agent?: string | string[]) {
+export function resolveAgentTargetPaths(agent?: string | Array<string>) {
   return getAgentTargetPaths(resolveAgentOptions(agent));
 }
 
-export function resolveAgentOptions(agent?: string | string[]) {
+export function resolveAgentOptions(agent?: string | Array<string>) {
   const agentNames = parseAgentNames(agent);
   const resolvedAgentNames = agentNames.length > 0 ? agentNames : [AGENT_DEFAULT_ID];
-  const dedupedAgents: AgentOption[] = [];
+  const dedupedAgents: Array<AgentOption> = [];
   const seenAgentIds = new Set<string>();
   for (const name of resolvedAgentNames) {
     const option = resolveSingleAgentOption(name);
@@ -261,8 +265,8 @@ export function resolveAgentOptions(agent?: string | string[]) {
   return dedupedAgents;
 }
 
-function getAgentTargetPaths(agents: AgentOption[]) {
-  const dedupedTargetPaths: string[] = [];
+function getAgentTargetPaths(agents: Array<AgentOption>) {
+  const dedupedTargetPaths: Array<string> = [];
   const seenTargetPaths = new Set<string>();
   for (const agent of agents) {
     if (seenTargetPaths.has(agent.targetPath)) {
@@ -274,7 +278,7 @@ function getAgentTargetPaths(agents: AgentOption[]) {
   return dedupedTargetPaths;
 }
 
-function parseAgentNames(agent?: string | string[]) {
+function parseAgentNames(agent?: string | Array<string>) {
   if (!agent) {
     return [];
   }
@@ -297,7 +301,7 @@ function resolveSingleAgentOption(agent: string): AgentOption {
       normalizeAgentName(option.targetPath) === resolved ||
       option.aliases?.some((candidate) => normalizeAgentName(candidate) === resolved),
   );
-  return match ?? AGENTS.find((option) => option.id === AGENT_DEFAULT_ID)!;
+  return match ?? AGENTS[0];
 }
 
 export interface AgentConflictInfo {
@@ -305,11 +309,11 @@ export interface AgentConflictInfo {
 }
 
 /** Order target paths for the shared detect/write traversal: AGENTS.md first. */
-function orderAgentTargetPaths(projectRoot: string, targetPaths: string[]): string[] {
+function orderAgentTargetPaths(projectRoot: string, targetPaths: Array<string>): Array<string> {
   const orderedPaths = targetPaths.includes(AGENT_STANDARD_PATH)
     ? [AGENT_STANDARD_PATH, ...targetPaths.filter((p) => p !== AGENT_STANDARD_PATH)]
     : targetPaths;
-  const dedupedPaths: string[] = [];
+  const dedupedPaths: Array<string> = [];
   const seenDestinationPaths = new Set<string>();
   for (const targetPath of orderedPaths) {
     const destinationKey = path.resolve(path.join(projectRoot, targetPath));
@@ -347,7 +351,7 @@ async function classifyExistingAgentTarget(
   }
   seenRealPaths.add(destinationRealPath);
 
-  const existingContent = await fsPromises.readFile(destinationPath, 'utf-8');
+  const existingContent = await fsPromises.readFile(destinationPath, 'utf8');
   const updatedContent = replaceMarkedAgentInstructionsSection(existingContent, incomingContent);
   if (updatedContent !== undefined) {
     return { kind: 'markers', existingContent, updatedContent };
@@ -365,8 +369,8 @@ export async function detectAgentConflicts({
   targetPaths,
 }: {
   projectRoot: string;
-  targetPaths?: string[];
-}): Promise<AgentConflictInfo[]> {
+  targetPaths?: Array<string>;
+}): Promise<Array<AgentConflictInfo>> {
   if (!targetPaths || targetPaths.length === 0) {
     return [];
   }
@@ -376,10 +380,10 @@ export async function detectAgentConflicts({
     return [];
   }
 
-  const incomingContent = rewriteDocumentationLinks(await fsPromises.readFile(sourcePath, 'utf-8'));
+  const incomingContent = rewriteDocumentationLinks(await fsPromises.readFile(sourcePath, 'utf8'));
   const shouldLinkToAgents = targetPaths.includes(AGENT_STANDARD_PATH);
 
-  const conflicts: AgentConflictInfo[] = [];
+  const conflicts: Array<AgentConflictInfo> = [];
   const seenRealPaths = new Set<string>();
 
   for (const targetPathToCheck of orderAgentTargetPaths(projectRoot, targetPaths)) {
@@ -421,7 +425,7 @@ export async function writeAgentInstructions({
 }: {
   projectRoot: string;
   targetPath?: string;
-  targetPaths?: string[];
+  targetPaths?: Array<string>;
   interactive: boolean;
   conflictDecisions?: Map<string, 'append' | 'skip'>;
   silent?: boolean;
@@ -434,13 +438,13 @@ export async function writeAgentInstructions({
   const sourcePath = path.join(pkgRoot, 'AGENTS.md');
   if (!fs.existsSync(sourcePath)) {
     if (!silent) {
-      prompts.log.warn('Agent instructions template not found; skipping.');
+      log.warn('Agent instructions template not found; skipping.');
     }
     return;
   }
 
   const seenRealPaths = new Set<string>();
-  const incomingContent = rewriteDocumentationLinks(await fsPromises.readFile(sourcePath, 'utf-8'));
+  const incomingContent = rewriteDocumentationLinks(await fsPromises.readFile(sourcePath, 'utf8'));
   const shouldLinkToAgents = paths.includes(AGENT_STANDARD_PATH);
 
   for (const targetPathToWrite of orderAgentTargetPaths(projectRoot, paths)) {
@@ -464,14 +468,14 @@ export async function writeAgentInstructions({
 
       if (state.kind === 'symlink') {
         if (!silent) {
-          prompts.log.info(`Skipped writing ${targetPathToWrite} (symlink)`);
+          log.info(`Skipped writing ${targetPathToWrite} (symlink)`);
         }
         continue;
       }
 
       if (state.kind === 'duplicate') {
         if (!silent) {
-          prompts.log.info(`Skipped writing ${targetPathToWrite} (duplicate target)`);
+          log.info(`Skipped writing ${targetPathToWrite} (duplicate target)`);
         }
         continue;
       }
@@ -489,7 +493,7 @@ export async function writeAgentInstructions({
       if (preResolved) {
         conflictAction = preResolved;
       } else if (interactive) {
-        const action = await prompts.select({
+        const action = await select({
           message:
             `Agent instructions already exist at ${targetPathToWrite}.\n  ` +
             styleText(
@@ -510,7 +514,7 @@ export async function writeAgentInstructions({
           ],
           initialValue: 'skip',
         });
-        conflictAction = prompts.isCancel(action) || action === 'skip' ? 'skip' : 'append';
+        conflictAction = isCancel(action) || action === 'skip' ? 'skip' : 'append';
       } else {
         conflictAction = 'skip';
       }
@@ -526,7 +530,7 @@ export async function writeAgentInstructions({
       } else {
         const suffix = !preResolved && !interactive ? ' (already exists)' : '';
         if (!silent) {
-          prompts.log.info(`Skipped writing ${targetPathToWrite}${suffix}`);
+          log.info(`Skipped writing ${targetPathToWrite}${suffix}`);
         }
       }
       continue;
@@ -534,7 +538,7 @@ export async function writeAgentInstructions({
 
     await fsPromises.writeFile(destinationPath, incomingContent);
     if (!silent) {
-      prompts.log.success(`Wrote agent instructions to ${targetPathToWrite}`);
+      log.success(`Wrote agent instructions to ${targetPathToWrite}`);
     }
     seenRealPaths.add(await fsPromises.realpath(destinationPath));
   }
@@ -552,14 +556,14 @@ export async function writeCopilotSetupWorkflow({
 
   if (fs.existsSync(destinationPath)) {
     if (!silent) {
-      prompts.log.info(`Skipped writing ${COPILOT_SETUP_WORKFLOW_PATH} (already exists)`);
+      log.info(`Skipped writing ${COPILOT_SETUP_WORKFLOW_PATH} (already exists)`);
     }
     return;
   }
 
   await fsPromises.writeFile(destinationPath, COPILOT_SETUP_WORKFLOW_CONTENT);
   if (!silent) {
-    prompts.log.success(`Wrote Copilot setup workflow to ${COPILOT_SETUP_WORKFLOW_PATH}`);
+    log.success(`Wrote Copilot setup workflow to ${COPILOT_SETUP_WORKFLOW_PATH}`);
   }
 }
 
@@ -573,7 +577,7 @@ async function appendAgentContent(
   const separator = existingContent.endsWith('\n') ? '' : '\n';
   await fsPromises.appendFile(destinationPath, `${separator}\n${incomingContent}`);
   if (!silent) {
-    prompts.log.success(`Appended agent instructions to ${targetPath}`);
+    log.success(`Appended agent instructions to ${targetPath}`);
   }
 }
 
@@ -581,7 +585,7 @@ function normalizeAgentName(value: string) {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
+    .replaceAll(/[^a-z0-9]+/g, '');
 }
 
 export function replaceMarkedAgentInstructionsSection(existing: string, incoming: string) {
@@ -624,9 +628,7 @@ async function tryLinkTargetToAgents(projectRoot: string, targetPath: string, si
     const resolvedCurrentLink = path.resolve(path.dirname(destinationPath), currentLink);
     if (resolvedCurrentLink === agentsPath) {
       if (!silent) {
-        prompts.log.info(
-          `Skipped linking ${targetPath} (already linked to ${AGENT_STANDARD_PATH})`,
-        );
+        log.info(`Skipped linking ${targetPath} (already linked to ${AGENT_STANDARD_PATH})`);
       }
       return true;
     }
@@ -635,20 +637,20 @@ async function tryLinkTargetToAgents(projectRoot: string, targetPath: string, si
 
   try {
     await fsPromises.symlink(symlinkTarget, destinationPath);
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+  } catch (error: unknown) {
+    if (errorCode(error) === 'EPERM') {
       // On Windows, symlinks require admin privileges.
       // Fall back to copying the file instead.
       await fsPromises.copyFile(agentsPath, destinationPath);
       if (!silent) {
-        prompts.log.success(`Copied ${AGENT_STANDARD_PATH} to ${targetPath}`);
+        log.success(`Copied ${AGENT_STANDARD_PATH} to ${targetPath}`);
       }
       return true;
     }
-    throw err;
+    throw error;
   }
   if (!silent) {
-    prompts.log.success(`Linked ${targetPath} to ${AGENT_STANDARD_PATH}`);
+    log.success(`Linked ${targetPath} to ${AGENT_STANDARD_PATH}`);
   }
   return true;
 }
@@ -656,11 +658,11 @@ async function tryLinkTargetToAgents(projectRoot: string, targetPath: string, si
 async function getExistingPathKind(filePath: string) {
   // lstat rather than existsSync: existsSync follows symlinks, so it reports a
   // dangling symlink as missing and the later symlink() call fails with EEXIST.
-  const stat = await fsPromises.lstat(filePath).catch((err: NodeJS.ErrnoException) => {
-    if (err.code === 'ENOENT') {
+  const stat = await fsPromises.lstat(filePath).catch((error: unknown) => {
+    if (errorCode(error) === 'ENOENT') {
       return undefined;
     }
-    throw err;
+    throw error;
   });
   if (!stat) {
     return 'missing' as const;

@@ -11,7 +11,7 @@ const features = [
 
 const activeSection = ref('feature-dev-build');
 const underlineStyle = ref({ left: '0px', width: '0px' });
-const listItems = ref<HTMLElement[]>([]);
+const listItems = ref<Array<HTMLElement>>([]);
 let scrollTimeout: number | null = null;
 
 const scrollToSection = (e: Event, id: string) => {
@@ -86,58 +86,31 @@ const updateUnderlinePosition = () => {
   }
 };
 
-const determineActiveSection = () => {
-  // Get all sections and their positions
-  const sections = features
-    .map((feature) => {
-      const element = document.getElementById(feature.id);
-      if (!element) {
-        return null;
-      }
+function determineActiveSection(): void {
+  const sections = features.flatMap(({ id }) => {
+    const section = document.getElementById(id);
+    return section ? [section] : [];
+  });
 
-      const rect = element.getBoundingClientRect();
-      return {
-        id: feature.id,
-        top: rect.top,
-        bottom: rect.bottom,
-        height: rect.height,
-      };
-    })
-    .filter(Boolean);
-
-  // Find the section that's most visible near the top of the viewport
-  // We consider a section "active" if it's within 200px of the top
   const threshold = 200;
-  let activeId = activeSection.value;
+  const active = sections.find((section) => {
+    const { top, bottom } = section.getBoundingClientRect();
+    return top <= threshold && bottom > threshold;
+  });
+  let activeId = active?.id ?? activeSection.value;
 
-  for (const section of sections) {
-    if (!section) {
-      continue;
-    }
-
-    // If section top is near or above threshold and bottom is below threshold
-    if (section.top <= threshold && section.bottom > threshold) {
-      activeId = section.id;
-      break;
-    }
-  }
-
-  // If no section found above, check if we're at the very bottom
-  if (activeId === activeSection.value) {
-    const lastSection = sections.at(-1);
-    if (
-      lastSection &&
-      window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100
-    ) {
-      activeId = lastSection.id;
-    }
+  if (
+    activeId === activeSection.value &&
+    window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100
+  ) {
+    activeId = sections.at(-1)?.id ?? activeId;
   }
 
   if (activeId !== activeSection.value) {
     activeSection.value = activeId;
     updateUnderlinePosition();
   }
-};
+}
 
 const handleScroll = () => {
   if (scrollTimeout) {

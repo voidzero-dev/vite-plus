@@ -20,7 +20,7 @@ const emit = defineEmits<{
 const visibleLineCount = ref(0);
 const renderedPrompt = ref('');
 const promptFinished = ref(false);
-let timers: number[] = [];
+let timers: Array<number> = [];
 
 const promptText = computed(() => `${props.transcript.prompt ?? '$'} ${props.transcript.command}`);
 

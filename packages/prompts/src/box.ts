@@ -6,8 +6,8 @@ import stringWidth from 'fast-string-width';
 import { wrapAnsi } from 'fast-wrap-ansi';
 import color from 'picocolors';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   S_BAR,
   S_BAR_END,
@@ -50,14 +50,14 @@ function getPaddingForLine(
   contentAlign: BoxAlignment | undefined,
 ): [number, number] {
   let leftPadding = padding;
-  let rightPadding = padding;
+
   if (contentAlign === 'center') {
     leftPadding = Math.floor((innerWidth - lineLength) / 2);
   } else if (contentAlign === 'right') {
     leftPadding = innerWidth - lineLength - padding;
   }
 
-  rightPadding = innerWidth - leftPadding - lineLength;
+  const rightPadding = innerWidth - leftPadding - lineLength;
 
   return [leftPadding, rightPadding];
 }

@@ -3,6 +3,9 @@ import path from 'node:path';
 
 import { parse as parseYaml } from 'yaml';
 
+import type { YamlMapping } from './yaml-value.ts';
+import { isYamlMapping } from './yaml-value.ts';
+
 const LEGACY_VITEST_ALIAS = 'npm:@voidzero-dev/vite-plus-test';
 
 function containsLegacyVitestAlias(value: unknown, visited = new Set<object>()): boolean {
@@ -16,18 +19,11 @@ function containsLegacyVitestAlias(value: unknown, visited = new Set<object>()):
   return Object.values(value).some((entry) => containsLegacyVitestAlias(entry, visited));
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+function containsAliasInFields(config: unknown, fields: Array<string>): boolean {
+  return isYamlMapping(config) && fields.some((field) => containsLegacyVitestAlias(config[field]));
 }
 
-function containsAliasInFields(config: unknown, fields: string[]): boolean {
-  const record = asRecord(config);
-  return fields.some((field) => containsLegacyVitestAlias(record?.[field]));
-}
-
-function containsPackageAlias(config: Record<string, unknown> | undefined): boolean {
+function containsPackageAlias(config: YamlMapping | undefined): boolean {
   return (
     containsAliasInFields(config, [
       'dependencies',
@@ -44,12 +40,12 @@ function containsPackageAlias(config: Record<string, unknown> | undefined): bool
   );
 }
 
-function readConfigFile(filePath: string): Record<string, unknown> | undefined {
+function readConfigFile(filePath: string): YamlMapping | undefined {
   try {
     const source = fs.readFileSync(filePath, 'utf8');
-    return asRecord(
-      path.basename(filePath) === 'package.json' ? JSON.parse(source) : parseYaml(source),
-    );
+    const config: unknown =
+      path.basename(filePath) === 'package.json' ? JSON.parse(source) : parseYaml(source);
+    return isYamlMapping(config) ? config : undefined;
   } catch {
     // Configuration parsing has its own diagnostics. Do not replace them with
     // the stale-alias recovery message when the file is malformed.

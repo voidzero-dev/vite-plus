@@ -4,13 +4,14 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { JsonObject } from '../json-value.ts';
 import { findLegacyVitestAliasConfig } from '../legacy-vitest-alias.ts';
 
 describe('findLegacyVitestAliasConfig', () => {
   const legacyAlias = 'npm:@voidzero-dev/vite-plus-test@0.1.24';
   let projectDir: string;
 
-  function writePackageJson(config: Record<string, unknown>, directory?: string): string {
+  function writePackageJson(config: JsonObject, directory?: string): string {
     const packageDir = directory ?? projectDir;
     const filePath = path.join(packageDir, 'package.json');
     fs.mkdirSync(packageDir, { recursive: true });
@@ -61,13 +62,11 @@ describe('findLegacyVitestAliasConfig', () => {
     const sourceDir = path.join(childDir, 'src');
     fs.mkdirSync(sourceDir, { recursive: true });
     writePackageJson({ devDependencies: { vitest: legacyAlias } });
-    writePackageJson(
-      {
-        devDependencies: { vitest: '4.1.11' },
-        ...(kind === 'npm' ? { workspaces: ['packages/*'] } : {}),
-      },
-      childDir,
-    );
+    const childManifest: JsonObject = { devDependencies: { vitest: '4.1.11' } };
+    if (kind === 'npm') {
+      childManifest.workspaces = ['packages/*'];
+    }
+    writePackageJson(childManifest, childDir);
     if (kind === 'pnpm') {
       fs.writeFileSync(path.join(childDir, 'pnpm-workspace.yaml'), 'packages: [.]\n');
     }

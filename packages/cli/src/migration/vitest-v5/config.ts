@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type * as t from '@oxc-project/types';
+import type { Node, ObjectExpression } from '@oxc-project/types';
 import { minimatch } from 'minimatch';
 
 import {
@@ -11,21 +11,19 @@ import {
   isString,
   isBoolean,
 } from '../ast-utils.ts';
+import type { AddedProperty, RewriteResult, SourceOptions } from './ast.ts';
 import {
   CONFIG_SOURCES,
   SourceEditor,
   importedName,
   projectElements,
   isModuleExports,
-  type AddedProperty,
-  type RewriteResult,
-  type SourceOptions,
 } from './ast.ts';
 import { migrateBenchmarkConfig } from './benchmark-config.ts';
 import { compatibilityProperty } from './compatibility.ts';
 import { resolveConfigObject } from './config-object.ts';
 
-function isTrue(node: t.Node | undefined): boolean {
+function isTrue(node: Node | undefined): boolean {
   return isBoolean(node) && node.value;
 }
 
@@ -86,17 +84,17 @@ function hasTestConfigHelper(file: string, source: string): boolean {
  * export a raw object. Candidate files come from the owning package's scan. */
 export function findVitestV5ConfigFiles(
   sources: ReadonlyMap<string, string>,
-  entries: string[] = [],
+  entries: Array<string> = [],
 ): Set<string> {
-  const files = new Set(
-    [...sources]
-      .filter(
-        ([file, source]) =>
-          /\.[cm]?[jt]sx?$/.test(file) &&
-          (CONFIG_FILENAME.test(file) || hasTestConfigHelper(file, source)),
-      )
-      .map(([file]) => file),
-  );
+  const files = new Set<string>();
+  for (const [file, source] of sources) {
+    if (
+      /\.[cm]?[jt]sx?$/.test(file) &&
+      (CONFIG_FILENAME.test(file) || hasTestConfigHelper(file, source))
+    ) {
+      files.add(file);
+    }
+  }
   for (const file of entries) {
     if (sources.has(file)) {
       files.add(file);
@@ -104,7 +102,11 @@ export function findVitestV5ConfigFiles(
   }
   for (const file of files) {
     try {
-      const editor = new SourceEditor(file, sources.get(file)!);
+      const source = sources.get(file);
+      if (source === undefined) {
+        continue;
+      }
+      const editor = new SourceEditor(file, source);
       function addReference(reference: string): void {
         if (reference.startsWith('!')) {
           return;
@@ -128,7 +130,7 @@ export function findVitestV5ConfigFiles(
           }
         }
       }
-      const collectReferences = (config: t.Node | undefined) => {
+      const collectReferences = (config: Node | undefined) => {
         const object = resolveConfigObject(editor, config);
         if (!object) {
           return;
@@ -207,15 +209,19 @@ export function findVitestV5MergedConfigFiles(
   configFiles: ReadonlySet<string>,
 ): Set<string> {
   const merged = new Set<string>();
-  const imports = new Map<string, string[]>();
+  const imports = new Map<string, Array<string>>();
   const extensions = ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs', '.tsx', '.jsx'];
   for (const file of configFiles) {
     try {
-      const editor = new SourceEditor(file, sources.get(file)!);
+      const source = sources.get(file);
+      if (source === undefined) {
+        continue;
+      }
+      const editor = new SourceEditor(file, source);
       if (hasConfigMerge(editor)) {
         merged.add(file);
       }
-      const dependencies: string[] = [];
+      const dependencies: Array<string> = [];
       for (const node of editor.ast.body) {
         if (
           node.type !== 'ImportDeclaration' &&
@@ -280,7 +286,7 @@ function migrateConfig(
   benchmarkOnly = false,
 ): RewriteResult {
   const editor = new SourceEditor(file, source);
-  const visited = new Set<t.ObjectExpression>();
+  const visited = new Set<ObjectExpression>();
   const merged = mergedConfig || hasConfigMerge(editor);
   const preserveDefaults = options.preserveV4 && !merged && !benchmarkOnly;
   const reviewV4 = options.preserveV4 || options.reviewV4;
@@ -293,10 +299,10 @@ function migrateConfig(
   }
 
   function nested(
-    object: t.ObjectExpression,
+    object: ObjectExpression,
     key: string,
-    additions: string | AddedProperty[],
-    apply: (node: t.ObjectExpression) => void,
+    additions: string | Array<AddedProperty>,
+    apply: (node: ObjectExpression) => void,
   ) {
     const prop = objectProperty(object, key);
     if (!prop) {
@@ -313,18 +319,14 @@ function migrateConfig(
   }
 
   function addCompatibility(
-    object: t.ObjectExpression,
+    object: ObjectExpression,
     key: Parameters<typeof compatibilityProperty>[0],
   ) {
     const property = compatibilityProperty(key);
     editor.add(object, key, property.value, property.comment);
   }
 
-  function testOptions(
-    test: t.ObjectExpression,
-    inherits: boolean,
-    parentTest?: t.ObjectExpression,
-  ) {
+  function testOptions(test: ObjectExpression, inherits: boolean, parentTest?: ObjectExpression) {
     if (benchmarkOnly) {
       // Reporters are global; do not invent destinations on inline projects or
       // fragments whose effective root settings depend on a merge.
@@ -511,7 +513,7 @@ function migrateConfig(
     }
   }
 
-  function config(object: t.ObjectExpression, inherits = false, parentTest?: t.ObjectExpression) {
+  function config(object: ObjectExpression, inherits = false, parentTest?: ObjectExpression) {
     if (visited.has(object)) {
       return;
     }

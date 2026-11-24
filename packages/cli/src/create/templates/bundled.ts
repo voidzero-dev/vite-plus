@@ -2,6 +2,7 @@ import assert from 'node:assert';
 import path from 'node:path';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
+import { errorCode } from '../../utils/error.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { copyDir, renameFiles, setPackageName } from '../utils.ts';
 import type { BuiltinTemplateInfo } from './types.ts';
@@ -22,7 +23,7 @@ export async function executeBundledTemplate(
   try {
     copyDir(templateInfo.localPath, destDir);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (errorCode(error) === 'ENOENT') {
       throw new Error(`bundled template directory not found: ${templateInfo.localPath}`, {
         cause: error,
       });

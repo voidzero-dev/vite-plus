@@ -1,7 +1,7 @@
 import color from 'picocolors';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   wrapTextWithPrefix,
   S_BAR,
@@ -21,7 +21,7 @@ export interface LogMessageOptions extends CommonOptions {
 
 export const log = {
   message: (
-    message: string | string[] = [],
+    message: string | Array<string> = [],
     {
       symbol,
       secondarySymbol = color.gray(S_BAR),
@@ -30,7 +30,7 @@ export const log = {
       withGuide,
     }: LogMessageOptions = {},
   ) => {
-    const parts: string[] = [];
+    const parts: Array<string> = [];
     const hasGuide = getGuide({ withGuide });
     const spacingString = !hasGuide ? '' : secondarySymbol;
     const prefix = symbol ? `${symbol} ` : hasGuide ? `${secondarySymbol} ` : '';

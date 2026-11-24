@@ -1,9 +1,8 @@
 import { readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
-const projectDir = dirname(fileURLToPath(import.meta.url));
+const projectDir = import.meta.dirname;
 
 // Use RUNNER_TEMP in GitHub Actions, otherwise use system temp directory
 const tempBase = process.env.RUNNER_TEMP ?? tmpdir();

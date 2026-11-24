@@ -78,6 +78,8 @@ describe('toolchainFromManifest', () => {
       ],
     },
   ])('rejects an incomplete toolchain manifest', (input) => {
-    expect(() => toolchainFromManifest(input)).toThrow();
+    expect(() => toolchainFromManifest(input)).toThrow(
+      /schemaVersion|one exact vite-plus-core version|version/,
+    );
   });
 });

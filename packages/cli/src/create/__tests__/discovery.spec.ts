@@ -4,14 +4,16 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { WorkspaceInfo, WorkspaceInfoOptional } from '../../types/index.js';
+import type { WorkspaceInfo, WorkspaceInfoOptional } from '../../types/index.ts';
+import type { JsonObject } from '../../utils/json-value.ts';
 import {
   discoverTemplate,
   expandCreateShorthand,
   inferGitHubRepoName,
   inferParentDir,
   parseGitHubUrl,
-} from '../discovery.js';
+} from '../discovery.ts';
+import { makeWorkspaceInfo } from './workspace-fixture.ts';
 
 // The local-package branch only engages for a resolved create.templates entry.
 function discoverLocal(workspaceInfo: WorkspaceInfo) {
@@ -27,20 +29,18 @@ describe('discoverTemplate', () => {
     }
   });
 
-  function createWorkspaceWithPackage(packageJson: Record<string, unknown>): WorkspaceInfo {
+  function createWorkspaceWithPackage(packageJson: JsonObject): WorkspaceInfo {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-discovery-spec-'));
     const packageDir = path.join(rootDir, 'tools/my-template');
     fs.mkdirSync(packageDir, { recursive: true });
     fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(packageJson));
-    return {
-      rootDir,
+    return makeWorkspaceInfo(rootDir, {
       isMonorepo: true,
       monorepoScope: '',
       workspacePatterns: ['tools/*'],
       parentDirs: ['tools'],
-      downloadPackageManager: { binPrefix: '' },
       packages: [{ name: 'my-template', path: 'tools/my-template' }],
-    } as unknown as WorkspaceInfo;
+    });
   }
 
   it('runs a local bingo template through its bin entry', () => {
@@ -162,10 +162,10 @@ describe('discoverTemplate', () => {
 
 // inferParentDir only reads parentDirs and packages off the workspace.
 function inferParentDirWorkspace(
-  parentDirs: string[],
+  parentDirs: Array<string>,
   packages: WorkspaceInfoOptional['packages'] = [],
 ): WorkspaceInfoOptional {
-  return { parentDirs, packages } as unknown as WorkspaceInfoOptional;
+  return makeWorkspaceInfo('/workspace', { parentDirs, packages });
 }
 
 describe('inferParentDir', () => {
@@ -272,6 +272,13 @@ describe('expandCreateShorthand', () => {
   });
 });
 
+function standaloneWorkspace(): WorkspaceInfo {
+  const workspace = makeWorkspaceInfo('/tmp/workspace', { isMonorepo: false });
+  workspace.downloadPackageManager.binPrefix = '/tmp/bin';
+  workspace.downloadPackageManager.version = '10.0.0';
+  return workspace;
+}
+
 describe('GitHub template helpers', () => {
   it('should parse GitHub shorthand URLs', () => {
     expect(parseGitHubUrl('github:user/repo')).toBe('user/repo');
@@ -288,37 +295,18 @@ describe('GitHub template helpers', () => {
   });
 
   it('should resolve GitHub templates to degit without reusing the original URL as destination', () => {
-    const template = discoverTemplate('https://github.com/nkzw-tech/fate-template', ['my-app'], {
-      rootDir: '/tmp/workspace',
-      isMonorepo: false,
-      monorepoScope: '',
-      workspacePatterns: [],
-      parentDirs: [],
-      packageManager: 'pnpm',
-      packageManagerVersion: 'latest',
-      downloadPackageManager: {
-        binPrefix: '/tmp/bin',
-        version: '10.0.0',
-      } as never,
-      packages: [],
-    });
+    const template = discoverTemplate(
+      'https://github.com/nkzw-tech/fate-template',
+      ['my-app'],
+      standaloneWorkspace(),
+    );
 
     expect(template.command).toBe('degit');
     expect(template.args).toEqual(['nkzw-tech/fate-template', 'my-app']);
   });
 
   it('should keep manifest-resolved specifiers literal when skipShorthand=true', () => {
-    const workspace = {
-      rootDir: '/tmp/workspace',
-      isMonorepo: false,
-      monorepoScope: '',
-      workspacePatterns: [],
-      parentDirs: [],
-      packageManager: 'pnpm',
-      packageManagerVersion: 'latest',
-      downloadPackageManager: { binPrefix: '/tmp/bin', version: '10.0.0' } as never,
-      packages: [],
-    } as never;
+    const workspace = standaloneWorkspace();
 
     // A manifest entry like `{ template: '@your-org/template-web' }` must
     // NOT be rewritten into `@your-org/create-template-web` by the create

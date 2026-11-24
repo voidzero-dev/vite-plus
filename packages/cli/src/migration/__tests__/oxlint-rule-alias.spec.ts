@@ -1,4 +1,4 @@
-import { type OxlintConfig } from 'oxlint';
+import type { OxlintConfig } from 'oxlint';
 import { describe, expect, it } from 'vitest';
 
 import { sanitizeMigratedOxlintConfig } from '../migrator/eslint.ts';

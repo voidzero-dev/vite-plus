@@ -1,16 +1,14 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
 
 interface Package {
   name: string;
-  dependencies: string[];
+  dependencies: Array<string>;
   scripts: Record<string, string>;
   hasVitePlusConfig: boolean;
 }
 
-// oxlint-disable-next-line no-underscore-dangle
-const __dirname = path.join(fileURLToPath(import.meta.url), '..');
+const benchDir = import.meta.dirname;
 
 class MonorepoGenerator {
   private packages: Map<string, Package> = new Map();
@@ -26,7 +24,7 @@ class MonorepoGenerator {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  private getRandomElement<T>(arr: T[]): T {
+  private getRandomElement<T>(arr: Array<T>): T {
     return arr[Math.floor(Math.random() * arr.length)];
   }
 
@@ -50,7 +48,7 @@ class MonorepoGenerator {
 
     // Generate command with 0-3 && concatenations
     const numCommands = this.getRandomInt(1, 4);
-    const selectedCommands: string[] = [];
+    const selectedCommands: Array<string> = [];
 
     for (let i = 0; i < numCommands; i++) {
       selectedCommands.push(this.getRandomElement(commands));
@@ -59,8 +57,8 @@ class MonorepoGenerator {
     return selectedCommands.join(' && ');
   }
 
-  private generateScripts(packageName: string): Record<string, string> {
-    const scripts: Record<string, string> = {};
+  private generateScripts(packageName: string): Package['scripts'] {
+    const scripts: Package['scripts'] = {};
 
     // Each package has 2-3 scripts
     const numScripts = this.getRandomInt(2, 3);
@@ -77,14 +75,17 @@ class MonorepoGenerator {
     return scripts;
   }
 
-  private selectDependencies(currentIndex: number, availablePackages: string[]): string[] {
+  private selectDependencies(
+    currentIndex: number,
+    availablePackages: Array<string>,
+  ): Array<string> {
     const numDeps = this.getRandomInt(this.MIN_DEPS_PER_PACKAGE, this.MAX_DEPS_PER_PACKAGE);
     const dependencies = new Set<string>();
 
     // Create a complex graph by selecting dependencies from different layers
     // Prefer packages with lower indices (creates deeper dependency chains)
     const eligiblePackages = availablePackages.filter((pkg) => {
-      const pkgIndex = parseInt(pkg.split('-')[1]);
+      const pkgIndex = Number.parseInt(pkg.split('-')[1]);
       return pkgIndex < currentIndex;
     });
 
@@ -114,7 +115,7 @@ class MonorepoGenerator {
 
   private generatePackages(): void {
     // First, create all package names
-    const allPackageNames: string[] = [];
+    const allPackageNames: Array<string> = [];
     for (let i = 0; i < this.PACKAGE_COUNT; i++) {
       allPackageNames.push(this.generatePackageName(i));
     }
@@ -340,6 +341,6 @@ module.exports = { ${pkg.name.replace('-', '_')} };
 }
 
 // Main execution
-const outputDir = path.join(__dirname, 'fixtures', 'monorepo');
+const outputDir = path.join(benchDir, 'fixtures', 'monorepo');
 const generator = new MonorepoGenerator(outputDir);
 generator.generate();

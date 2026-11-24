@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { Scalar } from 'yaml';
+import { isScalar } from 'yaml';
 
 import { PackageManager } from '../types/index.ts';
 import { VITE_PLUS_VERSION } from './constants.ts';
@@ -102,7 +102,7 @@ function ensureYarnBerryRegistry(projectRoot: string): void {
     }
     doc.set('npmRegistryServer', bridgeRegistry());
     const node = doc.get('npmRegistryServer', true);
-    if (node instanceof Scalar && typeof current === 'string' && !current.includes(BRIDGE_HOST)) {
+    if (isScalar(node) && typeof current === 'string' && !current.includes(BRIDGE_HOST)) {
       // Overwriting a custom registry (e.g. a corporate proxy) must not lose
       // it for good: stash it in a comment so clear/restore can put it back.
       node.comment = `${YARN_ORIGINAL_REGISTRY_COMMENT_PREFIX}${current}`;
@@ -120,7 +120,7 @@ function clearNpmrcRegistry(projectRoot: string): boolean {
     return false; // nothing we added
   }
   const lines = original.split('\n');
-  const kept: string[] = [];
+  const kept: Array<string> = [];
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim() === REGISTRY_MARKER) {
       // Drop the marker and the `registry=` line we wrote right after it.
@@ -159,12 +159,12 @@ function clearYarnBerryRegistry(projectRoot: string): boolean {
       // A prior preview run may have replaced a custom registry and stashed it
       // in the value's comment; restore it instead of deleting the setting.
       const node = doc.get('npmRegistryServer', true);
-      const comment = node instanceof Scalar ? node.comment : undefined;
+      const comment = isScalar(node) ? node.comment : undefined;
       const original = comment?.split(YARN_ORIGINAL_REGISTRY_COMMENT_PREFIX.trimStart())[1]?.trim();
       if (original) {
         doc.set('npmRegistryServer', original);
         const restored = doc.get('npmRegistryServer', true);
-        if (restored instanceof Scalar) {
+        if (isScalar(restored)) {
           restored.comment = undefined;
         }
       } else {

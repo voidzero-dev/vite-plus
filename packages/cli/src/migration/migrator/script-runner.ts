@@ -3,16 +3,18 @@ import path from 'node:path';
 
 import { parse as parseJsonc } from 'jsonc-parser';
 
-import { type LiteralCommandToken, parseLiteralCommands } from '../../../binding/index.js';
-import { type WorkspacePackage } from '../../types/index.ts';
-import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
+import type { LiteralCommandToken } from '../../../binding/index.js';
+import { parseLiteralCommands } from '../../../binding/index.js';
+import type { WorkspacePackage } from '../../types/index.ts';
+import type { JsonObject, JsonValue } from '../../utils/json.ts';
+import { editJsonFile, isJsonFile, readJsonValue, writeJsonFile } from '../../utils/json.ts';
 import { readNearestPackageJson } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { NODE_OPTIONS_WITH_VALUE, SCRIPT_EXTENSIONS } from '../../vpx-script.ts';
 import { sourceTreeMatches } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
+import type { DependencyBag } from './shared.ts';
 import {
-  type DependencyBag,
   getCommandStartIndex,
   isPlainRecord,
   LINT_STAGED_JSON_CONFIG_FILES,
@@ -25,9 +27,9 @@ import {
 /** Runner-specific behavior; parsing, file edits, and dependency retention are shared. */
 export interface ScriptRunnerMigration {
   name: string;
-  aliases?: readonly string[];
+  aliases?: ReadonlyArray<string>;
   watchSubcommand?: boolean;
-  dependencies: readonly string[];
+  dependencies: ReadonlyArray<string>;
   commandPattern: RegExp;
   loaderPattern: RegExp;
   envShebang: RegExp;
@@ -43,35 +45,35 @@ export interface ScriptRunnerMigration {
   dropOptions?: ReadonlySet<string>;
   optionsWithValue?: ReadonlySet<string>;
   testWithoutFilesReason: string;
-  envKeepReason: (assignments: readonly string[]) => string | undefined;
+  envKeepReason: (assignments: ReadonlyArray<string>) => string | undefined;
   scriptKeepReason?: (cwd: string | undefined, script: string) => string | undefined;
   isLoader?: (option: string, value: string) => boolean;
   /** Loader imports that can keep Node.js and use the public registration entry. */
   isRegister?: (option: string, value: string) => boolean;
-  registerEnvKeepReason?: (assignments: readonly string[]) => string | undefined;
+  registerEnvKeepReason?: (assignments: ReadonlyArray<string>) => string | undefined;
   registerKeepOptions?: ReadonlyMap<string, string>;
   registerPreloadKeepReason?: (option: string, value: string) => string | undefined;
   registerInlineCodeKeepReason?: (code: string) => string | undefined;
   /** Require a literal Node.js invocation when configuration preflight depends on its argv. */
   registerEnvRequiresNode?: boolean;
   prepareRun?: (
-    args: readonly string[],
+    args: ReadonlyArray<string>,
     context: {
       cwd: string | undefined;
-      environment: readonly string[];
+      environment: ReadonlyArray<string>;
       nodeLoader: boolean;
       executable: string;
       shebang?: boolean;
       publicRegister?: boolean;
       /** Original literal NODE_OPTIONS arguments, or undefined when they cannot be parsed. */
-      nodeOptionsArgs?: readonly string[];
+      nodeOptionsArgs?: ReadonlyArray<string>;
     },
   ) => {
     keepReason?: string;
     /** Argument indices after the executable; no value removes that argument. */
-    edits?: readonly { index: number; value?: string }[];
+    edits?: ReadonlyArray<{ index: number; value?: string }>;
     /** Options to add before the existing arguments, without changing their source ranges. */
-    prependArgs?: readonly string[];
+    prependArgs?: ReadonlyArray<string>;
   };
   /** Report unsupported uses even when no command can be converted. */
   detectKeptUses?: boolean;
@@ -164,7 +166,7 @@ const COMMAND_LAUNCHERS = new Map<string, (previous: string) => boolean>([
 export interface ScriptRunnerCommandRewrite {
   command: string;
   /** Why the runner stays in part of the command. */
-  kept: string[];
+  kept: Array<string>;
 }
 
 interface Edit {
@@ -175,11 +177,11 @@ interface Edit {
 
 interface Rewrite {
   command: string;
-  environment: readonly string[];
+  environment: ReadonlyArray<string>;
   /** The directory the next segment runs in, or undefined when it is not known. */
   cwd?: string;
-  edits: Edit[];
-  kept: string[];
+  edits: Array<Edit>;
+  kept: Array<string>;
   /** Package scripts already being checked through an inherited preload. */
   checkingScripts: ReadonlySet<string>;
 }
@@ -192,7 +194,7 @@ export function rewriteScriptRunnerCommand(
   runner: ScriptRunnerMigration,
   command: string,
   cwd?: string,
-  environment: readonly string[] = [],
+  environment: ReadonlyArray<string> = [],
   checkingScripts: ReadonlySet<string> = new Set(),
 ): ScriptRunnerCommandRewrite {
   if (!runner.commandPattern.test(command) && !runner.envKeepReason(environment)) {
@@ -223,7 +225,7 @@ export function rewriteScriptRunnerCommand(
 function rewriteSegment(
   runner: ScriptRunnerMigration,
   rewrite: Rewrite,
-  tokens: LiteralCommandToken[],
+  tokens: Array<LiteralCommandToken>,
 ): void {
   const values = tokens.map(({ value }) => value);
   // Environment assignments and cross-env stay in front of the command.
@@ -294,7 +296,7 @@ function rewriteSegment(
   } else if (shell || launcher) {
     const commands = shell
       ? tokens.slice(start)
-      : tokens.slice(start + 1).filter((_, index) => launcher!(values[start + index]));
+      : tokens.slice(start + 1).filter((_, index) => launcher?.(values[start + index]));
     let checked = commands.length > 0;
     for (const token of commands) {
       if (!rewriteQuotedCommand(runner, rewrite, token, assignments)) {
@@ -346,7 +348,7 @@ function taskKeepReason(
   runner: ScriptRunnerMigration,
   rewrite: Rewrite,
   name: string | undefined,
-  inherited: readonly string[],
+  inherited: ReadonlyArray<string>,
   lifecycle: boolean,
 ): string | undefined {
   if (!name || !rewrite.cwd) {
@@ -384,8 +386,8 @@ function taskKeepReason(
 function packageTaskKeepReason(
   runner: ScriptRunnerMigration,
   rewrite: Rewrite,
-  values: readonly string[],
-  inherited: readonly string[],
+  values: ReadonlyArray<string>,
+  inherited: ReadonlyArray<string>,
 ): string | undefined {
   const [manager, command] = values;
   if (!['npm', 'pnpm', 'yarn', 'bun'].includes(manager)) {
@@ -405,10 +407,10 @@ function packageTaskKeepReason(
   return taskKeepReason(runner, rewrite, name, inherited, true);
 }
 
-function applyEdits(command: string, pending: readonly Edit[]): string {
+function applyEdits(command: string, pending: ReadonlyArray<Edit>): string {
   let rewritten = command;
   // An option normalization and a loader removal can cover the same whitespace.
-  const edits: Edit[] = [];
+  const edits: Array<Edit> = [];
   for (const edit of pending.toSorted((a, b) => b.start - a.start || b.end - a.end)) {
     const previous = edits.at(-1);
     if (previous?.text === '' && edit.text === '' && edit.end >= previous.start) {
@@ -433,24 +435,24 @@ function literalEdit(command: string, token: LiteralCommandToken, value: string)
   const preserveQuote = prefix !== '' || raw.endsWith(quote);
   let content = value.slice(prefix.length);
   if (quote === "'" && preserveQuote) {
-    content = `'${content.replaceAll("'", "'\\''")}'`;
+    content = `'${content.replaceAll("'", String.raw`'\''`)}'`;
   } else if ((quote === '"' && preserveQuote) || !/^[\w./=:-]+$/.test(content)) {
-    content = `"${content.replaceAll(/[\\"$`]/g, '\\$&')}"`;
+    content = `"${content.replaceAll(/[\\"$`]/g, String.raw`\$&`)}"`;
   }
   return { start: token.start, end: token.end, text: `${prefix}${content}` };
 }
 
 interface EnvironmentOptions {
-  replacements: { index: number; value: string }[];
-  preloads: string[];
-  args?: string[];
+  replacements: Array<{ index: number; value: string }>;
+  preloads: Array<string>;
+  args?: Array<string>;
   keepReason?: string;
 }
 
 /** NODE_OPTIONS uses double quotes and spaces, not shell single quotes or tab separators. */
 function scanEnvironmentOptions(
   runner: ScriptRunnerMigration,
-  assignments: readonly string[],
+  assignments: ReadonlyArray<string>,
 ): EnvironmentOptions {
   const result: EnvironmentOptions = { replacements: [], preloads: [], args: [] };
   for (const [index, assignment] of assignments.entries()) {
@@ -501,7 +503,7 @@ function optionName(arg: string): string {
 }
 
 /** Remove `tokens[index]` with the space before it. */
-function removal(tokens: LiteralCommandToken[], index: number): Edit {
+function removal(tokens: Array<LiteralCommandToken>, index: number): Edit {
   return { start: tokens[index - 1]?.end ?? tokens[index].start, end: tokens[index].end, text: '' };
 }
 
@@ -514,8 +516,8 @@ function runKeepReason(
   runner: ScriptRunnerMigration,
   cwd: string | undefined,
   test: boolean,
-  positionals: readonly string[],
-  preloads: readonly string[],
+  positionals: ReadonlyArray<string>,
+  preloads: ReadonlyArray<string>,
 ): string | undefined {
   const [entry] = positionals;
   if (entry === undefined) {
@@ -538,11 +540,11 @@ function runKeepReason(
 function rewriteRunner(
   runner: ScriptRunnerMigration,
   rewrite: Rewrite,
-  tokens: LiteralCommandToken[],
+  tokens: Array<LiteralCommandToken>,
   first: number,
   start: number,
   keepReason: string | undefined,
-  environment: readonly string[],
+  environment: ReadonlyArray<string>,
 ): void {
   if (keepReason) {
     rewrite.kept.push(keepReason);
@@ -575,11 +577,11 @@ function rewriteRunner(
 function rewriteNodeLoader(
   runner: ScriptRunnerMigration,
   rewrite: Rewrite,
-  tokens: LiteralCommandToken[],
+  tokens: Array<LiteralCommandToken>,
   first: number,
   start: number,
   keepReason: string | undefined,
-  environment: readonly string[],
+  environment: ReadonlyArray<string>,
   environmentOptions: EnvironmentOptions,
 ): void {
   const original = scanOptions(runner, tokens, start + 1, false);
@@ -667,12 +669,12 @@ function rewriteNodeLoader(
 function prepareRun(
   runner: ScriptRunnerMigration,
   rewrite: Rewrite,
-  tokens: LiteralCommandToken[],
+  tokens: Array<LiteralCommandToken>,
   start: number,
-  environment: readonly string[],
+  environment: ReadonlyArray<string>,
   nodeLoader: boolean,
   publicRegister?: EnvironmentOptions,
-): { tokens: LiteralCommandToken[]; edits: Edit[]; keepReason?: string } {
+) {
   const prepared = runner.prepareRun?.(
     tokens.slice(start + 1).map(({ value }) => value),
     {
@@ -684,7 +686,7 @@ function prepareRun(
       nodeOptionsArgs: publicRegister?.args,
     },
   );
-  const edits: Edit[] = [];
+  const edits: Array<Edit> = [];
   const added = prepared?.prependArgs?.map(quoteArgument) ?? [];
   if (
     added.some((value) => value === undefined) ||
@@ -708,7 +710,10 @@ function prepareRun(
       edits.push(removal(tokens, index));
       return [];
     }
-    const text = quoteArgument(change.value)!;
+    const text = quoteArgument(change.value);
+    if (text === undefined) {
+      throw new Error('Expected a validated shell argument');
+    }
     edits.push({ start: token.start, end: token.end, text });
     return [{ ...token, value: change.value }];
   });
@@ -746,22 +751,22 @@ interface ScannedOptions {
   /** Where the entry, or with `--test` the test files, start. */
   entryIndex: number;
   /** Runner-specific options and loader flags to remove. */
-  removals: Edit[];
+  removals: Array<Edit>;
   loaders: number;
   runnerLoader: boolean;
-  imports: { token: LiteralCommandToken; value: string; option?: LiteralCommandToken }[];
+  imports: Array<{ token: LiteralCommandToken; value: string; option?: LiteralCommandToken }>;
   registerKeepReason?: string;
   inlineCode: boolean;
   runScript?: string;
   /** Local `--require` and `--import` modules, which load before the scripts. */
-  preloads: string[];
+  preloads: Array<string>;
   keepReason?: string;
   test: boolean;
   watch: boolean;
 }
 
-function importEdits(command: string, scanned: ScannedOptions): Edit[] {
-  const edits: Edit[] = [];
+function importEdits(command: string, scanned: ScannedOptions): Array<Edit> {
+  const edits: Array<Edit> = [];
   for (const { token, value, option } of scanned.imports) {
     if (option) {
       edits.push(literalEdit(command, option, '--import'));
@@ -774,7 +779,7 @@ function importEdits(command: string, scanned: ScannedOptions): Edit[] {
 /** Read options from the executable to the entry file. */
 function scanOptions(
   runner: ScriptRunnerMigration,
-  tokens: LiteralCommandToken[],
+  tokens: Array<LiteralCommandToken>,
   index: number,
   directRunner: boolean,
 ): ScannedOptions {
@@ -873,7 +878,7 @@ function scanOptions(
 function runReason(
   runner: ScriptRunnerMigration,
   cwd: string | undefined,
-  tokens: LiteralCommandToken[],
+  tokens: Array<LiteralCommandToken>,
   scanned: ScannedOptions,
   watch: boolean,
 ): string | undefined {
@@ -897,7 +902,7 @@ function rewriteQuotedCommand(
   runner: ScriptRunnerMigration,
   rewrite: Rewrite,
   token: LiteralCommandToken,
-  environment: readonly string[],
+  environment: ReadonlyArray<string>,
 ): boolean {
   const raw = rewrite.command.slice(token.start, token.end);
   const quote = raw[0];
@@ -919,7 +924,7 @@ function rewriteQuotedCommand(
 }
 
 /** The commands in a scripts or lint-staged record. */
-function recordCommands(record: unknown): string[] {
+function recordCommands(record: JsonValue | undefined): Array<string> {
   if (!isPlainRecord(record)) {
     return [];
   }
@@ -929,11 +934,11 @@ function recordCommands(record: unknown): string[] {
 }
 
 /** The commands a package.json runs: its scripts and lint-staged tasks. */
-function packageCommands(pkg: Record<string, unknown>): string[] {
+function packageCommands(pkg: JsonObject): Array<string> {
   return [...recordCommands(pkg.scripts), ...recordCommands(pkg['lint-staged'])];
 }
 
-function lintStagedJsonFiles(dir: string): string[] {
+function lintStagedJsonFiles(dir: string): Array<string> {
   return LINT_STAGED_JSON_CONFIG_FILES.map((name) => path.join(dir, name)).filter(
     (file) => fs.existsSync(file) && isJsonFile(file),
   );
@@ -952,7 +957,7 @@ function ownsRunnerAtRuntime(runner: ScriptRunnerMigration, pkg: DependencyBag):
   );
 }
 
-function packageDirs(rootDir: string, packages?: readonly WorkspacePackage[]): string[] {
+function packageDirs(rootDir: string, packages?: ReadonlyArray<WorkspacePackage>): Array<string> {
   return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
 }
 
@@ -962,7 +967,7 @@ function packageDirs(rootDir: string, packages?: readonly WorkspacePackage[]): s
 export function detectScriptRunnerProject(
   runner: ScriptRunnerMigration,
   rootDir: string,
-  packages?: readonly WorkspacePackage[],
+  packages?: ReadonlyArray<WorkspacePackage>,
 ): boolean {
   return packageDirs(rootDir, packages).some((dir) => {
     const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
@@ -971,7 +976,7 @@ export function detectScriptRunnerProject(
     }
     const commands = [
       ...packageCommands(pkg),
-      ...lintStagedJsonFiles(dir).flatMap((file) => recordCommands(readJsonFile(file))),
+      ...lintStagedJsonFiles(dir).flatMap((file) => recordCommands(readJsonValue(file))),
     ];
     return (
       commands.some((command) =>
@@ -1003,14 +1008,17 @@ export function detectScriptRunnerProject(
 /** Rewrite each command of a scripts or lint-staged record; returns whether one changed. */
 function rewriteCommandRecord(
   runner: ScriptRunnerMigration,
-  record: Record<string, unknown>,
+  record: JsonObject,
   label: string,
   cwd: string,
   report?: MigrationReport,
 ): boolean {
   let edited = false;
   for (const [key, value] of Object.entries(record)) {
-    const commands: unknown[] = Array.isArray(value) ? value : [value];
+    if (value === undefined) {
+      continue;
+    }
+    const commands = Array.isArray(value) ? value : [value];
     const rewritten = commands.map((command) => {
       if (typeof command !== 'string') {
         return command;
@@ -1048,16 +1056,17 @@ function rewriteRunnerShebang(
   if (entry === undefined) {
     return { reason: 'the script path needs shell escaping that vp migrate does not support' };
   }
-  const shebangRunner = runner.prepareRun
+  const prepareRun = runner.prepareRun;
+  const shebangRunner = prepareRun
     ? {
         ...runner,
         prepareRun: (
-          args: readonly string[],
+          args: ReadonlyArray<string>,
           context: Parameters<NonNullable<ScriptRunnerMigration['prepareRun']>>[1],
         ) =>
           // Inspect entry-relative configuration; shebang mode rejects settings
           // that would need a path pinned relative to the caller.
-          runner.prepareRun!(args, { ...context, cwd: path.dirname(file), shebang: true }),
+          prepareRun(args, { ...context, cwd: path.dirname(file), shebang: true }),
       }
     : runner;
   // The caller supplies the runtime working directory, not the script's location.
@@ -1308,7 +1317,9 @@ function jsonUsesRunner(runner: ScriptRunnerMigration, value: unknown, commands:
       ([key, item]) =>
         jsonUsesRunner(runner, item, commands) ||
         (LOADER_SETTINGS.has(key) &&
-          [item].flat().some((loader) => runner.loaderPattern.test(String(loader)))),
+          [item]
+            .flat()
+            .some((loader) => typeof loader === 'string' && runner.loaderPattern.test(loader))),
     )
   );
 }
@@ -1317,11 +1328,11 @@ function jsonUsesRunner(runner: ScriptRunnerMigration, value: unknown, commands:
 export function migrateScriptRunnerToVpx(
   runner: ScriptRunnerMigration,
   rootDir: string,
-  packages?: readonly WorkspacePackage[],
+  packages?: ReadonlyArray<WorkspacePackage>,
   report?: MigrationReport,
-): { changed: boolean; dependencyRemoved: boolean; scriptsChanged: boolean } {
+) {
   let changed = false;
-  const migrated: string[] = [];
+  const migrated: Array<string> = [];
   for (const dir of packageDirs(rootDir, packages)) {
     const packageJsonPath = path.join(dir, 'package.json');
     const pkg = readPackageJsonIfExists(packageJsonPath);
@@ -1359,11 +1370,14 @@ export function migrateScriptRunnerToVpx(
       return edited ? json : undefined;
     });
     for (const file of lintStagedJsonFiles(dir)) {
-      editJsonFile(file, (config) => {
-        const edited = rewriteCommandRecord(runner, config, displayRelative(file), dir, report);
-        changed ||= edited;
-        return edited ? config : undefined;
-      });
+      const config = readJsonValue(file);
+      if (
+        isPlainRecord(config) &&
+        rewriteCommandRecord(runner, config, displayRelative(file), dir, report)
+      ) {
+        writeJsonFile(file, config);
+        changed = true;
+      }
     }
     if (rewriteRunnerShebangs(runner, dir, report)) {
       changed = true;
@@ -1389,7 +1403,7 @@ export function migrateScriptRunnerToVpx(
     }
     editJsonFile<DependencyBag>(packageJsonPath, (json) => {
       for (const dependency of runner.dependencies) {
-        delete json.devDependencies![dependency];
+        delete json.devDependencies?.[dependency];
       }
       return json;
     });

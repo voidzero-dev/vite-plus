@@ -1,8 +1,11 @@
-import * as verkit from 'verkit';
+import { normalize, normalizeRange, isGreaterThan, findMinimumForRange } from 'verkit';
 import { describe, expect, test } from 'vitest';
-import * as yaml from 'yaml';
+import { isMap, isScalar, parse, parseDocument, stringify } from 'yaml';
 
 import { mergePnpmWorkspaces, mergeWorkspaceYaml } from '../sync-remote-deps.ts';
+
+const yaml = { isMap, isScalar, parse, parseDocument, stringify };
+const verkit = { normalize, normalizeRange, isGreaterThan, findMinimumForRange };
 
 // `pnpm tool sync-remote` rewrites the whole pnpm-workspace.yaml. It must merge
 // the upstream rolldown/vite workspaces into the main one WITHOUT dropping the

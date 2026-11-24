@@ -2,11 +2,14 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import type { JsonObject } from '../../packages/cli/src/utils/json-value.ts';
+import { isObjectValue, isJsonObject } from '../../packages/cli/src/utils/json-value.ts';
 import {
   CORE_PACKAGE_NAME,
   initialCoreVersion,
   tryDecodeCoreVersion,
 } from '../../packages/tools/src/core-version.ts';
+import { readJsonObject, requireJsonObject } from '../../scripts/json.ts';
 import {
   findLatestStableVersionForMajor,
   getBundledDependencyRanges,
@@ -24,13 +27,6 @@ type Change = {
   tag?: string;
 };
 
-type GitHubTag = {
-  name?: unknown;
-  commit?: {
-    sha?: unknown;
-  };
-};
-
 type LatestTag = {
   sha: string;
   tag: string;
@@ -40,26 +36,8 @@ type LatestTagOptions = {
   stableOnly?: boolean;
 };
 
-type NpmVersionResponse = {
-  version?: unknown;
-  dependencies?: Record<string, string>;
-};
-
-type NpmPackumentResponse = {
-  versions?: Record<string, unknown>;
-};
-
-type UpstreamVersions = {
-  rolldown: {
-    hash: string;
-  };
-  vite: {
-    hash: string;
-  };
-  'oxc-node': {
-    hash: string;
-  };
-};
+const upstreamNames = ['rolldown', 'vite', 'oxc-node'] as const;
+type UpstreamVersions = Record<(typeof upstreamNames)[number], { hash: string }>;
 
 type PnpmWorkspaceVersions = {
   vitest: string;
@@ -96,10 +74,6 @@ const SUPPORTED_PNPM_INSTALLER_MAJOR = 10;
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
 const changes = new Map<string, Change>();
-
-function readJsonFile(filePath: string) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
 
 function recordChange(
   name: string,
@@ -139,17 +113,26 @@ async function getLatestTag(
   if (!res.ok) {
     throw new Error(`Failed to fetch tags for ${owner}/${repo}: ${res.status} ${res.statusText}`);
   }
-  const tags = (await res.json()) as GitHubTag[];
+  const tags: unknown = await res.json();
   if (!Array.isArray(tags) || !tags.length) {
     throw new Error(`No tags found for ${owner}/${repo}`);
   }
+  const entries: Array<unknown> = tags;
   const latest = options.stableOnly
-    ? tags.find((tag) => typeof tag.name === 'string' && STABLE_SEMVER_TAG_RE.test(tag.name))
-    : tags[0];
+    ? entries.find(
+        (tag) =>
+          isJsonObject(tag) && typeof tag.name === 'string' && STABLE_SEMVER_TAG_RE.test(tag.name),
+      )
+    : entries[0];
   if (!latest) {
     throw new Error(`No stable semver tags found for ${owner}/${repo}`);
   }
-  if (typeof latest?.commit?.sha !== 'string' || typeof latest.name !== 'string') {
+  if (
+    !isJsonObject(latest) ||
+    !isObjectValue(latest.commit) ||
+    typeof latest.commit.sha !== 'string' ||
+    typeof latest.name !== 'string'
+  ) {
     throw new Error(`Invalid tag structure for ${owner}/${repo}: missing SHA or name`);
   }
   console.log(`${repo} -> ${latest.name} (${latest.commit.sha.slice(0, 7)})`);
@@ -171,19 +154,19 @@ async function containsCommit(
   if (!res.ok) {
     throw new Error(`Failed to compare ${owner}/${repo} ${base}...${head}: ${res.status}`);
   }
-  const { status } = (await res.json()) as { status?: unknown };
+  const { status } = requireJsonObject(await res.json(), 'GitHub comparison');
   return status === 'ahead' || status === 'identical';
 }
 
 // ============ npm Registry ============
-async function fetchNpmVersion(packageName: string): Promise<NpmVersionResponse> {
+async function fetchNpmVersion(packageName: string): Promise<JsonObject> {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
   if (!res.ok) {
     throw new Error(
       `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
     );
   }
-  return (await res.json()) as NpmVersionResponse;
+  return requireJsonObject(await res.json(), packageName);
 }
 
 async function getNpmVersion(packageName: string): Promise<string> {
@@ -203,8 +186,11 @@ async function getLatestNpmVersionForMajor(packageName: string, major: number): 
       `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
     );
   }
-  const data = (await res.json()) as NpmPackumentResponse;
-  const version = findLatestStableVersionForMajor(Object.keys(data.versions ?? {}), major);
+  const data = requireJsonObject(await res.json(), packageName);
+  const version = findLatestStableVersionForMajor(
+    Object.keys(isObjectValue(data.versions) ? data.versions : {}),
+    major,
+  );
   if (!version) {
     throw new Error(`No stable ${major}.x version found for ${packageName}`);
   }
@@ -220,7 +206,7 @@ async function getLatestPnpmInstaller(): Promise<{ version: string; integrity: s
 // e.g. the `lightningcss` range that the bundled `@tsdown/css` depends on.
 async function getNpmDependencyRange(packageName: string, dependencyName: string): Promise<string> {
   const data = await fetchNpmVersion(packageName);
-  const range = data.dependencies?.[dependencyName];
+  const range = isObjectValue(data.dependencies) ? data.dependencies[dependencyName] : undefined;
   if (typeof range !== 'string') {
     throw new Error(
       `Invalid npm response for ${packageName}: missing dependencies.${dependencyName}`,
@@ -229,10 +215,20 @@ async function getNpmDependencyRange(packageName: string, dependencyName: string
   return range;
 }
 
+function hasUpstreamHashes(data: JsonObject): data is JsonObject & UpstreamVersions {
+  return upstreamNames.every((name) => {
+    const upstream = data[name];
+    return isObjectValue(upstream) && typeof upstream.hash === 'string';
+  });
+}
+
 // ============ Update .upstream-versions.json ============
 async function updateUpstreamVersions(): Promise<void> {
   const filePath = path.join(ROOT, 'packages/tools/.upstream-versions.json');
-  const data: UpstreamVersions = readJsonFile(filePath);
+  const data = readJsonObject(filePath);
+  if (!hasUpstreamHashes(data)) {
+    throw new Error(`Invalid upstream hashes in ${filePath}`);
+  }
 
   const oldRolldownHash = data.rolldown.hash;
   const oldViteHash = data.vite.hash;
@@ -277,13 +273,15 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     '@vitest/spy',
     '@vitest/utils',
   ];
-  const vitestExactVersionEntries: PnpmWorkspaceEntry[] = vitestExactVersionPackages.map((pkg) => ({
-    name: pkg,
-    pattern: new RegExp(`'${pkg.replaceAll('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
-    replacement: `'${pkg}': ${versions.vitest}`,
-    newVersion: versions.vitest,
-  }));
-  const entries: PnpmWorkspaceEntry[] = [
+  const vitestExactVersionEntries: Array<PnpmWorkspaceEntry> = vitestExactVersionPackages.map(
+    (pkg) => ({
+      name: pkg,
+      pattern: new RegExp(`'${pkg.replaceAll('/', String.raw`\/`)}': ([\\d.]+(?:-[\\w.]+)?)`),
+      replacement: `'${pkg}': ${versions.vitest}`,
+      newVersion: versions.vitest,
+    }),
+  );
+  const entries: Array<PnpmWorkspaceEntry> = [
     {
       name: 'vitest',
       // The `@voidzero-dev/vite-plus-test` wrapper (which used to be aliased
@@ -506,8 +504,7 @@ function writeMetaFiles(): void {
   }
   bodyLines.push('', '## Dependency updates', '');
   if (changed.length) {
-    bodyLines.push('| Package | From | To |');
-    bodyLines.push('| --- | --- | --- |');
+    bodyLines.push('| Package | From | To |', '| --- | --- | --- |');
     for (const [name, v] of changed) {
       bodyLines.push(`| \`${name}\` | \`${formatOld(v)}\` | \`${formatVersion(v)}\` |`);
     }
@@ -532,23 +529,31 @@ function writeMetaFiles(): void {
 function syncBundledDependencies(): void {
   if (META_DIR) {
     const versionsPath = path.join(META_DIR, 'versions.json');
-    const previous = readJsonFile(versionsPath) as Record<string, Change>;
+    const previous = readJsonObject(versionsPath);
     for (const [name, change] of Object.entries(previous)) {
-      changes.set(name, change);
+      if (
+        !isObjectValue(change) ||
+        (change.old !== null && typeof change.old !== 'string') ||
+        typeof change.new !== 'string' ||
+        (change.tag !== undefined && typeof change.tag !== 'string')
+      ) {
+        throw new Error(`Invalid version change for ${name} in ${versionsPath}`);
+      }
+      changes.set(name, { old: change.old, new: change.new, tag: change.tag });
     }
   }
 
   const ranges = getBundledDependencyRanges(ROOT);
   const filePath = path.join(ROOT, 'packages/core/package.json');
-  const pkg = readJsonFile(filePath);
+  const pkg = readJsonObject(filePath);
   for (const { name, field, range } of ranges) {
-    const oldRange = pkg[field]?.[name];
-    if (typeof oldRange !== 'string') {
+    const dependencies = pkg[field];
+    if (!isObjectValue(dependencies) || typeof dependencies[name] !== 'string') {
       throw new Error(`Missing ${field}.${name} in ${filePath}`);
     }
     // Preserve the original version if synchronization runs again after fixups.
-    recordChange(name, changes.get(name)?.old ?? oldRange, range);
-    pkg[field][name] = range;
+    recordChange(name, changes.get(name)?.old ?? dependencies[name], range);
+    dependencies[name] = range;
   }
   syncCoreVersion(pkg);
   fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
@@ -558,13 +563,16 @@ function syncBundledDependencies(): void {
 // The core version encodes the bundled Vite version (rfcs/core-version-alignment.md).
 // When the bundled Vite changes, restart the release counter at 0. The release
 // workflow selects the next unpublished counter.
-function syncCoreVersion(pkg: { version?: unknown; bundledVersions?: Record<string, string> }) {
+function syncCoreVersion(pkg: JsonObject) {
   const vitePath = path.join(ROOT, 'vite/packages/vite/package.json');
-  const viteVersion = readJsonFile(vitePath).version;
+  const viteVersion = readJsonObject(vitePath).version;
   if (typeof viteVersion !== 'string' || !viteVersion.trim()) {
     throw new Error(`Missing version in ${vitePath}`);
   }
-  pkg.bundledVersions = { ...pkg.bundledVersions, vite: viteVersion };
+  if (!isObjectValue(pkg.bundledVersions)) {
+    pkg.bundledVersions = {};
+  }
+  pkg.bundledVersions.vite = viteVersion;
   const current = typeof pkg.version === 'string' ? pkg.version : undefined;
   if (current !== undefined && tryDecodeCoreVersion(current)?.vite === viteVersion) {
     return;

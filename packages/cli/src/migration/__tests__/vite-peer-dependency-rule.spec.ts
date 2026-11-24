@@ -5,14 +5,17 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 
-import { PackageManager, type WorkspaceInfo } from '../../types/index.js';
-import { VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.js';
-import type { PnpmPeerDependencyRules as PeerDependencyRules } from '../migrator/shared.js';
-import { createMigrationReport } from '../report.js';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
+import { VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
+import { readJsonFile as readJson } from '../../utils/json.ts';
+import type { PnpmPeerDependencyRules as PeerDependencyRules } from '../migrator/shared.ts';
+import { createMigrationReport } from '../report.ts';
+import { fixtureObject } from './fixture-json.ts';
 
 // Keep the vite-plus spec stable; each test selects the core alias it needs.
-vi.mock('../../utils/constants.js', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('../../utils/constants.js')>();
+vi.mock(import('../../utils/constants.ts'), async (importOriginal) => {
+  const mod = await importOriginal();
   return {
     ...mod,
     VITE_PLUS_VERSION: 'latest',
@@ -25,7 +28,7 @@ const {
   ensureVitePlusBootstrap,
   rewriteStandaloneProject,
   vitePeerDependencyRuleRequired,
-} = await import('../migrator.js');
+} = await import('../migrator.ts');
 
 const STABLE_CORE = 'npm:@voidzero-dev/vite-plus-core@8.3.5000';
 const PREVIEW_CORE = 'npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3';
@@ -51,14 +54,10 @@ function makeWorkspaceInfo(rootDir: string, version = '10.33.0'): WorkspaceInfo 
   };
 }
 
-function readJson(filePath: string): Record<string, unknown> {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-function readWorkspaceRules(projectPath: string): PeerDependencyRules | undefined {
-  const workspace = parseYaml(
-    fs.readFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8'),
-  ) as { peerDependencyRules?: PeerDependencyRules };
+function readWorkspaceRules(projectPath: string) {
+  const workspace = fixtureObject(
+    parseYaml(fs.readFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8')),
+  );
   return workspace.peerDependencyRules;
 }
 
@@ -69,7 +68,7 @@ function readPackageJsonRules(projectPath: string): PeerDependencyRules | undefi
   return pkg.pnpm?.peerDependencyRules;
 }
 
-function writeVitePlusProject(projectPath: string, peerDependencyRules: string[]) {
+function writeVitePlusProject(projectPath: string, peerDependencyRules: Array<string>) {
   fs.writeFileSync(
     path.join(projectPath, 'package.json'),
     JSON.stringify({
@@ -295,11 +294,9 @@ describe('pnpm vite peer rule', () => {
 
       ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, '10.6.1'));
 
-      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-        pnpm: Record<string, unknown>;
-      };
-      expect(pkg.pnpm.peerDependencyRules).toBeUndefined();
-      expect(pkg.pnpm.overrides).toEqual({ 'vite@*': STABLE_CORE });
+      const pkg = readJson(path.join(tmpDir, 'package.json'));
+      expect(fixtureObject(pkg, 'pnpm').peerDependencyRules).toBeUndefined();
+      expect(pkg).toHaveProperty(['pnpm', 'overrides'], { 'vite@*': STABLE_CORE });
     });
 
     it('removes a vite rule during the full migration', () => {

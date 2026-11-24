@@ -16,7 +16,7 @@ function tarRecord({ name, data = '', type = '0' }: TestEntry): Buffer {
   return tar.subarray(0, 512 + Math.ceil(Buffer.byteLength(data) / 512) * 512);
 }
 
-function archiveWith(files: TestEntry[]): Buffer {
+function archiveWith(files: Array<TestEntry>): Buffer {
   return gzipSync(Buffer.concat([...files.map(tarRecord), Buffer.alloc(1024)]));
 }
 
@@ -62,7 +62,7 @@ describe('parseOrgTarball', () => {
     ).rejects.toThrow(/entry exceeds 63 byte size limit/);
   });
 
-  it.each(['-0000000001', 'not-octal', '1000\xb0'])(
+  it.each(['-0000000001', 'not-octal', '1000\u00b0'])(
     'rejects a malformed size field: %s',
     async (size) => {
       const tar = tarRecord({ name: 'package/a' });
@@ -177,6 +177,6 @@ describe('parseOrgTarball', () => {
 
   it('rejects a truncated gzip stream', async () => {
     const archive = archiveWith([{ name: 'package/a', data: 'hello' }]);
-    await expect(parseOrgTarball(archive.subarray(0, -8))).rejects.toThrow();
+    await expect(parseOrgTarball(archive.subarray(0, -8))).rejects.toThrow(/unexpected end/i);
   });
 });

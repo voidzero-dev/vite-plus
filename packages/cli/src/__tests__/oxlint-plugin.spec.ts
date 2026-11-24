@@ -11,8 +11,8 @@ import {
   PREFER_VITE_PLUS_IMPORTS_RULE,
   PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
   VITE_PLUS_OXLINT_PLUGIN_SPECIFIER,
-} from '../oxlint-plugin-config.js';
-import { preferVitePlusImportsRule, rewriteVitePlusImportSpecifier } from '../oxlint-plugin.js';
+} from '../oxlint-plugin-config.ts';
+import { preferVitePlusImportsRule, rewriteVitePlusImportSpecifier } from '../oxlint-plugin.ts';
 
 const nuxtTestFilename = path.join(
   import.meta.dirname,
@@ -190,7 +190,7 @@ describe('rewriteVitePlusImportSpecifier', () => {
   });
 });
 
-function checkImports(filename: string, preservedSpecifiers: readonly string[]): void {
+function checkImports(filename: string, preservedSpecifiers: ReadonlyArray<string>): void {
   const tests: RuleTester.TestCases = { valid: [], invalid: [] };
   for (const [specifier, binding, replacement] of [
     ['vitest', 'expect', 'vite-plus/test'],

@@ -50,26 +50,22 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import {
-  createServer,
-  type IncomingMessage,
-  type OutgoingHttpHeaders,
-  type ServerResponse,
-} from 'node:http';
+import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from 'node:http';
+import { createServer } from 'node:http';
 import { Agent as HttpsAgent, get as httpsGet, request as httpsRequest } from 'node:https';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 
+import type { JsonObject, JsonValue } from '../../cli/src/utils/json-value.ts';
+import { isObjectValue, parseJsonObject, isStringRecord } from '../../cli/src/utils/json-value.ts';
 import { exitCodeFromClose } from './exit-code.ts';
 import { packLocalVitePlusPackages } from './pack-local-vite-plus.ts';
 import { RegistryCache, rewriteTarballs, upstreamUrl } from './registry-cache.ts';
 
-interface PackageManifest {
+interface PackageManifest extends JsonObject {
   name: string;
   version: string;
-  [key: string]: unknown;
 }
 
 const args = process.argv.slice(2);
@@ -175,7 +171,7 @@ if (prewarmUrl || prewarmManifest) {
 // invocation's pnpm wrapper) out of the kill list.
 const REGISTRY_PROCESS_RE = /(^|[/\\])node(\.exe)?['"]?\s[^\n]*local-npm-registry\.ts/;
 
-function findRegistryProcesses(): { pid: number; command: string }[] {
+function findRegistryProcesses(): Array<{ pid: number; command: string }> {
   const result =
     process.platform === 'win32'
       ? spawnSync(
@@ -231,7 +227,7 @@ if (listProcesses || killProcesses) {
 }
 
 // The script lives at `packages/tools/src/`, so the repo root is three up.
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const repoRoot = path.resolve(import.meta.dirname, '..', '..', '..');
 
 // `--pack-to <dir>`: pack the checkout packages into <dir> and exit, without
 // serving. The PTY snapshot runner calls this once per run, then points each
@@ -258,11 +254,11 @@ if (pack && !packagesDir) {
   packagesDir = packedDir;
 }
 
-const fixtureManifest: Record<string, unknown> = existsSync('./mock-manifest.json')
-  ? (JSON.parse(readFileSync('./mock-manifest.json', 'utf-8')) as Record<string, unknown>)
+const fixtureManifest = existsSync('./mock-manifest.json')
+  ? parseJsonObject(readFileSync('./mock-manifest.json', 'utf8'))
   : {};
 
-const sharedManifest: Record<string, unknown> = {};
+const sharedManifest: JsonObject = {};
 if (snapshotFixtures) {
   // Authored packages have no public-registry counterpart. Keep them available
   // in comparison modes; only published recordings are disabled by --live.
@@ -271,7 +267,7 @@ if (snapshotFixtures) {
     : ['manifest.json', 'local/manifest.json']) {
     Object.assign(
       sharedManifest,
-      JSON.parse(readFileSync(path.join(snapshotFixtures, filename), 'utf8')),
+      parseJsonObject(readFileSync(path.join(snapshotFixtures, filename), 'utf8')),
     );
   }
 }
@@ -294,7 +290,7 @@ const snapshotCache = snapshotCacheDir
 function resolveUpstreamRegistry(): string {
   for (const npmrcPath of [path.resolve('.npmrc'), path.join(homedir(), '.npmrc')]) {
     try {
-      const npmrc = readFileSync(npmrcPath, 'utf-8');
+      const npmrc = readFileSync(npmrcPath, 'utf8');
       const registryLine = npmrc.split('\n').find((line) => line.trim().startsWith('registry='));
       const registry = registryLine?.split('=')[1]?.trim().replace(/\/+$/, '');
       // The proxy fetches with node:https, so only accept https upstreams.
@@ -335,20 +331,40 @@ function readPackageJsonFromTarball(tgzBytes: Buffer, sourcePath: string): Packa
         8,
       ) || 0;
     if (name === 'package/package.json') {
-      return JSON.parse(
-        tar.subarray(offset + 512, offset + 512 + size).toString(),
-      ) as PackageManifest;
+      const manifest = parseJsonObject(tar.subarray(offset + 512, offset + 512 + size).toString());
+      if (typeof manifest.name !== 'string' || typeof manifest.version !== 'string') {
+        throw new Error(`Invalid package manifest in ${sourcePath}`);
+      }
+      return { ...manifest, name: manifest.name, version: manifest.version };
     }
     offset += 512 + Math.ceil(size / 512) * 512;
   }
   throw new Error(`package/package.json not found in ${sourcePath}`);
 }
 
-interface Packument {
+interface Packument extends JsonObject {
   name: string;
   'dist-tags': Record<string, string>;
-  versions: Record<string, unknown>;
-  time: Record<string, string>;
+  versions: JsonObject;
+  time: JsonObject;
+}
+
+function parsePackument(text: string): Packument | null {
+  const data = parseJsonObject(text);
+  if (
+    typeof data.name !== 'string' ||
+    !isStringRecord(data['dist-tags']) ||
+    !isObjectValue(data.versions)
+  ) {
+    return null;
+  }
+  return {
+    ...data,
+    name: data.name,
+    'dist-tags': data['dist-tags'],
+    versions: data.versions,
+    time: isObjectValue(data.time) ? data.time : {},
+  };
 }
 
 const localTarballs = new Map<string, string>(); // tarball basename -> absolute path
@@ -430,14 +446,14 @@ function fetchUpstreamPackument(name: string): Promise<Packument | null> {
           resolve(null);
           return;
         }
-        const chunks: Buffer[] = [];
+        const chunks: Array<Buffer> = [];
         upstream.on('data', (chunk: Buffer) => chunks.push(chunk));
         upstream.on('error', () => resolve(null));
         upstream.on('end', () => {
           try {
             const body = Buffer.concat(chunks);
             const json = upstream.headers['content-encoding'] === 'gzip' ? gunzipSync(body) : body;
-            resolve(JSON.parse(json.toString()) as Packument);
+            resolve(parsePackument(json.toString()));
           } catch {
             resolve(null);
           }
@@ -459,7 +475,10 @@ function fetchUpstreamPackument(name: string): Promise<Packument | null> {
 const mergedPackuments = new Map<string, Packument>();
 
 async function resolveLocalPackument(name: string): Promise<Packument> {
-  const local = localPackuments.get(name) as Packument;
+  const local = localPackuments.get(name);
+  if (!local) {
+    throw new Error(`Missing local packument for ${name}`);
+  }
   const cached = mergedPackuments.get(name);
   if (cached) {
     return cached;
@@ -468,7 +487,7 @@ async function resolveLocalPackument(name: string): Promise<Packument> {
     ? await snapshotCache
         .get(`${UPSTREAM_REGISTRY}/${name.replace('/', '%2F')}`, 'application/json')
         .then((response) =>
-          response.status === 200 ? (JSON.parse(response.body.toString()) as Packument) : null,
+          response.status === 200 ? parsePackument(response.body.toString()) : null,
         )
         .catch(() => null)
     : await fetchUpstreamPackument(name);
@@ -488,19 +507,20 @@ async function resolveLocalPackument(name: string): Promise<Packument> {
   return merged;
 }
 
-function resolveLocalVersion(key: string): unknown {
+function resolveLocalVersion(key: string): JsonValue | undefined {
   const separator = key.lastIndexOf('/');
   if (separator === -1) {
     return undefined;
   }
   const name = key.slice(0, separator);
   const specifier = key.slice(separator + 1);
-  const packument = localPackuments.get(name) ?? (manifest[name] as Packument | undefined);
-  if (!packument) {
+  const packument = localPackuments.get(name) ?? manifest[name];
+  if (!isObjectValue(packument) || !isObjectValue(packument.versions)) {
     return undefined;
   }
-  const version = packument['dist-tags']?.[specifier] ?? specifier;
-  return packument.versions?.[version];
+  const tags = packument['dist-tags'];
+  const tag = isObjectValue(tags) ? tags[specifier] : undefined;
+  return packument.versions[typeof tag === 'string' ? tag : specifier];
 }
 
 // Stream the upstream response byte-for-byte. Unlike `fetch`, `https` does not
@@ -512,7 +532,7 @@ function resolveLocalVersion(key: string): unknown {
 function copyHeaders(
   from: IncomingMessage['headers'],
   to: OutgoingHttpHeaders,
-  names: readonly string[],
+  names: ReadonlyArray<string>,
 ): void {
   for (const name of names) {
     if (from[name] !== undefined) {
@@ -604,7 +624,7 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): void {
 }
 
 let requests = 0;
-const server = createServer(async (req, res) => {
+async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   // Tests of the CLI's own metadata cache must keep the registry URL fixed:
   // changing the origin selects a different product cache entry.
   if (req.url === '/-/vp-test/requests') {
@@ -688,8 +708,13 @@ const server = createServer(async (req, res) => {
     if (!res.headersSent) {
       res.writeHead(502);
     }
-    res.end(`registry error: ${(error as Error).message}`);
+    res.end(`registry error: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+const server = createServer((req, res) => {
+  void handleRequest(req, res).catch((error: unknown) => {
+    res.destroy(error instanceof Error ? error : new Error(String(error)));
+  });
 });
 
 // Registry env for every package manager, each of which reads its own
@@ -703,7 +728,7 @@ const server = createServer(async (req, res) => {
 // its global folder, and bun's install cache trusts name@version without
 // refetching, so a later run would reuse dead URLs or stale local package
 // bytes. Give each run throwaway caches instead.
-function buildRegistryEnv(registry: string): Record<string, string> {
+function buildRegistryEnv(registry: string) {
   // In a proxied environment (HTTP_PROXY/HTTPS_PROXY without a loopback
   // no-proxy entry), package managers would send the 127.0.0.1 registry
   // requests through the proxy and never reach this server; extend the
@@ -715,7 +740,7 @@ function buildRegistryEnv(registry: string): Record<string, string> {
   // cache/temp renames can fail with ENOTSUP. Keep its throwaway cache in
   // the user profile and its temporary files on the same filesystem.
   const bunCacheRoot =
-    process.platform === 'win32' && process.env.CI != null ? homedir() : tmpdir();
+    process.platform === 'win32' && process.env.CI !== undefined ? homedir() : tmpdir();
   const bunCacheDir = mkdtempSync(path.join(bunCacheRoot, 'vp-local-registry-bun-'));
   const bunTempDir = path.join(bunCacheDir, '.tmp');
   mkdirSync(bunTempDir);
@@ -781,7 +806,7 @@ server.listen(0, '127.0.0.1', () => {
     return;
   }
 
-  const [cmd, ...cmdArgs] = command as [string, ...string[]];
+  const [cmd, ...cmdArgs] = command;
   const childEnv = snapshotRunner
     ? {
         ...process.env,

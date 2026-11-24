@@ -2,14 +2,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { log as promptLog } from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
-  log: { info: vi.fn(), success: vi.fn(), warn: vi.fn() },
+  log: {
+    info: vi.fn<typeof promptLog.info>(),
+    success: vi.fn<typeof promptLog.success>(),
+    warn: vi.fn<typeof promptLog.warn>(),
+  },
 }));
 vi.mock(import('../../utils/command.ts'), async (importOriginal) => ({
   ...(await importOriginal()),
-  runCommandSilently: vi.fn(),
+  runCommandSilently: vi.fn<typeof runCommandSilently>(),
 }));
 
 import { runCommandSilently } from '../../utils/command.ts';

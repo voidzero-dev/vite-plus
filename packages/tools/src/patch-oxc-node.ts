@@ -14,7 +14,6 @@
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { parseCargoOxcVersions, replaceCargoCrateVersion } from './cargo-toml.ts';
 
@@ -41,16 +40,16 @@ export function setOxcVersion(cargoToml: string, version: string): string {
 }
 
 export function patchOxcNode(rootDir: string = process.cwd()): void {
-  const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
+  const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf8'), 'Cargo.toml');
   const cargoTomlPath = join(rootDir, OXC_NODE_DIR, 'Cargo.toml');
-  const cargoToml = readFileSync(cargoTomlPath, 'utf-8');
+  const cargoToml = readFileSync(cargoTomlPath, 'utf8');
   const patched = setOxcVersion(cargoToml, version);
   if (patched !== cargoToml) {
-    writeFileSync(cargoTomlPath, patched, 'utf-8');
+    writeFileSync(cargoTomlPath, patched, 'utf8');
     log(`✓ Cargo.toml: oxc ${version}`);
   }
   const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
-  const source = readFileSync(libPath, 'utf-8');
+  const source = readFileSync(libPath, 'utf8');
   // Oxc 0.156 renamed this predicate; the workspace still uses 0.155.
   // Matching the variant preserves await-using detection with either version.
   const patchedSource = source.replace(
@@ -58,7 +57,7 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
     'matches!(it.kind, oxc::ast::ast::VariableDeclarationKind::AwaitUsing)',
   );
   if (patchedSource !== source) {
-    writeFileSync(libPath, patchedSource, 'utf-8');
+    writeFileSync(libPath, patchedSource, 'utf8');
     log('✓ lib.rs: compatible await-using detection');
   }
 }
@@ -66,7 +65,7 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
 if (
   process.argv[1] &&
   existsSync(process.argv[1]) &&
-  fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
+  import.meta.filename === realpathSync(process.argv[1])
 ) {
   patchOxcNode();
 }

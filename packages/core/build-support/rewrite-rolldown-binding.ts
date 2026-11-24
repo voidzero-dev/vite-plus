@@ -47,7 +47,7 @@ const SPECIFIER_RE = /@rolldown\/binding-([a-z0-9-]+)/g;
 // `@rolldown/binding-*` keep comparing against the Rolldown version. Matching
 // bare `require(` also covers the bundled chunks' `__require(` calls.
 function buildGuardRe(packageName: string): RegExp {
-  const escaped = packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escaped = packageName.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(
     `(require\\(["']${escaped}-[a-z0-9-]+\\/package\\.json["']\\)\\.version;\\s*if \\(bindingPackageVersion !== )(["'])[^"']+\\2([\\s\\S]{0,400}?expected )\\S+( but got)`,
     'g',
@@ -60,7 +60,7 @@ export function rewriteRolldownBindingRequires(
 ): RewriteRolldownBindingResult {
   const rewrittenSuffixes = new Set<string>();
   let specifierRewrites = 0;
-  let rewritten = source.replace(SPECIFIER_RE, (specifier, suffix: string) => {
+  let rewritten = source.replaceAll(SPECIFIER_RE, (specifier, suffix: string) => {
     if (!platformSuffixes.has(suffix)) {
       return specifier;
     }

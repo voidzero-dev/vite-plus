@@ -1,26 +1,29 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { type ParseError, parse as parseJsonc } from 'jsonc-parser';
+import type { ParseError } from 'jsonc-parser';
+import { parse as parseJsonc } from 'jsonc-parser';
 
+import type { JsonObject } from '../../utils/json.ts';
+import { isJsonObject } from '../../utils/json.ts';
 import { NODE_OPTIONS_WITH_VALUE } from '../../vpx-script.ts';
 import { isPlainRecord } from './shared.ts';
 
 interface TsNodeRunContext {
   cwd?: string;
-  environment: readonly string[];
+  environment: ReadonlyArray<string>;
   nodeLoader: boolean;
   executable: string;
   shebang?: boolean;
   publicRegister?: boolean;
-  nodeOptionsArgs?: readonly string[];
+  nodeOptionsArgs?: ReadonlyArray<string>;
 }
 
 interface TsNodeRunPreparation {
   keepReason?: string;
   /** Indices refer to args, excluding the executable. An absent value removes a token. */
-  edits?: { index: number; value?: string }[];
-  prependArgs?: string[];
+  edits?: Array<{ index: number; value?: string }>;
+  prependArgs?: Array<string>;
 }
 
 interface TsNodeOptions {
@@ -123,11 +126,14 @@ function readTsNodeEnvironment(
   return { options, project };
 }
 
+interface ResolvedTsNodeOptions {
+  options?: TsNodeOptions;
+  compilerOptions?: JsonObject;
+  keepReason?: string;
+}
+
 /** Read only data; migration must not load ts-node or a project's compiler. */
-function readTsNodeOptions(
-  file: string,
-  ancestors = new Set<string>(),
-): { options?: TsNodeOptions; compilerOptions?: Record<string, unknown>; keepReason?: string } {
+function readTsNodeOptions(file: string, ancestors = new Set<string>()): ResolvedTsNodeOptions {
   const keepConfig = (reason: string) => ({
     keepReason: `the ts-node configuration in \`${file}\` ${reason}`,
   });
@@ -137,16 +143,16 @@ function readTsNodeOptions(
   const chain = new Set(ancestors).add(file);
   let config: unknown;
   try {
-    const errors: ParseError[] = [];
+    const errors: Array<ParseError> = [];
     config = parseJsonc(fs.readFileSync(file, 'utf8'), errors, { allowTrailingComma: true });
-    if (errors.length || !isPlainRecord(config)) {
+    if (errors.length || !isJsonObject(config)) {
       return keepConfig('cannot be parsed');
     }
   } catch {
     return keepConfig('cannot be read');
   }
   let inherited: TsNodeOptions = {};
-  let compilerOptions: Record<string, unknown> = {};
+  let compilerOptions: JsonObject = {};
   if (config.extends !== undefined) {
     if (
       typeof config.extends !== 'string' ||
@@ -195,7 +201,7 @@ function readTsNodeOptions(
  * transpileOnly. Keep all other compiler behavior for manual migration.
  */
 export function prepareTsNodeRun(
-  args: readonly string[],
+  args: ReadonlyArray<string>,
   context: TsNodeRunContext,
 ): TsNodeRunPreparation {
   const { cwd, nodeLoader, executable } = context;
@@ -409,7 +415,7 @@ export function prepareTsNodeRun(
   }
   if (
     configFile &&
-    config.compilerOptions?.target == null &&
+    (config.compilerOptions?.target === undefined || config.compilerOptions?.target === null) &&
     typeof config.compilerOptions?.useDefineForClassFields !== 'boolean'
   ) {
     // An existing config disables ts-node's Node-version defaults. It then supplies

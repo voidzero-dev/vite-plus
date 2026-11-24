@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getConfiguredDefaultTemplate } from '../org-resolve.js';
+import { getConfiguredDefaultTemplate } from '../org-resolve.ts';
 
 describe('getConfiguredDefaultTemplate', () => {
   let repoRoot: string;

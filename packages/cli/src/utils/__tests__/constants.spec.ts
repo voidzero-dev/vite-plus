@@ -15,7 +15,7 @@ describe('Vite+ dependency versions', () => {
     vi.resetModules();
 
     const { VITE_PLUS_CORE_VERSION, VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } =
-      await import('../constants.js');
+      await import('../constants.ts');
 
     expect(VITE_PLUS_VERSION).toBe(cliPkg.version);
     expect(VITE_PLUS_CORE_VERSION).toBe(corePkg.version);
@@ -31,7 +31,7 @@ describe('Vite+ dependency versions', () => {
       vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
       vi.resetModules();
 
-      const { VITE_PLUS_CORE_VERSION } = await import('../constants.js');
+      const { VITE_PLUS_CORE_VERSION } = await import('../constants.ts');
 
       expect(VITE_PLUS_CORE_VERSION).toBe(corePkg.version);
     },
@@ -45,7 +45,7 @@ describe('Vite+ dependency versions', () => {
     vi.stubEnv('VP_OVERRIDE_PACKAGES', JSON.stringify({ vite: viteCoreUrl, vitest: '4.1.9' }));
     vi.resetModules();
 
-    const { VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } = await import('../constants.js');
+    const { VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } = await import('../constants.ts');
 
     expect(VITE_PLUS_VERSION).toBe(vitePlusUrl);
     expect(VITE_PLUS_OVERRIDE_PACKAGES.vite).toBe(viteCoreUrl);

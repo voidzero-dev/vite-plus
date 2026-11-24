@@ -14,16 +14,17 @@ interface Step {
 }
 
 interface Job {
-  steps: Step[];
-  needs?: string | string[];
+  steps: Array<Step>;
+  needs?: string | Array<string>;
   permissions?: Record<string, string>;
   environment?: string;
 }
 
 async function workflow(name: string): Promise<{ jobs: Record<string, Job> }> {
-  return parse(
+  const workflow: { jobs: Record<string, Job> } = parse(
     await readFile(new URL(`../../../../.github/workflows/${name}.yml`, import.meta.url), 'utf8'),
   );
+  return workflow;
 }
 
 function bridge(job: Job): Step {
@@ -57,29 +58,34 @@ describe('installation publishing order', () => {
     async (state) => {
       const { steps } = (await workflow('release')).jobs.Release;
       const check = steps.find((step) => step.id === 'github-release')!;
-      const getReleaseByTag = vi.fn(async () => {
+      const getReleaseByTag = vi.fn<
+        (request: {
+          owner: string;
+          repo: string;
+          tag: string;
+        }) => Promise<{ data: { draft: boolean } }>
+      >(async () => {
         if (state === 'missing' || state === 'unavailable') {
           throw Object.assign(new Error(state), { status: state === 'missing' ? 404 : 503 });
         }
         return { data: { draft: state === 'draft' } };
       });
-      const setOutput = vi.fn();
-      const result = runInNewContext(`(async () => { ${check.with!.script} })()`, {
+      const setOutput = vi.fn<(name: string, value: string) => void>();
+      const result: Promise<void> = runInNewContext(`(async () => { ${check.with!.script} })()`, {
         github: { rest: { repos: { getReleaseByTag } } },
         context: { repo: { owner: 'voidzero-dev', repo: 'vite-plus' } },
         core: { setOutput },
         process: { env: { VERSION: '1.4.0' } },
-      }) as Promise<void>;
-      if (state === 'unavailable') {
-        await expect(result).rejects.toThrow('unavailable');
-        expect(setOutput).not.toHaveBeenCalled();
-      } else {
-        await result;
-        expect(setOutput).toHaveBeenCalledExactlyOnceWith(
-          'published',
-          String(state === 'published'),
-        );
-      }
+      });
+      const failure = await result.then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      const unavailable = Object.assign(new Error('unavailable'), { status: 503 });
+      expect(failure).toEqual(state === 'unavailable' ? unavailable : undefined);
+      expect(setOutput.mock.calls).toEqual(
+        state === 'unavailable' ? [] : [['published', String(state === 'published')]],
+      );
       expect(getReleaseByTag).toHaveBeenCalledExactlyOnceWith({
         owner: 'voidzero-dev',
         repo: 'vite-plus',

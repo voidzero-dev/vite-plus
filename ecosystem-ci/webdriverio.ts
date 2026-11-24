@@ -2,6 +2,8 @@ import { execSync } from 'node:child_process';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { parseJsonObject } from '../packages/cli/src/utils/json-value.ts';
+
 async function replaceOnce(file: string, original: string, replacement: string): Promise<void> {
   const source = await readFile(file, 'utf8');
   if (source.split(original).length !== 2) {
@@ -27,8 +29,11 @@ export async function prepareWebdriverioProject(
     // token is interpreted as an ast-grep variable when merging the config.
     // Remove this workaround when formatter migration drops unsupported options.
     const prettierPath = join(root, '.prettierrc.json');
-    const prettier = JSON.parse(await readFile(prettierPath, 'utf8'));
-    if (!prettier.attributeGroups?.includes('$DEFAULT')) {
+    const prettier = parseJsonObject(await readFile(prettierPath, 'utf8'), prettierPath);
+    if (
+      !Array.isArray(prettier.attributeGroups) ||
+      !prettier.attributeGroups.includes('$DEFAULT')
+    ) {
       throw new Error('10ten-ja-reader patch: expected the pinned attributeGroups option');
     }
     delete prettier.attributeGroups;

@@ -3,6 +3,9 @@ import path from 'node:path';
 
 import type { WorkspacePackage } from '../types/index.ts';
 import { VITE_CONFIG_FILES } from '../utils/constants.ts';
+import type { JsonObject } from '../utils/json.ts';
+import { parseJsonValue, isJsonObject } from '../utils/json.ts';
+import { readJsonFile } from '../utils/json.ts';
 
 export interface ConfigFiles {
   viteConfig?: string;
@@ -97,7 +100,7 @@ const MIGRATION_WARNING_DETECTIONS = [
   },
 ] as const;
 
-function hasDependency(packageJson: Record<string, unknown>, packageName: string): boolean {
+function hasDependency(packageJson: JsonObject, packageName: string): boolean {
   return ['dependencies', 'devDependencies', 'optionalDependencies'].some((field) => {
     const dependencies = packageJson[field];
     return typeof dependencies === 'object' && dependencies !== null && packageName in dependencies;
@@ -109,14 +112,14 @@ function hasDependency(packageJson: Record<string, unknown>, packageName: string
  */
 export function detectMigrationWarnings(
   projectPath: string,
-  packages: readonly WorkspacePackage[] = [],
-): string[] {
+  packages: ReadonlyArray<WorkspacePackage> = [],
+): Array<string> {
   const projectPaths = [
     projectPath,
     ...packages.map((workspacePackage) => path.join(projectPath, workspacePackage.path)),
   ];
   const detected = new Set<string>();
-  let rootPackageJson: Record<string, unknown> | undefined;
+  let rootPackageJson: JsonObject | undefined;
 
   for (const currentPath of projectPaths) {
     const packageJsonPath = path.join(currentPath, 'package.json');
@@ -124,9 +127,9 @@ export function detectMigrationWarnings(
       continue;
     }
 
-    let packageJson: Record<string, unknown>;
+    let packageJson: JsonObject;
     try {
-      packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as Record<string, unknown>;
+      packageJson = readJsonFile(packageJsonPath);
     } catch {
       continue;
     }
@@ -155,8 +158,8 @@ export function detectMigrationWarnings(
     }
   }
 
-  return MIGRATION_WARNING_DETECTIONS.map(({ warning }) => warning).filter((warning) =>
-    detected.has(warning),
+  return MIGRATION_WARNING_DETECTIONS.flatMap(({ warning }) =>
+    detected.has(warning) ? [warning] : [],
   );
 }
 
@@ -294,7 +297,8 @@ export function detectConfigs(projectPath: string): ConfigFiles {
   if (fs.existsSync(packageJsonPath)) {
     try {
       const content = fs.readFileSync(packageJsonPath, 'utf8');
-      const pkg = JSON.parse(content);
+      const parsed = parseJsonValue(content);
+      const pkg = isJsonObject(parsed) ? parsed : {};
 
       if (!configs.prettierConfig && pkg.prettier) {
         configs.prettierConfig = PRETTIER_PACKAGE_JSON_CONFIG;
@@ -304,7 +308,7 @@ export function detectConfigs(projectPath: string): ConfigFiles {
         configs.tsupConfig = TSUP_PACKAGE_JSON_CONFIG;
       }
 
-      const voltaNode = pkg.volta?.node;
+      const voltaNode = isJsonObject(pkg.volta) ? pkg.volta.node : undefined;
       if (typeof voltaNode === 'string') {
         configs.voltaNode = voltaNode;
       }

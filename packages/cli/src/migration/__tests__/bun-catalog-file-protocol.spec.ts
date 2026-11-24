@@ -4,11 +4,14 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PackageManager, type WorkspaceInfo } from '../../types/index.js';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
+import { readJsonFile as readJson } from '../../utils/json.ts';
+import { fixtureObject } from './fixture-json.ts';
 
 // Mock with file: protocol paths (simulating VP_OVERRIDE_PACKAGES in CI)
-vi.mock('../../utils/constants.js', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('../../utils/constants.js')>();
+vi.mock(import('../../utils/constants.ts'), async (importOriginal) => {
+  const mod = await importOriginal();
   return {
     ...mod,
     VITE_PLUS_VERSION: 'file:/tmp/tgz/vite-plus-0.0.0.tgz',
@@ -19,7 +22,7 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
   };
 });
 
-const { rewriteMonorepo, rewritePackageJson } = await import('../migrator.js');
+const { rewriteMonorepo, rewritePackageJson } = await import('../migrator.ts');
 
 function makeWorkspaceInfo(rootDir: string, packageManager: PackageManager): WorkspaceInfo {
   return {
@@ -40,10 +43,6 @@ function makeWorkspaceInfo(rootDir: string, packageManager: PackageManager): Wor
     },
     packages: [],
   };
-}
-
-function readJson(filePath: string): Record<string, unknown> {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
 describe('rewriteMonorepo bun catalog with file: protocol', () => {
@@ -71,11 +70,11 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     // catalog should not contain file: entries
-    const catalog = (pkg.catalog ?? {}) as Record<string, string>;
+    const catalog = fixtureObject(pkg.catalog ?? {});
     expect(catalog.vite).toBeUndefined();
     expect(catalog.vitest).toBeUndefined();
     // overrides should use file: paths directly, not catalog:
-    const overrides = pkg.overrides as Record<string, string>;
+    const overrides = fixtureObject(pkg.overrides);
     expect(overrides.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
     expect(overrides.vitest).toBeUndefined();
     expect(overrides['@voidzero-dev/vite-plus-core']).toBe(
@@ -107,21 +106,22 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
 
     rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
 
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      workspaces: {
-        catalog: Record<string, string>;
-        catalogs: Record<string, Record<string, string>>;
-      };
-      overrides: Record<string, string>;
-      devDependencies: Record<string, string>;
-    };
-    expect(pkg.workspaces.catalog?.vite).toBeUndefined();
-    expect(pkg.workspaces.catalog?.vitest).toBeUndefined();
-    expect(pkg.workspaces.catalogs.build.vite).toBe('^7.0.0');
-    expect(pkg.workspaces.catalogs.build.vitest).toBe('^4.0.0');
-    expect(pkg.workspaces.catalogs.build.tsdown).toBeUndefined();
-    expect(pkg.overrides.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
-    expect(pkg.devDependencies.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    const workspaces = fixtureObject(pkg, 'workspaces');
+    const catalog = fixtureObject(workspaces.catalog ?? {});
+    expect(catalog.vite).toBeUndefined();
+    expect(catalog.vitest).toBeUndefined();
+    expect(pkg).toHaveProperty(['workspaces', 'catalogs', 'build', 'vite'], '^7.0.0');
+    expect(pkg).toHaveProperty(['workspaces', 'catalogs', 'build', 'vitest'], '^4.0.0');
+    expect(fixtureObject(pkg, 'workspaces', 'catalogs', 'build').tsdown).toBeUndefined();
+    expect(pkg).toHaveProperty(
+      ['overrides', 'vite'],
+      'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
+    );
+    expect(pkg).toHaveProperty(
+      ['devDependencies', 'vite'],
+      'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
+    );
   });
 
   it('does not create bunfig.toml', () => {
@@ -194,9 +194,10 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     expect(pkg.optionalDependencies.vite).toBe(
       'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
     );
-    expect(
-      (pkg as { devDependencies?: Record<string, string> }).devDependencies?.['vite-plus'],
-    ).toBe('file:/tmp/tgz/vite-plus-0.0.0.tgz');
+    expect(pkg).toHaveProperty(
+      ['devDependencies', 'vite-plus'],
+      'file:/tmp/tgz/vite-plus-0.0.0.tgz',
+    );
   });
 
   it('does not align Vitest ecosystem packages when Vitest is unmanaged', () => {

@@ -18,7 +18,7 @@ export type TemplateType = (typeof TemplateType)[keyof typeof TemplateType];
 
 export interface TemplateInfo {
   command: string;
-  args: string[];
+  args: Array<string>;
   envs: NodeJS.ProcessEnv;
   type: TemplateType;
   // The parent directory of the generated package, only for monorepo

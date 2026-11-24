@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import { parseSyncVersionsRequest, planSyncVersions, type SyncVersionsToolchain } from './plan.ts';
+import type { SyncVersionsToolchain } from './plan.ts';
+import { parseSyncVersionsRequest, planSyncVersions } from './plan.ts';
 
 const exactVersionSchema = z
   .string()

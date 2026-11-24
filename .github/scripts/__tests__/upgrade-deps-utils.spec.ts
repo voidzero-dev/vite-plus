@@ -23,7 +23,7 @@ test('selects the latest eligible stable Node.js 24 release independently of the
     vi.unstubAllGlobals();
   });
   vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-12T00:00:00Z'));
-  const fetchMock = vi.fn().mockResolvedValue(
+  const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
     Response.json([
       { version: 'v26.13.0', date: '2026-11-01', lts: 'Lithium' },
       { version: 'v24.9.0', date: '2026-11-01', lts: 'Krypton' },
@@ -60,6 +60,6 @@ test.each([
   onTestFinished(() => {
     vi.unstubAllGlobals();
   });
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response()));
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(response()));
   await expect(getLatestNodeVersion(24)).rejects.toThrow(error);
 });

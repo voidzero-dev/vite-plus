@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type * as t from '@oxc-project/types';
+import type { CallExpression, Node, ObjectExpression } from '@oxc-project/types';
 
 import { isString, objectProperty, staticObject, memberName } from '../ast-utils.ts';
 import { SourceEditor, importedName } from './ast.ts';
@@ -12,17 +12,17 @@ const NODE_URL = new Set(['node:url', 'url']);
 
 export interface StorybookScope {
   root?: string;
-  include?: string[];
+  include?: Array<string>;
   reason?: string;
 }
 
-function importMeta(node: t.Node): boolean {
+function importMeta(node: Node): boolean {
   return (
     node.type === 'MetaProperty' && node.meta.name === 'import' && node.property.name === 'meta'
   );
 }
 
-function pathFunction(editor: SourceEditor, node: t.Node): string | undefined {
+function pathFunction(editor: SourceEditor, node: Node): string | undefined {
   const name = importedName(editor, node, NODE_PATH);
   if (name) {
     return name;
@@ -45,10 +45,10 @@ function pathFunction(editor: SourceEditor, node: t.Node): string | undefined {
 /** Recognize common configDir expressions, without evaluating config code. */
 function configPath(
   editor: SourceEditor,
-  node: t.Node,
+  node: Node,
   file: string,
   cwd: string,
-  seen = new Set<t.Node>(),
+  seen = new Set<Node>(),
 ): string | undefined {
   if (seen.has(node)) {
     return undefined;
@@ -99,14 +99,13 @@ function configPath(
     return undefined;
   }
   const args = node.arguments.map((arg) => configPath(editor, arg, file, cwd, new Set(seen)));
-  if (args.some((arg) => arg === undefined)) {
+  if (!args.every((arg) => arg !== undefined)) {
     return undefined;
   }
-  const values = args as string[];
   if (method === 'dirname') {
-    return values.length === 1 ? path.dirname(values[0]) : undefined;
+    return args.length === 1 ? path.dirname(args[0]) : undefined;
   }
-  return method === 'resolve' ? path.resolve(cwd, ...values) : path.join(...values);
+  return method === 'resolve' ? path.resolve(cwd, ...args) : path.join(...args);
 }
 
 /** The addon replaces test.include with Storybook stories, not Vitest's default
@@ -114,7 +113,7 @@ function configPath(
  * https://storybook.js.org/docs/writing-tests/integrations/vitest-addon */
 export function resolveStorybookScope(
   editor: SourceEditor,
-  object: t.ObjectExpression,
+  object: ObjectExpression,
   sources: ReadonlyMap<string, string>,
   file: string,
   cwd: string,
@@ -123,7 +122,7 @@ export function resolveStorybookScope(
   if (!plugins) {
     return undefined;
   }
-  const calls: t.CallExpression[] = [];
+  const calls: Array<CallExpression> = [];
   editor.visit({
     CallExpression(node) {
       if (
@@ -145,7 +144,7 @@ export function resolveStorybookScope(
     return unknown('multiple storybookTest calls');
   }
   const call = calls[0];
-  let container: t.Node = call;
+  let container: Node = call;
   while (container !== plugins) {
     const parent = editor.parent(container);
     if (parent?.type !== 'ArrayExpression' && parent?.type !== 'AwaitExpression') {
@@ -164,9 +163,11 @@ export function resolveStorybookScope(
   }
   const resolvedDir = path.resolve(cwd, directory);
   // Multiple main files can have loader-specific precedence. Do not guess.
-  const mains = ['js', 'jsx', 'ts', 'tsx', 'mjs', 'mts', 'cjs', 'cts']
-    .map((extension) => path.join(resolvedDir, `main.${extension}`))
-    .filter((candidate) => sources.has(candidate));
+  const mains = ['js', 'jsx', 'ts', 'tsx', 'mjs', 'mts', 'cjs', 'cts'].flatMap((extension) => {
+    const file = path.join(resolvedDir, `main.${extension}`);
+    const source = sources.get(file);
+    return source === undefined ? [] : [{ file, source }];
+  });
   const label = path.relative(cwd, resolvedDir).replaceAll('\\', '/');
   if (mains.length !== 1) {
     return unknown(`expected one readable main config in ${label}`);
@@ -178,9 +179,9 @@ export function resolveStorybookScope(
   ) {
     return unknown(`custom presets in ${label}`);
   }
-  const mainFile = mains[0];
+  const { file: mainFile, source } = mains[0];
   try {
-    const mainEditor = new SourceEditor(mainFile, sources.get(mainFile)!);
+    const mainEditor = new SourceEditor(mainFile, source);
     const exported = mainEditor.ast.body.find((node) => node.type === 'ExportDefaultDeclaration');
     const main = resolveConfigObject(mainEditor, exported?.declaration);
     if (!main || main.properties.some((property) => property.type === 'SpreadElement')) {
@@ -195,7 +196,7 @@ export function resolveStorybookScope(
     if (stories?.type !== 'ArrayExpression') {
       return unknown(`dynamic stories in ${label}/main`);
     }
-    const include: string[] = [];
+    const include: Array<string> = [];
     for (const story of stories.elements) {
       let pattern: string;
       if (isString(story)) {

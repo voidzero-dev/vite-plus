@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, expect, test } from 'vitest';
 import { parse } from 'yaml';
 
+import { isYamlMapping } from '../../../cli/src/utils/yaml-value.ts';
+
 const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
-const temporaryDirs: string[] = [];
+const temporaryDirs: Array<string> = [];
 // Native producers run on Linux and macOS, including Windows cross-builds.
-const bashTest = test.skipIf(process.platform === 'win32');
 
 function temporaryDir() {
   const dir = mkdtempSync(path.join(tmpdir(), 'vp-native-profile-'));
@@ -18,11 +19,18 @@ function temporaryDir() {
   return dir;
 }
 
-function actionStep(action: string, name: string): { run: string } {
+function actionStepScript(action: string, name: string): string {
   const file = path.join(repoRoot, '.github/actions', action, 'action.yml');
-  return parse(readFileSync(file, 'utf8')).runs.steps.find(
-    (step: { name?: string }) => step.name === name,
-  );
+  const actionFile: unknown = parse(readFileSync(file, 'utf8'));
+  const runs = isYamlMapping(actionFile) ? actionFile.runs : undefined;
+  if (isYamlMapping(runs) && Array.isArray(runs.steps)) {
+    for (const step of runs.steps) {
+      if (isYamlMapping(step) && step.name === name && typeof step.run === 'string') {
+        return step.run;
+      }
+    }
+  }
+  throw new Error(`Missing step ${name} in ${file}`);
 }
 
 afterEach(() => {
@@ -31,25 +39,31 @@ afterEach(() => {
   }
 });
 
-bashTest('native caches separate release and CI binaries with identical source inputs', () => {
-  const dir = temporaryDir();
-  const { run } = actionStep('compute-native-cache-input-hash', 'Compute native cache input hash');
-  const keys = ['release', 'ci'].map((profile) => {
-    const output = path.join(dir, profile);
-    execFileSync('bash', ['-e', '-c', run], {
-      env: {
-        ...process.env,
-        GITHUB_OUTPUT: output,
-        NATIVE_CACHE_INPUT_HASH: 'same-source',
-        INPUTS_PROFILE: profile,
-      },
+test.skipIf(process.platform === 'win32')(
+  'native caches separate release and CI binaries with identical source inputs',
+  () => {
+    const dir = temporaryDir();
+    const run = actionStepScript(
+      'compute-native-cache-input-hash',
+      'Compute native cache input hash',
+    );
+    const keys = ['release', 'ci'].map((profile) => {
+      const output = path.join(dir, profile);
+      execFileSync('bash', ['-e', '-c', run], {
+        env: {
+          ...process.env,
+          GITHUB_OUTPUT: output,
+          NATIVE_CACHE_INPUT_HASH: 'same-source',
+          INPUTS_PROFILE: profile,
+        },
+      });
+      return readFileSync(output, 'utf8').trim();
     });
-    return readFileSync(output, 'utf8').trim();
-  });
-  expect(keys).toEqual(['hash=same-source-release', 'hash=same-source-ci']);
-});
+    expect(keys).toEqual(['hash=same-source-release', 'hash=same-source-ci']);
+  },
+);
 
-bashTest.each([
+test.skipIf(process.platform === 'win32').each([
   ['build-upstream', 'x86_64-unknown-linux-gnu'],
   ['build-upstream', 'x86_64-pc-windows-msvc'],
   ['build-windows-cli', 'x86_64-pc-windows-msvc'],
@@ -68,7 +82,7 @@ bashTest.each([
   }
   writeFileSync(path.join(releaseDir, 'vp-shim.exe'), 'release trampoline');
 
-  execFileSync('bash', ['-e', '-c', actionStep(action, 'Stage native CLI binaries').run], {
+  execFileSync('bash', ['-e', '-c', actionStepScript(action, 'Stage native CLI binaries')], {
     cwd: dir,
     env: {
       ...process.env,

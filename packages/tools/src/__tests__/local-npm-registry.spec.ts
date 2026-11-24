@@ -13,12 +13,14 @@ import { RegistryCache } from '../registry-cache.ts';
 it('prewarms every generated archive once and picks up changed fixture versions', async () => {
   const script = fileURLToPath(new URL('../local-npm-registry.ts', import.meta.url));
   const root = mkdtempSync(path.join(tmpdir(), 'vp-prewarm-manifest-test-'));
-  const requests: string[] = [];
+  const requests: Array<string> = [];
   const server = createServer((req, res) => {
     requests.push(req.url!);
     res.end(Buffer.from([0, 255, 128]));
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
   try {
     const address = server.address();
     if (!address || typeof address === 'string') {
@@ -48,7 +50,9 @@ it('prewarms every generated archive once and picks up changed fixture versions'
     expect(requests).toHaveLength(2);
   } finally {
     server.closeAllConnections();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -243,7 +247,12 @@ it.each([false, true])(
         readFileSync(log, 'utf8')
           .trim()
           .split('\n')
-          .map((line) => JSON.parse(line).event),
+          .map((line) => {
+            const entry: unknown = JSON.parse(line);
+            return typeof entry === 'object' && entry !== null && 'event' in entry
+              ? entry.event
+              : undefined;
+          }),
       ).toEqual(Array(live ? 7 : 20).fill('fixture'));
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -5,8 +5,8 @@ import stringWidth from 'fast-string-width';
 import color from 'picocolors';
 import { erase } from 'sisteransi';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   completeColor,
   isCI as isCIFn,
@@ -43,7 +43,7 @@ interface BufferEntry {
 
 const stripDestructiveANSI = (input: string): string => {
   // oxlint-disable-next-line no-control-regex
-  return input.replace(/\x1b\[(?:\d+;)*\d*[ABCDEFGHfJKSTsu]|\x1b\[(s|u)/g, '');
+  return input.replaceAll(/\u001b\[(?:\d+;)*\d*[ABCDEFGHfJKSTsu]|\u001b\[(s|u)/g, '');
 };
 
 /**
@@ -67,7 +67,7 @@ export const taskLog = (opts: TaskLogOptions) => {
     output.write(`${hasGuide ? secondarySymbol : ''}\n`);
   }
 
-  const buffers: BufferEntry[] = [
+  const buffers: Array<BufferEntry> = [
     {
       value: '',
       full: '',

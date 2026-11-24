@@ -3,7 +3,7 @@
  * so Node.js caches registration together with the two flags passed by `vpx`.
  */
 import { createRequire } from 'node:module';
-import * as workerThreads from 'node:worker_threads';
+import workerThreads from 'node:worker_threads';
 
 // `NODE_OPTIONS` can also preload this module in Node.js' own loader worker.
 // Registering another loader there would recursively create loader workers.

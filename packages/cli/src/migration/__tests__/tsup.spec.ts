@@ -2,16 +2,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { log as promptLog, confirm as promptConfirm } from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { cancelAndExit } from '../../utils/prompts.ts';
+import { fixtureObject, fixtureString } from './fixture-json.ts';
 
 vi.mock('vite/package.json', () => ({
   default: { bundledVersions: { tsdown: '0.99.0' } },
 }));
 
 const { mockConfirm, mockInfo, mockWarn } = vi.hoisted(() => ({
-  mockConfirm: vi.fn(),
-  mockInfo: vi.fn(),
-  mockWarn: vi.fn(),
+  mockConfirm: vi.fn<typeof promptConfirm>(),
+  mockInfo: vi.fn<typeof promptLog.info>(),
+  mockWarn: vi.fn<typeof promptLog.warn>(),
 }));
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
@@ -19,17 +23,17 @@ vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   isCancel: () => false,
   log: {
     info: mockInfo,
-    success: vi.fn(),
+    success: vi.fn<typeof promptLog.success>(),
     warn: mockWarn,
   },
 }));
 
 vi.mock(import('../../utils/command.ts'), async (importOriginal) => ({
   ...(await importOriginal()),
-  runCommandSilently: vi.fn(),
+  runCommandSilently: vi.fn<typeof runCommandSilently>(),
 }));
 vi.mock('../../utils/prompts.ts', () => ({
-  cancelAndExit: vi.fn(),
+  cancelAndExit: vi.fn<typeof cancelAndExit>(),
 }));
 
 import { PackageManager } from '../../types/index.ts';
@@ -50,7 +54,7 @@ function manualMigrationOptions(targetLabel = 'the project root'): string {
   ].join('\n');
 }
 
-function migrationSkillGuidance(instructions: string[]): string {
+function migrationSkillGuidance(instructions: Array<string>): string {
   return [
     ...instructions,
     '',
@@ -446,9 +450,10 @@ describe('tsup migration', () => {
     }
     mockRunCommandSilently.mockImplementation(async ({ cwd }) => {
       const packageJsonPath = path.join(cwd, 'package.json');
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      packageJson.devDependencies.tsdown = '0.22.14';
-      delete packageJson.devDependencies.tsup;
+      const packageJson = readJsonFile(packageJsonPath);
+      const devDependencies = fixtureObject(packageJson, 'devDependencies');
+      devDependencies.tsdown = '0.22.14';
+      delete devDependencies.tsup;
       fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
       fs.writeFileSync(path.join(cwd, 'tsdown.config.ts'), 'export default {};\n');
       fs.unlinkSync(path.join(cwd, 'tsup.config.ts'));
@@ -510,9 +515,10 @@ describe('tsup migration', () => {
     fs.writeFileSync(path.join(packagePath, 'tsup.config.ts'), originalConfig);
     mockRunCommandSilently.mockImplementation(async ({ cwd }) => {
       const packageJsonPath = path.join(cwd, 'package.json');
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      packageJson.devDependencies.tsdown = '0.22.14';
-      delete packageJson.devDependencies.tsup;
+      const packageJson = readJsonFile(packageJsonPath);
+      const devDependencies = fixtureObject(packageJson, 'devDependencies');
+      devDependencies.tsdown = '0.22.14';
+      delete devDependencies.tsup;
       fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
       fs.writeFileSync(path.join(cwd, 'tsdown.config.ts'), 'export default {};\n');
       fs.unlinkSync(path.join(cwd, 'tsup.config.ts'));
@@ -581,15 +587,17 @@ describe('tsup migration', () => {
     }
     mockRunCommandSilently.mockImplementation(async ({ cwd }) => {
       const packageJsonPath = path.join(cwd, 'package.json');
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      for (const scriptName of Object.keys(packageJson.scripts)) {
-        packageJson.scripts[scriptName] = packageJson.scripts[scriptName].replaceAll(
+      const packageJson = readJsonFile(packageJsonPath);
+      const scripts = fixtureObject(packageJson, 'scripts');
+      const devDependencies = fixtureObject(packageJson, 'devDependencies');
+      for (const scriptName of Object.keys(scripts)) {
+        scripts[scriptName] = fixtureString(packageJson, 'scripts', scriptName).replaceAll(
           'tsup',
           'tsdown',
         );
       }
-      packageJson.devDependencies.tsdown = '0.22.14';
-      delete packageJson.devDependencies.tsup;
+      devDependencies.tsdown = '0.22.14';
+      delete devDependencies.tsup;
       fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
       fs.writeFileSync(path.join(cwd, 'tsdown.config.ts'), 'export default {};\n');
       fs.unlinkSync(path.join(cwd, 'tsup.config.ts'));
@@ -641,12 +649,14 @@ describe('tsup migration', () => {
     );
     mockRunCommandSilently.mockImplementation(async () => {
       const packageJsonPath = path.join(projectPath, 'package.json');
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      for (const name of Object.keys(packageJson.scripts)) {
-        packageJson.scripts[name] = packageJson.scripts[name].replace('tsup', 'tsdown');
+      const packageJson = readJsonFile(packageJsonPath);
+      const scripts = fixtureObject(packageJson, 'scripts');
+      const devDependencies = fixtureObject(packageJson, 'devDependencies');
+      for (const name of Object.keys(scripts)) {
+        scripts[name] = fixtureString(packageJson, 'scripts', name).replace('tsup', 'tsdown');
       }
-      packageJson.devDependencies.tsdown = '0.22.14';
-      delete packageJson.devDependencies.tsup;
+      devDependencies.tsdown = '0.22.14';
+      delete devDependencies.tsup;
       fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
       fs.writeFileSync(path.join(projectPath, 'tsdown.config.ts'), 'export default {};\n');
       fs.unlinkSync(path.join(projectPath, 'tsup.config.ts'));

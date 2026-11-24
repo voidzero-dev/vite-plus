@@ -1,6 +1,7 @@
 import type { Readable, Writable } from 'node:stream';
 
-import { type State, settings, updateSettings, getColumns } from '@clack/core';
+import type { State } from '@clack/core';
+import { settings, updateSettings, getColumns } from '@clack/core';
 import stringWidth from 'fast-string-width';
 import { wrapAnsi } from 'fast-wrap-ansi';
 import isUnicodeSupported from 'is-unicode-supported';
@@ -61,10 +62,10 @@ export const optionText = (
 export const SELECT_INSTRUCTIONS = ['↑/↓ navigate', 'Enter confirm'];
 export const MULTISELECT_INSTRUCTIONS = ['↑/↓ navigate', 'Space select', 'Enter confirm'];
 export const formatInstructionFooter = (
-  instructions: string[],
+  instructions: Array<string>,
   hasGuide: boolean,
   output?: Writable,
-): string[] =>
+): Array<string> =>
   wrapTextWithPrefix(
     output,
     color.dim(instructions.join(' · ')),

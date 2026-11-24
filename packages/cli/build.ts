@@ -23,17 +23,63 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { createBuildCommand, NapiCli } from '@napi-rs/cli';
 import { format } from 'oxfmt';
+import { z } from 'zod';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import corePkg from '../core/package.json' with { type: 'json' };
 import { VITEST_VERSION } from './src/utils/constants.ts';
+import { errorMessage } from './src/utils/error.ts';
+import type { JsonObject, JsonValue } from './src/utils/json-value.ts';
+import { isObjectValue, parseJsonObject } from './src/utils/json-value.ts';
 
-const projectDir = dirname(fileURLToPath(import.meta.url));
+const toolchainConfigSchema = z.object({
+  schemaVersion: z.number(),
+  versionExportIds: z.array(z.string()),
+  nodes: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      kind: z.enum(['package', 'tool', 'engine']),
+      delivery: z.array(z.enum(['dependency', 'bundled', 'compiled'])),
+      aliases: z.array(z.string()),
+      versionSource: z.discriminatedUnion('type', [
+        z.object({ type: z.literal('cli-package') }),
+        z.object({ type: z.literal('core-package') }),
+        z.object({ type: z.literal('core-bundled'), key: z.string() }),
+        z.object({ type: z.literal('npm-dependency'), package: z.string() }),
+        z.object({
+          type: z.literal('cargo'),
+          package: z.string(),
+          revision: z.boolean().optional(),
+          builtAt: z.boolean().optional(),
+        }),
+        z.object({ type: z.literal('vendored'), upstream: z.string(), packageJson: z.string() }),
+      ]),
+    }),
+  ),
+  edges: z.array(
+    z.object({
+      from: z.string(),
+      to: z.string(),
+      relationship: z.enum(['depends-on', 'bundles', 'uses', 'compiles']),
+    }),
+  ),
+});
+type ToolchainConfig = z.infer<typeof toolchainConfigSchema>;
+type ToolchainConfigNode = ToolchainConfig['nodes'][number];
+
+const cargoMetadataSchema = z.object({
+  packages: z.array(
+    z.object({ name: z.string(), version: z.string(), source: z.string().nullable() }),
+  ),
+});
+type CargoMetadata = z.infer<typeof cargoMetadataSchema>;
+
+const projectDir = import.meta.dirname;
 const TEST_PACKAGE_NAME = 'vitest';
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 const CORE_IMPORT_SPECIFIER = 'vite';
@@ -354,17 +400,20 @@ async function syncTestPackageExports() {
   const testDistDir = join(projectDir, 'dist/test');
 
   // Read test package.json
-  const testPkg = JSON.parse(await readFile(testPkgPath, 'utf-8'));
+  const testPkg = parseJsonObject(await readFile(testPkgPath, 'utf8'));
   if (testPkg.version !== VITEST_VERSION) {
-    throw new Error(`Expected vitest@${VITEST_VERSION}, found ${testPkg.version}`);
+    throw new Error(`Expected vitest@${VITEST_VERSION}, found ${JSON.stringify(testPkg.version)}`);
   }
-  const testExports = testPkg.exports as Record<string, unknown>;
+  const testExports = testPkg.exports;
+  if (!isObjectValue(testExports)) {
+    throw new Error(`Expected exports in ${testPkgPath}`);
+  }
 
   // Clean up previous build
   await rm(testDistDir, { recursive: true, force: true });
   await mkdir(testDistDir, { recursive: true });
 
-  const generatedExports: Record<string, unknown> = {};
+  const generatedExports: JsonObject = {};
 
   for (const [exportPath, exportValue] of Object.entries(testExports)) {
     // Skip package.json export and wildcard exports
@@ -415,13 +464,13 @@ async function syncTestPackageExports() {
     let providerPkgPath: string;
     try {
       providerPkgPath = require.resolve(`${pkg}/package.json`, { paths: [projectDir] });
-    } catch (err) {
-      console.warn(`  Skipping ${pkg} — not installed: ${(err as Error).message}`);
+    } catch (error) {
+      console.warn(`  Skipping ${pkg} — not installed: ${errorMessage(error)}`);
       continue;
     }
-    const providerPkg = JSON.parse(await readFile(providerPkgPath, 'utf-8'));
+    const providerPkg = parseJsonObject(await readFile(providerPkgPath, 'utf8'));
     const providerPkgRoot = dirname(providerPkgPath);
-    const providerExports = (providerPkg.exports ?? {}) as Record<string, unknown>;
+    const providerExports = isObjectValue(providerPkg.exports) ? providerPkg.exports : {};
 
     for (const [providerExportPath, providerExportValue] of Object.entries(providerExports)) {
       if (providerExportPath === './package.json' || providerExportPath.includes('*')) {
@@ -502,9 +551,11 @@ async function syncTestPackageExports() {
     const [scope, name, ...subpath] = importSpecifier.split('/');
     const packageName = `${scope}/${name}`;
     const packagePath = require.resolve(`${packageName}/package.json`, { paths: [projectDir] });
-    const packageJson = JSON.parse(await readFile(packagePath, 'utf8'));
+    const packageJson = parseJsonObject(await readFile(packagePath, 'utf8'));
     const exportKey = subpath.length ? `./${subpath.join('/')}` : '.';
-    const exportValue = packageJson.exports?.[exportKey];
+    const exportValue = isObjectValue(packageJson.exports)
+      ? packageJson.exports[exportKey]
+      : undefined;
     if (!exportValue) {
       throw new Error(`Missing public export ${importSpecifier} for ./test/plugins/${pluginName}`);
     }
@@ -548,14 +599,14 @@ async function createBareBrowserShims(
   let browserPkgPath: string;
   try {
     browserPkgPath = require.resolve('@vitest/browser/package.json', { paths: [projectDir] });
-  } catch (err) {
+  } catch (error) {
     console.warn(
-      `  Skipping bare browser shims — @vitest/browser not installed: ${(err as Error).message}`,
+      `  Skipping bare browser shims — @vitest/browser not installed: ${errorMessage(error)}`,
     );
     return result;
   }
-  const browserPkg = JSON.parse(await readFile(browserPkgPath, 'utf-8'));
-  const browserExports = (browserPkg.exports ?? {}) as Record<string, unknown>;
+  const browserPkg = parseJsonObject(await readFile(browserPkgPath, 'utf8'));
+  const browserExports = isObjectValue(browserPkg.exports) ? browserPkg.exports : {};
 
   // The base browser package already resolves through vite-plus's own dependency
   // edge. Forward its declarations instead of copying them: relative helpers
@@ -613,61 +664,19 @@ async function createBrowserCompatExport(testDistDir: string): Promise<ExportVal
   };
 }
 
-type ToolchainKind = 'package' | 'tool' | 'engine';
-type ToolchainDelivery = 'dependency' | 'bundled' | 'compiled';
-type ToolchainRelationship = 'depends-on' | 'bundles' | 'uses' | 'compiles';
-
-type ToolchainVersionSource =
-  | { type: 'cli-package' }
-  | { type: 'core-package' }
-  | { type: 'core-bundled'; key: string }
-  | { type: 'npm-dependency'; package: string }
-  | { type: 'cargo'; package: string; revision?: boolean; builtAt?: boolean }
-  // Upstream source vendored by `sync-remote` and compiled into the binding: the version
-  // comes from its package.json, the revision from `.upstream-versions.json`.
-  | { type: 'vendored'; upstream: string; packageJson: string };
-
-interface ToolchainConfigNode {
-  id: string;
-  name: string;
-  kind: ToolchainKind;
-  delivery: ToolchainDelivery[];
-  aliases: string[];
-  versionSource: ToolchainVersionSource;
-}
-
-interface ToolchainConfig {
-  schemaVersion: number;
-  versionExportIds: string[];
-  nodes: ToolchainConfigNode[];
-  edges: Array<{
-    from: string;
-    to: string;
-    relationship: ToolchainRelationship;
-  }>;
-}
-
-interface CargoMetadata {
-  packages: Array<{
-    name: string;
-    version: string;
-    source: string | null;
-  }>;
-}
-
 interface ResolvedToolchainNode {
   id: string;
   name: string;
   version?: string;
   revision?: string;
   builtAt?: string;
-  kind: ToolchainKind;
-  delivery: ToolchainDelivery[];
-  aliases: string[];
+  kind: ToolchainConfigNode['kind'];
+  delivery: ToolchainConfigNode['delivery'];
+  aliases: Array<string>;
 }
 
 async function readPackageVersion(packageJsonPath: string, label: string): Promise<string> {
-  const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8')) as { version?: unknown };
+  const pkg = parseJsonObject(await readFile(packageJsonPath, 'utf8'));
   if (typeof pkg.version !== 'string' || pkg.version.length === 0) {
     throw new Error(`Expected an exact version in ${label}`);
   }
@@ -677,7 +686,7 @@ async function readPackageVersion(packageJsonPath: string, label: string): Promi
 async function readCargoMetadata(): Promise<CargoMetadata> {
   const metadataPath = process.env.VP_BUILD_CARGO_METADATA;
   if (metadataPath) {
-    return JSON.parse(await readFile(metadataPath, 'utf8')) as CargoMetadata;
+    return cargoMetadataSchema.parse(JSON.parse(await readFile(metadataPath, 'utf8')));
   }
   const repoDir = join(projectDir, '..', '..');
   const stdout = execFileSync('cargo', ['metadata', '--locked', '--format-version', '1'], {
@@ -685,7 +694,7 @@ async function readCargoMetadata(): Promise<CargoMetadata> {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
-  return JSON.parse(stdout) as CargoMetadata;
+  return cargoMetadataSchema.parse(JSON.parse(stdout));
 }
 
 function resolveCargoPackage(metadata: CargoMetadata, packageName: string) {
@@ -711,7 +720,7 @@ function resolveBuildTime(): string {
   if (seconds !== undefined && !Number.isSafeInteger(seconds)) {
     throw new Error(`Invalid SOURCE_DATE_EPOCH: ${JSON.stringify(sourceDateEpoch)}`);
   }
-  const date = seconds === undefined ? new Date() : new Date(seconds * 1_000);
+  const date = seconds === undefined ? new Date() : new Date(seconds * 1000);
   if (Number.isNaN(date.getTime())) {
     throw new Error(`Invalid SOURCE_DATE_EPOCH: ${JSON.stringify(sourceDateEpoch)}`);
   }
@@ -820,10 +829,11 @@ async function resolveToolchainNode(
     }
     case 'vendored': {
       const repoRoot = join(projectDir, '..', '..');
-      const upstreamVersions = JSON.parse(
+      const upstreamVersions = parseJsonObject(
         await readFile(join(repoRoot, 'packages', 'tools', '.upstream-versions.json'), 'utf8'),
-      ) as Record<string, { hash?: string }>;
-      revision = upstreamVersions[source.upstream]?.hash;
+      );
+      const entry = upstreamVersions[source.upstream];
+      revision = isObjectValue(entry) && typeof entry.hash === 'string' ? entry.hash : undefined;
       if (!revision) {
         throw new Error(`Missing ${source.upstream} in packages/tools/.upstream-versions.json`);
       }
@@ -839,9 +849,9 @@ async function resolveToolchainNode(
   return {
     id: node.id,
     name: node.name,
-    ...(version ? { version } : {}),
-    ...(revision ? { revision } : {}),
-    ...(builtAt ? { builtAt } : {}),
+    version,
+    revision,
+    builtAt,
     kind: node.kind,
     delivery: node.delivery,
     aliases: node.aliases,
@@ -854,9 +864,9 @@ async function resolveToolchainNode(
 async function syncToolchainExports() {
   console.log('\nSyncing toolchain exports...');
   const distDir = join(projectDir, 'dist');
-  const config = JSON.parse(
-    await readFile(join(projectDir, 'toolchain.config.json'), 'utf8'),
-  ) as ToolchainConfig;
+  const config = toolchainConfigSchema.parse(
+    JSON.parse(await readFile(join(projectDir, 'toolchain.config.json'), 'utf8')),
+  );
   validateToolchainConfig(config);
 
   const cliVersion = await readPackageVersion(join(projectDir, 'package.json'), 'vite-plus');
@@ -1052,7 +1062,7 @@ async function ensureContextRuntimeShim(
   if (typeof shimExport !== 'object' || shimExport === null) {
     return;
   }
-  const entry = shimExport as Record<string, unknown>;
+  const entry = shimExport;
   if (entry.default || entry.import) {
     return;
   }
@@ -1100,7 +1110,7 @@ async function writeInlinedProviderDts(
   upstreamDtsPath: string,
   testDistDir: string,
 ): Promise<void> {
-  const upstream = await readFile(upstreamDtsPath, 'utf-8');
+  const upstream = await readFile(upstreamDtsPath, 'utf8');
   const outDir = dirname(outDtsPath);
   // Resolve to the file basename appended to the relative dir, never to the
   // bare directory. `relative('dist/test/x/', 'dist/test/y')` returns `'../y'`
@@ -1114,7 +1124,7 @@ async function writeInlinedProviderDts(
   };
   let result = upstream;
   for (const [bare, sub] of VITEST_TYPE_SPECIFIER_REWRITES) {
-    const escaped = bare.replaceAll('/', '\\/');
+    const escaped = bare.replaceAll('/', String.raw`\/`);
     const pattern = new RegExp(`(['"])${escaped}\\1`, 'g');
     result = result.replaceAll(pattern, `'${relToShim(sub)}'`);
   }
@@ -1128,7 +1138,7 @@ async function writeInlinedProviderDts(
  */
 function resolveUpstreamDtsPath(
   providerPkgRoot: string,
-  exportValue: unknown,
+  exportValue: JsonValue | undefined,
   condition: 'types' | 'require-types' = 'types',
 ): string | null {
   if (typeof exportValue === 'string') {
@@ -1136,29 +1146,17 @@ function resolveUpstreamDtsPath(
       ? join(providerPkgRoot, exportValue)
       : null;
   }
-  if (typeof exportValue !== 'object' || exportValue === null) {
+  if (!isObjectValue(exportValue)) {
     return null;
   }
-  const value = exportValue as Record<string, unknown>;
-  if (condition === 'types') {
-    if (typeof value.types === 'string') {
-      return join(providerPkgRoot, value.types);
-    }
-    if (typeof value.import === 'object' && value.import !== null) {
-      const types = (value.import as Record<string, unknown>).types;
-      if (typeof types === 'string') {
-        return join(providerPkgRoot, types);
-      }
-    }
-  } else {
-    if (typeof value.require === 'object' && value.require !== null) {
-      const types = (value.require as Record<string, unknown>).types;
-      if (typeof types === 'string') {
-        return join(providerPkgRoot, types);
-      }
-    }
+  if (condition === 'types' && typeof exportValue.types === 'string') {
+    return join(providerPkgRoot, exportValue.types);
   }
-  return null;
+
+  const branch = condition === 'types' ? exportValue.import : exportValue.require;
+  return isObjectValue(branch) && typeof branch.types === 'string'
+    ? join(providerPkgRoot, branch.types)
+    : null;
 }
 
 async function writeShimDts(
@@ -1191,7 +1189,7 @@ async function writeShimDts(
  */
 async function createShimForExport(
   shimBaseName: string,
-  exportValue: unknown,
+  exportValue: JsonValue | undefined,
   testImportSpecifier: string,
   distDir: string,
   opts: { providerPkgRoot?: string } = {},
@@ -1199,7 +1197,7 @@ async function createShimForExport(
   const shimDir = join(distDir, dirname(shimBaseName));
   await mkdir(shimDir, { recursive: true });
 
-  const baseFileName = shimBaseName.includes('/') ? shimBaseName.split('/').pop()! : shimBaseName;
+  const baseFileName = shimBaseName.slice(shimBaseName.lastIndexOf('/') + 1);
   const shimDirForFile = shimBaseName.includes('/') ? shimDir : distDir;
   // Preserve the Vite+ browser-context aliases after v5 moved the virtual
   // module. Keep the original type specifier for module augmentations.
@@ -1224,44 +1222,42 @@ async function createShimForExport(
     return { default: `./dist/test/${shimBaseName}.js` };
   }
 
-  if (typeof exportValue === 'object' && exportValue !== null) {
-    const value = exportValue as Record<string, unknown>;
-
-    // Check if it has import/require conditions (complex conditional export)
-    if ('import' in value || 'require' in value) {
-      return await createConditionalShim(
-        value,
-        testImportSpecifier,
-        shimDirForFile,
-        baseFileName,
-        shimBaseName,
-        distDir,
-        opts,
-      );
-    }
-
-    // Simple object with types/default
-    const result: ExportValue = {};
-
-    if (value.types && typeof value.types === 'string') {
-      const dtsPath = join(shimDirForFile, `${baseFileName}.d.ts`);
-      const upstream = opts.providerPkgRoot
-        ? resolveUpstreamDtsPath(opts.providerPkgRoot, value, 'types')
-        : null;
-      await writeShimDts(dtsPath, testImportSpecifier, upstream, distDir);
-      (result as Record<string, string>).types = `./dist/test/${shimBaseName}.d.ts`;
-    }
-
-    if (value.default && typeof value.default === 'string') {
-      const jsPath = join(shimDirForFile, `${baseFileName}.js`);
-      await writeFile(jsPath, `export * from '${runtimeSpecifier}';\n`);
-      (result as Record<string, string>).default = `./dist/test/${shimBaseName}.js`;
-    }
-
-    return Object.keys(result).length > 0 ? result : null;
+  if (!isObjectValue(exportValue)) {
+    return null;
   }
 
-  return null;
+  // Check if it has import/require conditions (complex conditional export)
+  if ('import' in exportValue || 'require' in exportValue) {
+    return await createConditionalShim(
+      exportValue,
+      testImportSpecifier,
+      shimDirForFile,
+      baseFileName,
+      shimBaseName,
+      distDir,
+      opts,
+    );
+  }
+
+  // Simple object with types/default
+  const result: ExportValue = {};
+
+  if (exportValue.types && typeof exportValue.types === 'string') {
+    const dtsPath = join(shimDirForFile, `${baseFileName}.d.ts`);
+    const upstream = opts.providerPkgRoot
+      ? resolveUpstreamDtsPath(opts.providerPkgRoot, exportValue, 'types')
+      : null;
+    await writeShimDts(dtsPath, testImportSpecifier, upstream, distDir);
+    result.types = `./dist/test/${shimBaseName}.d.ts`;
+  }
+
+  if (exportValue.default && typeof exportValue.default === 'string') {
+    const jsPath = join(shimDirForFile, `${baseFileName}.js`);
+    await writeFile(jsPath, `export * from '${runtimeSpecifier}';\n`);
+    result.default = `./dist/test/${shimBaseName}.js`;
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 /**
@@ -1278,7 +1274,7 @@ async function createShimForExport(
  * matching the catch-all `default` (which would point at the ESM file).
  */
 async function createConditionalShim(
-  value: Record<string, unknown>,
+  value: JsonObject,
   testImportSpecifier: string,
   shimDir: string,
   baseFileName: string,
@@ -1304,13 +1300,13 @@ async function createConditionalShim(
 
   // Handle import condition
   if (value.import) {
-    const importValue = value.import as Record<string, unknown>;
+    const importValue = value.import;
 
     if (typeof importValue === 'string') {
       const jsPath = join(shimDir, `${baseFileName}.js`);
       await writeFile(jsPath, `export * from '${testImportSpecifier}';\n`);
       entries.push(['import', `./dist/test/${shimBaseName}.js`]);
-    } else if (typeof importValue === 'object' && importValue !== null) {
+    } else if (isObjectValue(importValue)) {
       const importResult: Record<string, string> = {};
 
       if (importValue.types && typeof importValue.types === 'string') {
@@ -1340,13 +1336,13 @@ async function createConditionalShim(
   // Handle require condition — emitted BEFORE `default` so CJS resolution
   // picks the `.cjs` shim instead of the catch-all `default` entry.
   if (value.require) {
-    const requireValue = value.require as Record<string, unknown>;
+    const requireValue = value.require;
 
     if (typeof requireValue === 'string') {
       const cjsPath = join(shimDir, `${baseFileName}.cjs`);
       await writeFile(cjsPath, `module.exports = require('${testImportSpecifier}');\n`);
       entries.push(['require', `./dist/test/${shimBaseName}.cjs`]);
-    } else if (typeof requireValue === 'object' && requireValue !== null) {
+    } else if (isObjectValue(requireValue)) {
       const requireResult: Record<string, string> = {};
 
       if (requireValue.types && typeof requireValue.types === 'string') {
@@ -1383,11 +1379,11 @@ async function createConditionalShim(
 /**
  * Update CLI package.json with the generated exports
  */
-async function updateCliPackageJson(pkgPath: string, generatedExports: Record<string, unknown>) {
-  const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
+async function updateCliPackageJson(pkgPath: string, generatedExports: JsonObject) {
+  const pkg = parseJsonObject(await readFile(pkgPath, 'utf8'));
 
   // Remove old ./test/* exports (if any) to ensure clean sync
-  if (pkg.exports) {
+  if (isObjectValue(pkg.exports)) {
     for (const key of Object.keys(pkg.exports)) {
       if (key.startsWith('./test')) {
         delete pkg.exports[key];
@@ -1397,7 +1393,7 @@ async function updateCliPackageJson(pkgPath: string, generatedExports: Record<st
 
   // Add new exports
   pkg.exports = {
-    ...pkg.exports,
+    ...(isObjectValue(pkg.exports) ? pkg.exports : undefined),
     ...generatedExports,
   };
 

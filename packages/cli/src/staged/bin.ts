@@ -21,39 +21,24 @@ import { createStagedLogger } from './logger.ts';
 const args = unwrapCliParseOutcome(parseStagedArgs(process.argv.slice(3)));
 const options: Options = {};
 
-// Boolean flags — only include if explicitly set
-if (args.allowEmpty != null) {
-  options.allowEmpty = args.allowEmpty;
-}
-if (args.debug != null) {
-  options.debug = args.debug;
-}
-if (args.continueOnError != null) {
-  options.continueOnError = args.continueOnError;
-}
-if (args.failOnChanges != null) {
-  options.failOnChanges = args.failOnChanges;
-}
-if (args.hidePartiallyStaged != null) {
-  options.hidePartiallyStaged = args.hidePartiallyStaged;
-}
-if (args.hideUnstaged != null) {
-  options.hideUnstaged = args.hideUnstaged;
-}
-if (args.quiet != null) {
-  options.quiet = args.quiet;
-}
-if (args.relative != null) {
-  options.relative = args.relative;
-}
-if (args.revert != null) {
-  options.revert = args.revert;
-}
-if (args.stash != null) {
-  options.stash = args.stash;
-}
-if (args.verbose != null) {
-  options.verbose = args.verbose;
+// Leave unspecified flags to lint-staged's defaults, and preserve explicit false.
+for (const flag of [
+  'allowEmpty',
+  'debug',
+  'continueOnError',
+  'failOnChanges',
+  'hidePartiallyStaged',
+  'hideUnstaged',
+  'quiet',
+  'relative',
+  'revert',
+  'stash',
+  'verbose',
+] as const) {
+  const value = args[flag];
+  if (value !== undefined && value !== null) {
+    options[flag] = value;
+  }
 }
 
 // Read "staged" from vite.config.ts and pass it as an inline config object to lint-staged.
@@ -61,10 +46,10 @@ let stagedConfig;
 try {
   const viteConfig = await resolveViteConfig(args.cwd ?? process.cwd());
   stagedConfig = viteConfig.staged;
-} catch (err) {
+} catch (error) {
   // Surface real errors (syntax errors, missing imports, etc.)
   // instead of masking them as "no config found"
-  const message = err instanceof Error ? err.message : String(err);
+  const message = error instanceof Error ? error.message : String(error);
   log(`Failed to load vite.config: ${message}`);
   process.exit(1);
 }
@@ -80,16 +65,13 @@ if (stagedConfig) {
   log('  });');
   process.exit(1);
 }
-if (args.cwd != null) {
-  options.cwd = args.cwd;
+for (const flag of ['cwd', 'diff', 'diffFilter'] as const) {
+  const value = args[flag];
+  if (value !== undefined && value !== null) {
+    options[flag] = value;
+  }
 }
-if (args.diff != null) {
-  options.diff = args.diff;
-}
-if (args.diffFilter != null) {
-  options.diffFilter = args.diffFilter;
-}
-if (args.concurrent != null) {
+if (args.concurrent !== null && args.concurrent !== undefined) {
   options.concurrent = args.concurrent;
 }
 

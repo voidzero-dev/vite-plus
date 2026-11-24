@@ -2,12 +2,8 @@
 
 import { describe, expect, test, vi } from 'vitest';
 
-import {
-  type PublishCommandRunner,
-  type PublishNpmPackageOptions,
-  isAlreadyPublishedError,
-  publishNpmPackage,
-} from '../publish-npm-package.ts';
+import type { PublishCommandRunner, PublishNpmPackageOptions } from '../publish-npm-package.ts';
+import { isAlreadyPublishedError, publishNpmPackage } from '../publish-npm-package.ts';
 import type { FetchLike } from '../wait-for-npm-packages.ts';
 import { response, stalledFetch } from './npm-registry.ts';
 
@@ -22,8 +18,8 @@ function options(fetchImpl: FetchLike, runCommand: PublishCommandRunner): Publis
     registry: 'https://registry.npmjs.org',
     fetchImpl,
     runCommand,
-    log: vi.fn(),
-    warn: vi.fn(),
+    log: vi.fn<PublishNpmPackageOptions['log']>(),
+    warn: vi.fn<PublishNpmPackageOptions['warn']>(),
   };
 }
 
@@ -95,7 +91,7 @@ describe('publishNpmPackage', () => {
     onTestFinished(() => {
       vi.useRealTimers();
     });
-    const fetchImpl = vi.fn(stalledFetch);
+    const fetchImpl = vi.fn<FetchLike>(stalledFetch);
     const runCommand = vi.fn<PublishCommandRunner>().mockResolvedValue({
       exitCode: 0,
       output: 'published',
@@ -103,7 +99,7 @@ describe('publishNpmPackage', () => {
     const publishOptions = options(fetchImpl, runCommand);
     const result = publishNpmPackage(publishOptions);
 
-    await vi.advanceTimersByTimeAsync(9_999);
+    await vi.advanceTimersByTimeAsync(9999);
     expect(runCommand).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
 
@@ -131,7 +127,7 @@ describe('publishNpmPackage', () => {
     ]),
   )('resumes publication after $name fails (accepted=$accepted)', async ({ name, accepted }) => {
     const published = new Set<string>();
-    const uploads: string[] = [];
+    const uploads: Array<string> = [];
     let interrupted = false;
     async function publishRelease() {
       for (const packageName of releasePackages) {

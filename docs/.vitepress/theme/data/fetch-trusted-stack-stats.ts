@@ -1,6 +1,5 @@
 import { writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 /**
  * Fetches last-week npm download counts and GitHub star counts, then writes
@@ -16,7 +15,7 @@ import type {
   TrustedStackStatsFile,
 } from './trusted-stack-stats.types';
 
-const currentDir = dirname(fileURLToPath(import.meta.url));
+const currentDir = import.meta.dirname;
 const OUT = join(currentDir, 'trusted-stack-stats.json');
 
 interface ProjectSource {
@@ -25,7 +24,7 @@ interface ProjectSource {
   readonly githubRepo: string;
 }
 
-const PROJECTS: readonly ProjectSource[] = [
+const PROJECTS: ReadonlyArray<ProjectSource> = [
   { id: 'vite', npmPackage: 'vite', githubRepo: 'vitejs/vite' },
   { id: 'vitest', npmPackage: 'vitest', githubRepo: 'vitest-dev/vitest' },
   /** OXC row uses `oxlint` npm weekly downloads as a concrete proxy for the Oxc toolchain. */
@@ -80,15 +79,15 @@ function parseGithubRepoJson(data: unknown, repo: string): number {
 
 async function fetchGithubStargazers(repo: string): Promise<number> {
   const url = `https://api.github.com/repos/${repo}`;
-  const headers: Record<string, string> = {
+  const headers = new Headers({
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
     'User-Agent':
       'voidzero-dev/vite-plus (docs/.vitepress/theme/data/fetch-trusted-stack-stats.ts)',
-  };
+  });
   const token = process.env.GITHUB_TOKEN;
   if (token !== undefined && token !== '') {
-    headers.Authorization = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
   const res = await fetch(url, { headers });
   if (!res.ok) {
@@ -99,7 +98,7 @@ async function fetchGithubStargazers(repo: string): Promise<number> {
 }
 
 async function main(): Promise<void> {
-  const projects: TrustedStackStatProject[] = [];
+  const projects: Array<TrustedStackStatProject> = [];
   for (const p of PROJECTS) {
     const [npmWeeklyDownloads, stars] = await Promise.all([
       npmLastWeekDownloads(p.npmPackage),
@@ -121,7 +120,7 @@ async function main(): Promise<void> {
   console.error(`Wrote ${OUT} at ${new Date().toISOString()}`);
 }
 
-void main().catch((err: unknown) => {
-  console.error(err);
+await main().catch((error: unknown) => {
+  console.error(error);
   process.exitCode = 1;
 });

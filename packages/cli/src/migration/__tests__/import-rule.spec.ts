@@ -13,7 +13,9 @@ import {
 } from '../migrator.ts';
 import { createMigrationReport } from '../report.ts';
 
-vi.mock('../compat/runner.ts', () => ({ readLintConfigInWorker: vi.fn() }));
+vi.mock('../compat/runner.ts', () => ({
+  readLintConfigInWorker: vi.fn<typeof readLintConfigInWorker>(),
+}));
 
 describe('migration import rule settings', () => {
   let root: string;

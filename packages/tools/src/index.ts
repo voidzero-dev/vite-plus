@@ -1,19 +1,22 @@
 const subcommand = process.argv[2];
 
 switch (subcommand) {
-  case 'sync-remote':
+  case 'sync-remote': {
     const { syncRemote } = await import('./sync-remote-deps.ts');
     await syncRemote();
     break;
-  case 'install-global-cli':
+  }
+  case 'install-global-cli': {
     const { installGlobalCli } = await import('./install-global-cli.ts');
     installGlobalCli();
     break;
-  case 'brand-vite':
+  }
+  case 'brand-vite': {
     const { brandVite } = await import('./brand-vite.ts');
     brandVite();
     break;
-  case 'local-npm-registry':
+  }
+  case 'local-npm-registry': {
     // Spawn the script by path instead of importing it, so the child carries
     // the canonical `node .../local-npm-registry.ts` command line that the
     // script's own --ps/--kill maintenance matches.
@@ -26,6 +29,7 @@ switch (subcommand) {
     });
     process.exit(exitCodeFromClose(result.status, result.signal));
     break;
+  }
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(

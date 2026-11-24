@@ -1,9 +1,9 @@
-import type { CANCEL_SYMBOL, Validate } from '@clack/core';
+import type { Validate } from '@clack/core';
 import { PasswordPrompt } from '@clack/core';
 import color from 'picocolors';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   promptTitle,
   wrapTextWithPrefix,
@@ -11,6 +11,7 @@ import {
   S_BAR_END,
   S_PASSWORD_MASK,
 } from './common.js';
+import { runPrompt } from './prompt-result.js';
 
 export interface PasswordOptions extends CommonOptions {
   message: string;
@@ -21,7 +22,7 @@ export interface PasswordOptions extends CommonOptions {
   clearOnError?: boolean;
 }
 export const password = (opts: PasswordOptions) => {
-  return new PasswordPrompt({
+  const prompt = new PasswordPrompt({
     validate: opts.validate,
     mask: opts.mask ?? S_PASSWORD_MASK,
     signal: opts.signal,
@@ -71,5 +72,6 @@ export const password = (opts: PasswordOptions) => {
         }
       }
     },
-  }).prompt() as Promise<string | typeof CANCEL_SYMBOL>;
+  });
+  return runPrompt<string>(prompt);
 };

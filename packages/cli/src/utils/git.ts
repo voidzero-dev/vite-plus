@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log } from '@voidzero-dev/vite-plus-prompts';
 
 import { runCommandSilently } from './command.ts';
 
@@ -31,10 +31,10 @@ export async function initGitRepository(cwd: string): Promise<boolean> {
     envs: process.env,
   });
   if (result.exitCode !== 0) {
-    prompts.log.warn('Failed to initialize git repository');
+    log.warn('Failed to initialize git repository');
     const stderr = result.stderr.toString().trim();
     if (stderr) {
-      prompts.log.info(stderr);
+      log.info(stderr);
     }
     return false;
   }

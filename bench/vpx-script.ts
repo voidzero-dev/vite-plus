@@ -28,10 +28,10 @@ import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'nod
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const repo = path.join(import.meta.dirname, '..');
 const fixtures = path.join(tmpdir(), 'vite-plus-bench-vpx-script');
 const dist = path.join(repo, 'packages/cli/dist');
 const modules = 300;
@@ -52,7 +52,12 @@ const tsxPackage = createRequire(path.join(repo, 'packages/core/package.json')).
   'tsx/package.json',
 );
 const tsxDir = path.dirname(tsxPackage);
-const tsxVersion = (JSON.parse(readFileSync(tsxPackage, 'utf8')) as { version: string }).version;
+const metadata: unknown = JSON.parse(readFileSync(tsxPackage, 'utf8'));
+const tsxVersion =
+  metadata && typeof metadata === 'object' && 'version' in metadata ? metadata.version : undefined;
+if (typeof tsxVersion !== 'string') {
+  throw new TypeError('Expected tsx to have a package version');
+}
 
 function write(file: string, content: string): void {
   mkdirSync(path.dirname(path.join(fixtures, file)), { recursive: true });
@@ -122,7 +127,7 @@ function generateFixtures(): void {
 
   // One 1.8 MB file without import/export, as CommonJS and as an ES module.
   let large = '';
-  for (let i = 0; i < 12000; i++) {
+  for (let i = 0; i < 12_000; i++) {
     large +=
       `interface Shape${i} { id: number; label: string }\n` +
       `function make${i}(id: number): Shape${i} { return { id, label: 'shape-${i}-' + id.toString(16) }; }\n`;
@@ -147,11 +152,11 @@ interface Command {
   label: string;
   /** The executable; the `--node` binary when absent. */
   program?: string;
-  args: string[];
+  args: Array<string>;
   env: NodeJS.ProcessEnv;
 }
 
-function commands(scenario: string, entry: string, nodeVersion: string): Command[] {
+function commands(scenario: string, entry: string, nodeVersion: string): Array<Command> {
   // `VP_HOME` stays, so a global `vpx` finds its managed runtimes.
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => key === 'VP_HOME' || !/^(VP|TSX|OXC)_/.test(key)),
@@ -201,7 +206,7 @@ function time(node: string, command: Command, cwd: string) {
   };
 }
 
-function median(sorted: number[]): number {
+function median(sorted: Array<number>): number {
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
@@ -212,13 +217,13 @@ const nodes = values.node.map((node) => ({
   node,
   version: spawnSync(node, ['-p', 'process.versions.node']).stdout.toString().trim(),
 }));
-const results: {
+const results: Array<{
   node: string;
   scenario: string;
   command: string;
   median: number;
-  samples: number[];
-}[] = [];
+  samples: Array<number>;
+}> = [];
 for (const { node, version } of nodes) {
   for (const { name, entry } of scenarios) {
     const cwd = path.join(fixtures, name);
@@ -260,7 +265,7 @@ console.log(`tsx ${tsxVersion}; median of ${runs} runs after ${warmup} warmup ru
 console.log(`| Scenario | Command | ${versions.map((v) => `Node.js ${v}`).join(' | ')} |`);
 console.log(`| --- | --- | ${versions.map(() => '--:').join(' | ')} |`);
 for (const { name } of scenarios) {
-  const labels = [...new Set(results.filter((r) => r.scenario === name).map((r) => r.command))];
+  const labels = [...new Set(results.flatMap((r) => (r.scenario === name ? [r.command] : [])))];
   for (const label of labels) {
     const cells = versions.map((version) => {
       const row = results.find(

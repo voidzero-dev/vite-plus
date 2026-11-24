@@ -90,8 +90,8 @@ export async function resolveUniversalViteConfig(err: null | Error, viteConfigCw
       run: config.run,
       staged: config.staged,
     });
-  } catch (resolveErr) {
-    console.error('[Vite+] resolve universal vite config error:', resolveErr);
-    throw resolveErr;
+  } catch (error) {
+    console.error('[Vite+] resolve universal vite config error:', error);
+    throw error;
   }
 }

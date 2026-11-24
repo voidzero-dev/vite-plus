@@ -1,4 +1,4 @@
-import { emitMilestone } from './milestone';
+import { emitMilestone } from './milestone.ts';
 
 export default {
   clearScreen: false,

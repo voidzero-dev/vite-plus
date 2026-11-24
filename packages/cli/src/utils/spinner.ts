@@ -1,4 +1,4 @@
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log, spinner } from '@voidzero-dev/vite-plus-prompts';
 
 // Spinner shims shared by prompts.ts, approve-builds.ts, and the migrator.
 // They live here (rather than in prompts.ts) so approve-builds.ts can reuse
@@ -6,22 +6,22 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 export function getSpinner(interactive?: boolean) {
   if (interactive) {
-    return prompts.spinner();
+    return spinner();
   }
   return {
     start: (msg?: string) => {
       if (msg) {
-        prompts.log.info(msg);
+        log.info(msg);
       }
     },
     stop: (msg?: string) => {
       if (msg) {
-        prompts.log.info(msg);
+        log.info(msg);
       }
     },
     message: (msg?: string) => {
       if (msg) {
-        prompts.log.info(msg);
+        log.info(msg);
       }
     },
   };

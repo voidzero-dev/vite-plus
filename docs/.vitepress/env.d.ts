@@ -15,14 +15,14 @@ declare module '*VPSponsors.vue' {
   import type { DefineComponent } from 'vue';
 
   export type Sponsors = Omit<SponsorTier, 'tier'> & { tier?: string };
-  const component: DefineComponent<{}, {}, unknown>;
+  const component: DefineComponent;
   export default component;
 }
 
 // Vue SFC module declaration
 declare module '*.vue' {
   import type { DefineComponent } from 'vue';
-  const component: DefineComponent<{}, {}, unknown>;
+  const component: DefineComponent;
   export default component;
 }
 

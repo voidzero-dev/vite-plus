@@ -30,7 +30,7 @@ import {
   WATCH_OPTIONS_WITH_VALUE,
 } from '../vpx-script.ts';
 
-const dirs: string[] = [];
+const dirs: Array<string> = [];
 
 function project(files: Record<string, string>): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'vpx-script-'));
@@ -52,25 +52,28 @@ afterEach(() => {
 interface DetectionCase {
   name: string;
   files?: Record<string, string>;
-  args: string[];
-  expect: 'package' | { error: string } | { script: string[]; tsconfig?: string; watch?: true };
+  args: Array<string>;
+  expect:
+    | 'package'
+    | { error: string }
+    | { script: Array<string>; tsconfig?: string; watch?: true };
 }
 
 const detectionTable: {
-  scriptExtensions: string[];
-  nodeOptionsWithValue: string[];
-  nodeOptionsWithoutEntry: string[];
-  watchOptionsWithValue: string[];
-  packageSpecs: { spec: string; versioned: boolean; command: string }[];
-  explicitPrograms: {
+  scriptExtensions: Array<string>;
+  nodeOptionsWithValue: Array<string>;
+  nodeOptionsWithoutEntry: Array<string>;
+  watchOptionsWithValue: Array<string>;
+  packageSpecs: Array<{ spec: string; versioned: boolean; command: string }>;
+  explicitPrograms: Array<{
     name: string;
     files?: Record<string, string>;
-    executable?: string[];
+    executable?: Array<string>;
     token: string;
     unixOnly?: boolean;
     expect: 'ok' | { error: string; note?: string };
-  }[];
-  cases: DetectionCase[];
+  }>;
+  cases: Array<DetectionCase>;
 } = JSON.parse(
   readFileSync(
     path.join(
@@ -85,23 +88,35 @@ describe('detectScript', () => {
   // The global CLI runs the same cases (`vpx_script.rs`), so both decide the same way.
   it.each(detectionTable.cases)('$name', ({ files = {}, args, expect: expected }) => {
     const cwd = project(files);
-    const fill = (values: string[]) => values.map((value) => value.replaceAll('{cwd}', cwd));
-    if (expected === 'package') {
-      expect(detectScript(fill(args), cwd)).toBeUndefined();
-    } else if ('error' in expected) {
-      expect(() => detectScript(fill(args), cwd)).toThrow(new ScriptError(expected.error));
-    } else {
+    const fill = (values: Array<string>) => values.map((value) => value.replaceAll('{cwd}', cwd));
+    const detect = () => {
       const result = detectScript(fill(args), cwd);
-      expect({
-        nodeArgs: result?.nodeArgs,
-        tsconfig: result?.tsconfig,
-        watch: result?.watch ?? false,
-      }).toEqual({
-        nodeArgs: fill(expected.script),
-        tsconfig: expected.tsconfig,
-        watch: expected.watch ?? false,
-      });
-    }
+      return (
+        result && {
+          nodeArgs: result.nodeArgs,
+          tsconfig: result.tsconfig,
+          watch: result.watch ?? false,
+        }
+      );
+    };
+    const outcome = () => {
+      try {
+        return detect();
+      } catch (error) {
+        return error;
+      }
+    };
+    expect(outcome()).toEqual(
+      expected === 'package'
+        ? undefined
+        : 'error' in expected
+          ? new ScriptError(expected.error)
+          : {
+              nodeArgs: fill(expected.script),
+              tsconfig: expected.tsconfig,
+              watch: expected.watch ?? false,
+            },
+    );
   });
 
   it('declares the lists the global CLI declares', () => {
@@ -140,9 +155,13 @@ describe('parseVpxArgs', () => {
   });
 });
 
-function runPackage(args: string[], cwd: string) {
+function runPackage(args: Array<string>, cwd: string) {
   const { flags, positional } = parseVpxArgs(args);
-  return packageInvocation(flags, positional as [string, ...string[]], cwd);
+  const [first, ...rest] = positional;
+  if (first === undefined) {
+    throw new Error('Expected a package argument');
+  }
+  return packageInvocation(flags, [first, ...rest], cwd);
 }
 
 describe('checkExplicitProgram', () => {
@@ -339,6 +358,6 @@ describe('script hooks', () => {
     );
     expect(withRequireAsyncModuleCode(tla)).toMatchObject({ code: 'ERR_REQUIRE_ASYNC_MODULE' });
     const other = new Error('Failed to parse /x/a.ts');
-    expect((withRequireAsyncModuleCode(other) as NodeJS.ErrnoException).code).toBeUndefined();
+    expect(withRequireAsyncModuleCode(other)).not.toHaveProperty('code');
   });
 });

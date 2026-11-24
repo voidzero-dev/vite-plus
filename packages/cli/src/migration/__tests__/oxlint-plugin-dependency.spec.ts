@@ -4,8 +4,10 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
 import { readJsonFile, writeJsonFile } from '../../utils/json.ts';
+import type { DependencyBag } from '../migrator.ts';
 import {
   collectOxlintOwnerDirs,
   detectVitePlusBootstrapPending,
@@ -19,7 +21,6 @@ import {
   rewriteStandaloneProject,
   sourceTreeReferencesOxlintPluginsPackage,
   usesVitestBrowserMode,
-  type DependencyBag,
 } from '../migrator.ts';
 
 describe('Oxlint plugin dependency cleanup', () => {
@@ -614,7 +615,7 @@ describe('Oxlint plugin dependency cleanup', () => {
   });
 });
 
-function packument(versions: string[]): Response {
+function packument(versions: Array<string>): Response {
   return new Response(
     JSON.stringify({ versions: Object.fromEntries(versions.map((v) => [v, {}])) }),
     { status: 200, headers: { 'content-type': 'application/json' } },

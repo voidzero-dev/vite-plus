@@ -1,4 +1,4 @@
-import { type Plugin } from 'rolldown';
+import type { Plugin } from 'rolldown';
 
 import pkgJson from '../package.json' with { type: 'json' };
 

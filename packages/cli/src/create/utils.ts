@@ -41,7 +41,7 @@ export function ensureCreateCatalogEntries(
   const pkg = readJsonFile(packageJsonPath) as Partial<
     Record<'dependencies' | 'devDependencies' | 'optionalDependencies', Record<string, string>>
   >;
-  const versions: Record<string, string> = {
+  const versions: NonNullable<typeof pkg.dependencies> = {
     ...VITE_PLUS_OVERRIDE_PACKAGES,
     [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
   };
@@ -190,11 +190,7 @@ export function copyDir(srcDir: string, destDir: string) {
  * ./foo/bar/@scope/my-package -> { directory: './foo/bar/my-package', packageName: '@scope/my-package' }
  * ```
  */
-export function formatTargetDir(input: string): {
-  directory: string;
-  packageName: string;
-  error?: string;
-} {
+export function formatTargetDir(input: string) {
   let targetDir = path.normalize(input.trim());
 
   // "." or "./" means current directory — valid directory, but no package name derivable
@@ -290,12 +286,12 @@ export function ensureDefaultGitignoreEntries(projectDir: string): void {
   const gitignorePath = path.join(projectDir, '.gitignore');
   let content = '';
   try {
-    content = fs.readFileSync(gitignorePath, 'utf-8');
+    content = fs.readFileSync(gitignorePath, 'utf8');
   } catch {
     // No existing .gitignore — we'll write a fresh one below.
   }
 
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   if (!hasNodeModulesGitignoreLine(content)) {
     lines.push('node_modules');
   }
@@ -325,7 +321,7 @@ function hasGitignoreLine(content: string, line: string): boolean {
 function appendGitignoreLines(
   gitignorePath: string,
   content: string,
-  lines: readonly string[],
+  lines: ReadonlyArray<string>,
 ): void {
   if (lines.length === 0) {
     return;
@@ -353,7 +349,7 @@ export function ensureGitignoreVsCodeEditorConfigs(projectDir: string): void {
   const gitignorePath = path.join(projectDir, '.gitignore');
   let content: string;
   try {
-    content = fs.readFileSync(gitignorePath, 'utf-8');
+    content = fs.readFileSync(gitignorePath, 'utf8');
   } catch {
     return;
   }

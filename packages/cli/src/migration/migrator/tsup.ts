@@ -2,18 +2,25 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  confirm as promptConfirm,
+  isCancel,
+  log as promptLog,
+} from '@voidzero-dev/vite-plus-prompts';
 import corePkg from 'vite/package.json' with { type: 'json' };
 
-import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
+import type { PackageManager } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
 import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
 import { TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
+import { parseJsonObject, isObjectValue } from '../../utils/json-value.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { detectConfigs, TSUP_CONFIG_FILES, TSUP_PACKAGE_JSON_CONFIG } from '../detector.ts';
-import { addMigrationWarning, type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
+import { addMigrationWarning } from '../report.ts';
 
 function showTsdownMigrationOptions(
   targetLabel = 'the project root',
@@ -29,11 +36,11 @@ function showTsdownMigrationOptions(
     lines.unshift('Automatic tsup migration failed.', '');
     lines.push('');
   }
-  prompts.log.info(lines.join('\n'));
+  promptLog.info(lines.join('\n'));
 }
 
-function showTsdownMigrationSkillGuidance(instructions: string[]): void {
-  prompts.log.info(
+function showTsdownMigrationSkillGuidance(instructions: Array<string>): void {
+  promptLog.info(
     [
       ...instructions,
       '',
@@ -43,14 +50,7 @@ function showTsdownMigrationSkillGuidance(instructions: string[]): void {
   );
 }
 
-export function detectTsupProject(
-  projectPath: string,
-  packages?: WorkspacePackage[],
-): {
-  hasDependency: boolean;
-  hasConfig: boolean;
-  configFile?: string;
-} {
+export function detectTsupProject(projectPath: string, packages?: Array<WorkspacePackage>) {
   const packageJsonPath = path.join(projectPath, 'package.json');
   let hasDependency = false;
   if (fs.existsSync(packageJsonPath)) {
@@ -92,7 +92,7 @@ const TSDOWN_MIGRATION_FILES = [
 ];
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 const STANDARD_TSUP_CONFIG_FILE_PATTERN = TSUP_CONFIG_FILES.flatMap((file) => [
@@ -129,17 +129,17 @@ interface UnsupportedTsupConfigConsumer {
 }
 
 function removeStandardTsdownConfigOption(script: string): string {
-  return script.replace(TSDOWN_STANDARD_CONFIG_OPTION_RE, '$1');
+  return script.replaceAll(TSDOWN_STANDARD_CONFIG_OPTION_RE, '$1');
 }
 
 function resolveScriptConfigPath(packagePath: string, configPath: string): string {
-  return path.resolve(packagePath, configPath.replace(/[\\/]/g, path.sep));
+  return path.resolve(packagePath, configPath.replaceAll(/[\\/]/g, path.sep));
 }
 
 function collectSharedTsupConfigs(
   projectPath: string,
-  packages: WorkspacePackage[] | undefined,
-  tsupTargets: string[],
+  packages: Array<WorkspacePackage> | undefined,
+  tsupTargets: Array<string>,
 ): Map<string, SharedTsupConfig> {
   const migratedConfigPaths = new Set(
     tsupTargets.flatMap((target) =>
@@ -170,11 +170,13 @@ function collectSharedTsupConfigs(
         if (!migratedConfigPaths.has(configPath) || path.dirname(configPath) === packagePath) {
           continue;
         }
-        const sharedConfig = sharedConfigs.get(configPath) ?? { consumers: new Map() };
+        const sharedConfig = sharedConfigs.get(configPath) ?? {
+          consumers: new Map<string, SharedTsupConsumer>(),
+        };
         const consumer = sharedConfig.consumers.get(packagePath) ?? {
           label,
           packagePath,
-          scriptNames: new Set(),
+          scriptNames: new Set<string>(),
         };
         consumer.scriptNames.add(scriptName);
         sharedConfig.consumers.set(packagePath, consumer);
@@ -186,8 +188,8 @@ function collectSharedTsupConfigs(
   return sharedConfigs;
 }
 
-function collectTsupConfigCollisions(tsupTargets: string[]): TsupConfigLocation[] {
-  const collisions: TsupConfigLocation[] = [];
+function collectTsupConfigCollisions(tsupTargets: Array<string>): Array<TsupConfigLocation> {
+  const collisions: Array<TsupConfigLocation> = [];
   for (const target of tsupTargets) {
     const tsdownConfig = detectConfigs(target).tsdownConfig;
     if (tsdownConfig) {
@@ -204,7 +206,7 @@ function collectTsupConfigCollisions(tsupTargets: string[]): TsupConfigLocation[
   return collisions;
 }
 
-function collectInlineTsupConfigs(tsupTargets: string[]): TsupConfigLocation[] {
+function collectInlineTsupConfigs(tsupTargets: Array<string>): Array<TsupConfigLocation> {
   return tsupTargets.flatMap((target) => {
     const packageJsonPath = path.join(target, 'package.json');
     if (!fs.existsSync(packageJsonPath) || !Object.hasOwn(readJsonFile(packageJsonPath), 'tsup')) {
@@ -224,8 +226,8 @@ function isRemovableDefaultConfigArgument(configArgument: string, defaultConfig?
 }
 
 function collectUnsupportedTsupConfigConsumers(
-  tsupTargets: string[],
-): UnsupportedTsupConfigConsumer[] {
+  tsupTargets: Array<string>,
+): Array<UnsupportedTsupConfigConsumer> {
   const migratedConfigPaths = new Set(
     tsupTargets.flatMap((target) =>
       TSUP_CONFIG_FILES.map((file) => path.join(target, file)).filter((file) =>
@@ -233,7 +235,7 @@ function collectUnsupportedTsupConfigConsumers(
       ),
     ),
   );
-  const unsupported: UnsupportedTsupConfigConsumer[] = [];
+  const unsupported: Array<UnsupportedTsupConfigConsumer> = [];
 
   for (const target of tsupTargets) {
     const packageJsonPath = path.join(target, 'package.json');
@@ -295,11 +297,7 @@ function restoreSharedTsupUsage(
     if (!originalPackageJson || !fs.existsSync(packageJsonPath)) {
       continue;
     }
-    const original = JSON.parse(originalPackageJson.toString()) as {
-      scripts?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-      dependencies?: Record<string, string>;
-    };
+    const original = parseJsonObject(originalPackageJson.toString());
     editJsonFile<{
       scripts?: Record<string, string>;
       devDependencies?: Record<string, string>;
@@ -307,16 +305,17 @@ function restoreSharedTsupUsage(
     }>(packageJsonPath, (pkg) => {
       let changed = false;
       for (const field of ['devDependencies', 'dependencies'] as const) {
-        const spec = original[field]?.tsup;
-        if (spec && pkg[field]?.tsup !== spec) {
+        const group = original[field];
+        const spec = isObjectValue(group) ? group.tsup : undefined;
+        if (typeof spec === 'string' && spec && pkg[field]?.tsup !== spec) {
           pkg[field] ??= {};
           pkg[field].tsup = spec;
           changed = true;
         }
       }
       for (const scriptName of restoredScripts.get(target) ?? []) {
-        const script = original.scripts?.[scriptName];
-        if (script !== undefined && pkg.scripts?.[scriptName] !== script) {
+        const script = isObjectValue(original.scripts) ? original.scripts[scriptName] : undefined;
+        if (typeof script === 'string' && pkg.scripts?.[scriptName] !== script) {
           pkg.scripts ??= {};
           pkg.scripts[scriptName] = script;
           changed = true;
@@ -329,7 +328,7 @@ function restoreSharedTsupUsage(
   return preservedDependencyTargets;
 }
 
-function snapshotTsupMigrationTargets(targets: string[]): Map<string, Buffer | undefined> {
+function snapshotTsupMigrationTargets(targets: Array<string>): Map<string, Buffer | undefined> {
   const snapshots = new Map<string, Buffer | undefined>();
   for (const target of targets) {
     for (const file of TSDOWN_MIGRATION_FILES) {
@@ -340,8 +339,8 @@ function snapshotTsupMigrationTargets(targets: string[]): Map<string, Buffer | u
   return snapshots;
 }
 
-function restoreTsupMigrationTargets(snapshots: Map<string, Buffer | undefined>): string[] {
-  const failures: string[] = [];
+function restoreTsupMigrationTargets(snapshots: Map<string, Buffer | undefined>): Array<string> {
+  const failures: Array<string> = [];
   for (const [filePath, contents] of snapshots) {
     try {
       if (contents === undefined) {
@@ -356,7 +355,7 @@ function restoreTsupMigrationTargets(snapshots: Map<string, Buffer | undefined>)
   return failures;
 }
 
-function extractTsdownMigrationWarnings(output: Buffer): string[] {
+function extractTsdownMigrationWarnings(output: Buffer): Array<string> {
   return output
     .toString()
     .replaceAll('\r\n', '\n')
@@ -374,7 +373,7 @@ function extractTsdownMigrationWarnings(output: Buffer): string[] {
 async function runTsdownMigrateStep(
   cwd: string,
   packageManager: PackageManager,
-): Promise<{ ok: boolean; warnings: string[] }> {
+): Promise<{ ok: boolean; warnings: Array<string> }> {
   try {
     const result = await runCommandSilently({
       ...getVpCommand([
@@ -391,7 +390,7 @@ async function runTsdownMigrateStep(
     if (result.exitCode !== 0) {
       const stderr = result.stderr.toString().trim();
       if (stderr) {
-        prompts.log.warn(`⚠ ${stderr}`);
+        promptLog.warn(`⚠ ${stderr}`);
       }
       return { ok: false, warnings: [] };
     }
@@ -412,7 +411,7 @@ export async function migrateTsupToTsdown(
   interactive: boolean,
   packageManager: PackageManager,
   tsupConfigFile?: string,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
@@ -430,7 +429,7 @@ export async function migrateTsupToTsdown(
   );
   const configCollisions = collectTsupConfigCollisions(tsupTargets);
   if (configCollisions.length > 0) {
-    prompts.log.warn(
+    promptLog.warn(
       `Automatic tsup migration was skipped because these tsdown configs already exist:\n${configCollisions
         .map(({ configPath }) => `  ${displayRelative(configPath, projectPath)}`)
         .join('\n')}`,
@@ -444,7 +443,7 @@ export async function migrateTsupToTsdown(
   }
   const inlineTsupConfigs = collectInlineTsupConfigs(tsupTargets);
   if (inlineTsupConfigs.length > 0) {
-    prompts.log.warn(
+    promptLog.warn(
       `Automatic tsup migration was skipped because these inline tsup configs cannot be migrated automatically:\n${inlineTsupConfigs
         .map(({ configPath }) => `  ${displayRelative(configPath, projectPath)}`)
         .join('\n')}`,
@@ -458,7 +457,7 @@ export async function migrateTsupToTsdown(
   }
   const unsupportedConfigConsumers = collectUnsupportedTsupConfigConsumers(tsupTargets);
   if (unsupportedConfigConsumers.length > 0) {
-    prompts.log.warn(
+    promptLog.warn(
       `Automatic tsup migration was skipped because these scripts use configs that cannot be migrated automatically:\n${unsupportedConfigConsumers
         .map(
           ({ configArgument, packagePath, scriptName }) =>
@@ -483,7 +482,7 @@ export async function migrateTsupToTsdown(
     // finds. Preserve those files across all targets so a later failure can
     // roll the complete workspace back to its pre-migration state.
     const snapshots = snapshotTsupMigrationTargets(tsupTargets);
-    const migrationWarnings: { targetLabel: string; warning: string }[] = [];
+    const migrationWarnings: Array<{ targetLabel: string; warning: string }> = [];
     spinner.start('Migrating tsup config to tsdown...');
     for (const target of tsupTargets) {
       const targetLabel =
@@ -493,7 +492,7 @@ export async function migrateTsupToTsdown(
         spinner.stop();
         const restoreFailures = restoreTsupMigrationTargets(snapshots);
         if (restoreFailures.length > 0) {
-          prompts.log.warn(
+          promptLog.warn(
             `Could not restore these files after the failed migration:\n${restoreFailures
               .map((file) => `  ${file}`)
               .join('\n')}`,
@@ -521,7 +520,7 @@ export async function migrateTsupToTsdown(
       if (options?.report) {
         addMigrationWarning(options.report, message);
       } else {
-        prompts.log.warn(message);
+        promptLog.warn(message);
       }
     }
     for (const [configPath, sharedConfig] of sharedConfigs) {
@@ -534,7 +533,7 @@ export async function migrateTsupToTsdown(
       if (options?.report) {
         addMigrationWarning(options.report, message);
       } else {
-        prompts.log.warn(message);
+        promptLog.warn(message);
       }
     }
   }
@@ -579,7 +578,7 @@ function deleteTsupConfigFiles(
         report.removedConfigCount++;
       }
       if (!silent) {
-        prompts.log.success(`✔ Removed ${displayRelative(configPath)}`);
+        promptLog.success(`✔ Removed ${displayRelative(configPath)}`);
       }
     }
   }
@@ -596,7 +595,7 @@ function deleteTsupConfigFiles(
         report.removedConfigCount++;
       }
       if (!silent) {
-        prompts.log.success(`✔ Removed ${displayRelative(configPath)}`);
+        promptLog.success(`✔ Removed ${displayRelative(configPath)}`);
       }
     }
   }
@@ -626,8 +625,8 @@ function rewriteTsupPackageJson(packageJsonPath: string, preserveTsupDependency 
     // remove that redundant option before the generic tsdown -> vp pack rule.
     for (const [name, script] of Object.entries(pkg.scripts ?? {})) {
       const rewritten = removeStandardTsdownConfigOption(script);
-      if (rewritten !== script) {
-        pkg.scripts![name] = rewritten;
+      if (rewritten !== script && pkg.scripts) {
+        pkg.scripts[name] = rewritten;
         changed = true;
       }
     }
@@ -647,14 +646,14 @@ function rewriteTsupPackageJson(packageJsonPath: string, preserveTsupDependency 
 }
 
 export function warnMissingTsupConfig() {
-  prompts.log.warn(
+  promptLog.warn(
     'tsup detected, but no tsup config was found. The tsup setup must be migrated manually.',
   );
 }
 
 export async function confirmTsupMigration(interactive: boolean): Promise<boolean> {
   if (interactive) {
-    const confirmed = await prompts.confirm({
+    const confirmed = await promptConfirm({
       message:
         'Migrate tsup config to tsdown using tsdown-migrate?\n  ' +
         styleText(
@@ -663,7 +662,7 @@ export async function confirmTsupMigration(interactive: boolean): Promise<boolea
         ),
       initialValue: true,
     });
-    if (prompts.isCancel(confirmed)) {
+    if (isCancel(confirmed)) {
       cancelAndExit();
     }
     if (!confirmed) {
@@ -671,7 +670,7 @@ export async function confirmTsupMigration(interactive: boolean): Promise<boolea
     }
     return confirmed;
   }
-  prompts.log.info('tsup configuration detected. Auto-migrating to tsdown...');
+  promptLog.info('tsup configuration detected. Auto-migrating to tsdown...');
   return true;
 }
 
@@ -679,7 +678,7 @@ export async function promptTsupMigration(
   projectPath: string,
   interactive: boolean,
   packageManager: PackageManager,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): Promise<boolean> {
   const tsupProject = detectTsupProject(projectPath, packages);
   if (!tsupProject.hasDependency) {

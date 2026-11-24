@@ -4,7 +4,6 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
   realpathSync,
   rmSync,
@@ -14,8 +13,9 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+
+import { readPackageManifest } from './package-manifest.ts';
 
 const isWindows = process.platform === 'win32';
 const LOCAL_DEV_PREFIX = 'local-dev';
@@ -26,7 +26,7 @@ function pinCiLegacyHome() {
   // bootstrap uses the monolithic root. The resolver uses `~/.vite-plus` only
   // when it contains an install with a `current` link. An empty directory does
   // not select the monolithic layout.
-  if (process.env.CI == null || process.env.VP_HOME != null) {
+  if (process.env.CI === undefined || process.env.VP_HOME !== undefined) {
     return;
   }
   process.env.VP_HOME = path.join(os.homedir(), '.vite-plus');
@@ -59,9 +59,7 @@ function localDevVersion(): string {
 }
 
 // Get repo root from script location (packages/tools/src/install-global-cli.ts -> repo root)
-// oxlint-disable-next-line no-underscore-dangle
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '../../..');
+const repoRoot = path.resolve(import.meta.dirname, '../../..');
 
 export function installGlobalCli() {
   // Detect if running directly or via tools dispatcher
@@ -147,19 +145,21 @@ export function installGlobalCli() {
           }
           try {
             removeInstallPath(entryPath);
-          } catch (err) {
-            if (isWindowsLockedExecutableError(err)) {
+          } catch (error) {
+            if (isWindowsLockedExecutableError(error)) {
               console.log(`Skipping old ${entry} because its vp.exe is still running.`);
               continue;
             }
-            console.warn(`Warning: failed to remove old ${entry}: ${(err as Error).message}`);
+            console.warn(
+              `Warning: failed to remove old ${entry}: ${error instanceof Error ? error.message : String(error)}`,
+            );
           }
         }
       }
     }
 
-    const env: Record<string, string> = {
-      ...(process.env as Record<string, string>),
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
       VP_LOCAL_TGZ: tgzPath,
       VP_LOCAL_BINARY: binaryPath,
       VP_VERSION: localDevVer,
@@ -209,7 +209,7 @@ export function installGlobalCli() {
 }
 
 // Returns target directories to search, with CARGO_TARGET_DIR (e.g., Windows Dev Drive) first if set.
-function getTargetDirs(): string[] {
+function getTargetDirs(): Array<string> {
   const dirs = [path.join(repoRoot, 'target')];
   if (process.env.CARGO_TARGET_DIR) {
     dirs.unshift(process.env.CARGO_TARGET_DIR);
@@ -265,11 +265,11 @@ function removeWindowsPath(targetPath: string) {
   let stat;
   try {
     stat = lstatSync(targetPath);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
       return;
     }
-    throw err;
+    throw error;
   }
 
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
@@ -312,7 +312,7 @@ function getWindowsPowerShellCommand(): string {
   for (const command of ['pwsh', 'powershell.exe', 'powershell']) {
     try {
       const resolved = execFileSync('where.exe', [command], {
-        encoding: 'utf-8',
+        encoding: 'utf8',
         stdio: 'pipe',
       })
         .split(/\r?\n/)
@@ -349,7 +349,7 @@ function installCiDeps(versionDir: string, mainTgzPath: string): void {
       stdio: 'pipe',
     });
   }
-  const vitePlusPkg = JSON.parse(readFileSync(path.join(tempDir, 'package.json'), 'utf-8'));
+  const vitePlusPkg = readPackageManifest(path.join(tempDir, 'package.json'));
   rmSync(tempDir, { recursive: true, force: true });
 
   const wrapperPkg = createCiInstallPackage(vitePlusPkg.dependencies ?? {}, mainTgzPath);
@@ -377,7 +377,7 @@ export function createCiInstallPackage(
 ): CiInstallPackage {
   const tgzDir = path.dirname(mainTgzPath);
   // Build wrapper deps: vite-plus from tgz + @voidzero-dev/* from sibling tgz files
-  const wrapperDeps: Record<string, string> = {
+  const wrapperDeps: CiInstallPackage['dependencies'] = {
     'vite-plus': `file:${mainTgzPath}`,
   };
   const overrides: Record<string, string> = {};
