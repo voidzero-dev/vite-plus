@@ -32,6 +32,8 @@ export interface WaitForNpmPackagesOptions {
   minSeconds: number;
   timeoutSeconds: number;
   pollSeconds: number;
+  /** Log the versions that are still pending at this interval. Defaults to 60. */
+  progressSeconds?: number;
   sleep: (milliseconds: number) => Promise<void>;
   now: () => number;
   log: (message: string) => void;
@@ -89,13 +91,16 @@ export async function isNpmPackageAvailable(
   return tarballResponse.ok;
 }
 
+function formatPackageList(pending: ReadonlyMap<string, string>): string {
+  return Array.from(pending, ([name, version]) => `${name}@${version}`).join(', ');
+}
+
 function propagationTimeoutError(
   pending: ReadonlyMap<string, string>,
   timeoutSeconds: number,
 ): Error {
-  const packageList = Array.from(pending, ([name, version]) => `${name}@${version}`).join(', ');
   return new Error(
-    `Timed out after ${timeoutSeconds}s waiting for npm propagation: ${packageList}`,
+    `Timed out after ${timeoutSeconds}s waiting for npm propagation: ${formatPackageList(pending)}`,
   );
 }
 
@@ -114,8 +119,15 @@ export async function waitForNpmPackages(
   const start = options.now();
   const deadline = start + options.timeoutSeconds * 1000;
   const pending = new Map(packages.map((pkg) => [pkg.name, pkg.version]));
+  const progressMilliseconds = (options.progressSeconds ?? 60) * 1000;
+  let lastProgress = start;
 
-  options.log(`Waiting for ${pending.size} npm package version(s) to become installable...`);
+  options.log(
+    `Waiting up to ${options.timeoutSeconds}s for ${pending.size} npm package version(s) to become installable:`,
+  );
+  for (const [name, version] of pending) {
+    options.log(`  - ${name}@${version}`);
+  }
 
   while (pending.size > 0) {
     for (const [name, version] of pending) {
@@ -147,6 +159,13 @@ export async function waitForNpmPackages(
 
     if (pending.size === 0) {
       break;
+    }
+    if (progressMilliseconds > 0 && options.now() - lastProgress >= progressMilliseconds) {
+      lastProgress = options.now();
+      const elapsedSeconds = Math.round((lastProgress - start) / 1000);
+      options.log(
+        `  Still waiting after ${elapsedSeconds}s for ${pending.size} package version(s): ${formatPackageList(pending)}`,
+      );
     }
     const remainingMilliseconds = deadline - options.now();
     if (remainingMilliseconds <= 0) {
@@ -198,6 +217,7 @@ export async function waitForNpmPackagesFromEnv(
     minSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_MIN_SECONDS', 60),
     timeoutSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_TIMEOUT_SECONDS', 2400),
     pollSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_POLL_SECONDS', 5),
+    progressSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_PROGRESS_SECONDS', 60),
     sleep,
     now: Date.now,
     log: console.log,
