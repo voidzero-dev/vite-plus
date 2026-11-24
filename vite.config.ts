@@ -81,8 +81,6 @@ export default defineConfig({
       '**/node_modules/**',
       // PTY snapshot fixtures; also excluded in lint/fmt here and tsconfig.json
       'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
-      // FIXME: Error: failed to prepare the command for injection: Invalid argument (os error 22)
-      'packages/*/binding/__tests__/',
     ],
   },
   fmt: {
