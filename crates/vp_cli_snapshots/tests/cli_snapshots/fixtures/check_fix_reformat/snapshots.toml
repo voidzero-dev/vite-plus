@@ -5,3 +5,11 @@ steps = [
   { argv = ["vp", "check", "--fix"], continue-on-failure = true },
   { argv = ["vp", "check"], comment = "should pass after fix", continue-on-failure = true },
 ]
+
+[[case]]
+name = "check_fix_reformat_agent"
+vp = "local"
+steps = [
+  ["vp", "check", "--fix", "--format=agent"],
+  { argv = ["vp", "check"], comment = "Lint fixes are reformatted even with an explicit reporter." },
+]
