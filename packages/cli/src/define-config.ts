@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { ignoreInput, ignoreOutput } from '@voidzero-dev/vite-task-client';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
-import { resolveConfig, searchForWorkspaceRoot } from 'vite';
 import type {
   Alias,
   InlineConfig as ViteInlineConfig,
@@ -15,6 +14,7 @@ import type {
   ResolvedConfig,
   UserConfig,
 } from 'vite';
+import { resolveConfig, searchForWorkspaceRoot } from 'vite';
 import {
   defineConfig as viteDefineConfig,
   defineProject as viteDefineProject,

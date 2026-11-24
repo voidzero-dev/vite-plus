@@ -30,8 +30,8 @@ setUserAgent();
 
 // Node.js sets O_NONBLOCK when pipe-backed stdio is first accessed. Materialize
 // the output streams before restoring the blocking semantics expected by Rust.
-void process.stdout;
-void process.stderr;
+Reflect.get(process, 'stdout');
+Reflect.get(process, 'stderr');
 ensureBlockingStdio();
 
 interface StdioStream {
