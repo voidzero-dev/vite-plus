@@ -62,7 +62,7 @@ mod sys {
         sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction},
     };
 
-    use crate::is_background_job as in_background;
+    use crate::is_background_job;
 
     struct Saved(UnsafeCell<MaybeUninit<libc::termios>>);
 
@@ -124,7 +124,7 @@ mod sys {
 
     /// Save the state of `fd` and return its raw input form with signals kept.
     pub(super) fn save(fd: RawFd) -> Option<libc::termios> {
-        if in_background(fd) {
+        if is_background_job(fd) {
             return None;
         }
         let mut termios = MaybeUninit::<libc::termios>::uninit();
@@ -156,7 +156,7 @@ mod sys {
     /// calls, because the signal handlers use this too.
     pub(super) fn restore(fd: RawFd) {
         // The shell restored its own modes when it moved this job to the background.
-        if in_background(fd) {
+        if is_background_job(fd) {
             return;
         }
         // SAFETY: callers only restore after `save` saved the state.
@@ -176,7 +176,7 @@ mod sys {
     /// Writes to stderr, where the progress row is drawn. Only async-signal-safe
     /// calls, and like `restore` it leaves the terminal alone in the background.
     fn write_cursor(sequence: &[u8]) {
-        if !CURSOR_HIDDEN.load(Ordering::SeqCst) || in_background(libc::STDIN_FILENO) {
+        if !CURSOR_HIDDEN.load(Ordering::SeqCst) || is_background_job(libc::STDIN_FILENO) {
             return;
         }
         // SAFETY: `write` is async-signal-safe and only reads `sequence`.

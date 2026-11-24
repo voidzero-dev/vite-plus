@@ -314,7 +314,6 @@ fn query_terminal_colors(palette_indices: &[u8]) -> (Option<Rgb>, Vec<(u8, Rgb)>
         Ok(file) => file,
         Err(_) => return (None, vec![]),
     };
-    // A background job that switches the terminal to raw mode is stopped with SIGTTOU.
     if crate::is_background_job(tty.as_raw_fd()) {
         return (None, vec![]);
     }

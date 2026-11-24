@@ -749,8 +749,6 @@ mod tests {
         }
     }
 
-    /// A job the shell moved to the background must leave the terminal alone,
-    /// or SIGTTOU stops it after the command already finished.
     #[cfg(unix)]
     #[test]
     fn terminal_guard_leaves_a_background_terminal_alone() {
@@ -773,10 +771,11 @@ mod tests {
                 }
                 let job = libc::fork();
                 if job == 0 {
-                    // Another group in the session is a background job. The guard
-                    // drops at the end of the statement, which restores the terminal.
+                    // Another group in the session is a background job.
                     libc::setpgid(0, 0);
-                    let saved = TerminalStateGuard::save(libc::STDIN_FILENO).is_some();
+                    let guard = TerminalStateGuard::save(libc::STDIN_FILENO);
+                    let saved = guard.is_some();
+                    drop(guard);
                     libc::_exit(i32::from(!saved));
                 }
                 let mut status = 0;
