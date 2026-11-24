@@ -40,6 +40,19 @@ pub fn is_stderr_terminal() -> bool {
     *IS_TTY
 }
 
+/// A background job that changes or flushes its controlling terminal is
+/// stopped with SIGTTOU, so it leaves the terminal to the foreground job.
+/// A terminal that is not the controlling one has no foreground job.
+/// Async-signal-safe, so signal handlers can call it.
+#[cfg(unix)]
+#[must_use]
+pub fn is_background_job(fd: std::os::fd::RawFd) -> bool {
+    use nix::libc;
+    // SAFETY: both calls only read process state and are async-signal-safe.
+    let (foreground, own) = unsafe { (libc::tcgetpgrp(fd), libc::getpgrp()) };
+    foreground != -1 && foreground != own
+}
+
 /// True when vp can show interactive prompts: stdin and stdout are terminals,
 /// the terminal is capable, and this is not a CI environment.
 ///

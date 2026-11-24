@@ -62,6 +62,8 @@ mod sys {
         sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction},
     };
 
+    use crate::is_background_job as in_background;
+
     struct Saved(UnsafeCell<MaybeUninit<libc::termios>>);
 
     // SAFETY: only the guard that won `ACTIVE` writes this, before it sets
@@ -118,15 +120,6 @@ mod sys {
                 let _ = unsafe { sigaction(signal, &previous) };
             }
         }
-    }
-
-    /// A background job that changes or flushes its controlling terminal is
-    /// stopped with SIGTTOU, so it leaves the terminal to the foreground job.
-    /// A terminal that is not the controlling one has no foreground job.
-    fn in_background(fd: RawFd) -> bool {
-        // SAFETY: both calls only read process state and are async-signal-safe.
-        let (foreground, own) = unsafe { (libc::tcgetpgrp(fd), libc::getpgrp()) };
-        foreground != -1 && foreground != own
     }
 
     /// Save the state of `fd` and return its raw input form with signals kept.
