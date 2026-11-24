@@ -1,8 +1,8 @@
 # help_background_job
 
-A background job must not touch the terminal, or SIGTTOU stops it before help is printed. Interactive Bash enables job control, and `wait` returns 150 if the job stops.
+A background job must not touch the terminal, or SIGTTOU stops it before help is printed. Interactive Bash enables job control, and `wait` returns 150 if the job stops. The shell's stderr is discarded because Bash versions differ in when they report job status.
 
-## `bash --noprofile --norc -ic '{ vp --help & } 2>/dev/null; wait %1; echo "exit status: $?"'`
+## `bash --noprofile --norc -ic 'exec 2>/dev/null; vp --help & wait %1; echo "exit status: $?"'`
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -62,6 +62,5 @@ Options:
   -V, --version  Print version
   -C <DIR>       Run as if vp was started in <DIR> instead of the current working directory
   -h, --help     Print help
-[1]+  Done                    vp --help
 exit status: 0
 ```
