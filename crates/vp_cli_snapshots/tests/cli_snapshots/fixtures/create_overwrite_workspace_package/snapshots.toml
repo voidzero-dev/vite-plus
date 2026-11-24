@@ -1,0 +1,14 @@
+[[case]]
+name = "create_overwrite_workspace_package"
+vp = "local"
+comment = "Overwriting the only workspace package, even with a trailing separator, skips the dependency prompt instead of offering the new package as its own dependency."
+steps = [
+  { argv = ["vp", "create", "vite:generator", "--directory", "packages/old/", "--interactive", "--no-agent", "--no-editor", "--no-hooks"], interactions = [
+    { "expect-milestone" = "select:select:0" },
+    { "write-key" = "down" },
+    { "expect-milestone" = "select:select:1" },
+    { "write-key" = "enter" },
+    { "expect-milestone" = "text:text:" },
+    { "write-key" = "enter" },
+  ] },
+]
