@@ -157,7 +157,7 @@ The loader is resolved from the project's `vite-plus` first (`JsExecutor::resolv
 - `--tsconfig` works as for a script: the CLIs set or clear `VP_SCRIPT_TSCONFIG` before the watcher starts, the runs inherit it, and the preload passes it to `initializeLoader()`, which wins over a `TS_NODE_PROJECT` or `OXC_TSCONFIG_PATH` that an `--env-file` sets. The loader reports the config it read, so the watcher reruns on an edit to it.
 - `--watch-path`, which would start Node.js' watch mode, also selects the watcher, which rejects it with a hint to use `--include`. So do `--test`, `--eval`, and the other options that run no file.
 - The watcher sets `WATCH_REPORT_DEPENDENCIES` and an IPC channel, so the loader sends its reports, and its own folder watcher sees files created later on every platform and Node.js version. It owns `SIGINT`, `SIGTERM`, `SIGHUP`, stdin (Return reruns), and the IPC channel until it stops, and exits with the script's code.
-- [Glob imports](#restarts-in-watch-mode) (proposed) add one report: the patterns and the listed files of each `import.meta.glob` call. With it, a matching file that is created or deleted restarts the script too.
+- [Glob imports](#restarts-in-watch-mode) (proposed) add one report from oxc-node: the patterns and the listed files of each `import.meta.glob` call. With it, a matching file that is created or deleted restarts the script too.
 - Ctrl+C from a terminal reaches the script through the process group, so the watcher does not forward it. When the watcher is not the terminal's foreground job (a pipe, `vp run`, a tool), it forwards a `SIGINT` unless the script acks one within 50 ms on the `OXNODE_SIGNAL_ACK` socket, which the preload's `installSignalAck()` does while the script listens for `SIGINT` itself. A `SIGINT` sent to the watcher's PID alone still reaches the script.
 
 ### Environment
@@ -236,70 +236,64 @@ const routes = import.meta.glob('./routes/*.ts');
 console.log(Object.keys(routes)); // [ './routes/health.ts' ]
 ```
 
-Node.js has no `import.meta.glob`, so today this call throws `TypeError: (intermediate value).glob is not a function`. With this change, the loader expands each glob call when it loads the file, as Vite does when it transforms one. `vpx` needs no Vite config for it. `vpx --watch` restarts the script when a matching file is added, removed, or renamed, even when no loaded file changed.
+Node.js has no `import.meta.glob`, so today this call throws `TypeError: (intermediate value).glob is not a function`. With this change, oxc-node expands each glob call when it transforms the file, as Vite does, and `vpx` turns that expansion on. `vpx` needs no Vite config for it. `vpx --watch` restarts the script when a matching file is added, removed, or renamed, even when no loaded file changed.
 
-The reference is the plugin that Vite runs for unbundled code, in dev and SSR: `vite:import-glob` in `vite/packages/vite/src/node/plugins/importMetaGlob.ts`. A script is unbundled code too. The loader uses the libraries of that plugin with the options of that plugin: `tinyglobby` for the file list and `picomatch` for restarts. [Differences from Vite](#differences-from-vite) lists what differs on purpose.
+The expansion is in oxc-node, not in Vite+. The transform of oxc-node already holds the syntax tree and makes the source map, so the expansion needs no second parse and no change of a finished source map. Every loader that is built on oxc-node can use it.
+
+The reference for the behavior is the plugin that Vite runs for unbundled code, in dev and SSR: `vite:import-glob` in `vite/packages/vite/src/node/plugins/importMetaGlob.ts`. A script is unbundled code too. That plugin matches files with `tinyglobby` and `picomatch`, which are JavaScript. oxc-node is Rust, so it matches files with the `fast-glob` crate, the crate of the plugin that Vite uses for bundled builds. [Differences from Vite](#differences-from-vite) lists what differs.
 
 Three terms: a **glob call** is a direct call of `import.meta.glob(...)`. The **importer** is the file that contains it. The **map** is the object that the call returns.
 
 ### Supported Forms
 
-| Form                                                                         | `vpx`                                                                            |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `'./routes/*.ts'`, `'../shared/**/*.ts'`                                     | Supported. The pattern is relative to the importer                               |
-| `['./a/*.ts', './b/*.ts']`                                                   | Supported                                                                        |
-| `'!./routes/*.test.ts'`, `'!**/*.test.ts'`                                   | Supported. A negative pattern removes matches                                    |
-| A template literal without `${}`                                             | Supported                                                                        |
-| `{ eager: true }`                                                            | Supported. The map holds the modules                                             |
-| `{ import: 'default' }`                                                      | Supported. The map holds one export of each module                               |
-| `{ base: './routes' }`                                                       | Supported. Patterns and keys are relative to `base`                              |
-| `{ exhaustive: true }`, `{ caseSensitive: false }`                           | Supported                                                                        |
-| `Object.keys(import.meta.glob(...))`, `Object.values(import.meta.glob(...))` | Supported. `Object.keys()` imports nothing, as in Vite                           |
-| `'/src/routes/*.ts'`, `'**/*.ts'`, `{ base: '/src' }`                        | Error. Vite resolves these from its project root, and `vpx` loads no Vite config |
-| `'@/routes/*.ts'`, `'#routes/*.ts'`, `'pkg/*.ts'`                            | Error. `vpx` resolves no aliases in patterns                                     |
-| `{ query: '?raw' }`, `{ as: 'raw' }`                                         | Error. Node.js loads a matched file as a module, and `vpx` has no import queries |
-| An argument that is not a literal, an unknown option, 0 or 3+ arguments      | Error, with Vite's message                                                       |
+| Form                                                                         | `vpx`                                                                              |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `'./routes/*.ts'`, `'../shared/**/*.ts'`                                     | Supported. The pattern is relative to the importer                                 |
+| `['./a/*.ts', './b/*.ts']`                                                   | Supported                                                                          |
+| `'!./routes/*.test.ts'`, `'!**/*.test.ts'`                                   | Supported. A negative pattern removes matches                                      |
+| A template literal without `${}`                                             | Supported                                                                          |
+| `{ eager: true }`                                                            | Supported. The map holds the modules                                               |
+| `{ import: 'default' }`                                                      | Supported. The map holds one export of each module                                 |
+| `{ base: './routes' }`                                                       | Supported. Patterns and keys are relative to `base`                                |
+| `{ exhaustive: true }`, `{ caseSensitive: false }`                           | Supported                                                                          |
+| `Object.keys(import.meta.glob(...))`, `Object.values(import.meta.glob(...))` | Supported. `Object.keys()` imports nothing, as in Vite                             |
+| `'/src/routes/*.ts'`, `'**/*.ts'`, `{ base: '/src' }`                        | Error. Vite resolves these from its project root, and oxc-node has no project root |
+| `'@/routes/*.ts'`, `'#routes/*.ts'`, `'pkg/*.ts'`                            | Error. oxc-node resolves no aliases in patterns                                    |
+| `{ query: '?raw' }`, `{ as: 'raw' }`                                         | Error. Node.js loads a matched file as a module, without import queries            |
+| An argument that is not a literal, an unknown option, 0 or 3+ arguments      | Error, with Vite's message                                                         |
 
-The loader builds the map in the steps of Vite's plugin:
+oxc-node builds the map in the steps of Vite's plugin:
 
-1. **Resolve.** The loader joins a pattern that starts with `./` or `../` to the importer's directory, or to `base`. It escapes glob characters in that directory with `escapePath` from `tinyglobby`. A negative pattern that starts with `**` stays as written.
-2. **List.** The loader calls `globSync` from `tinyglobby` with Vite's options: `{ absolute: true, cwd, dot: exhaustive, expandDirectories: false, caseSensitiveMatch: caseSensitive ?? true, ignore: exhaustive ? [] : ['**/node_modules/**'], extglob: false }`. `cwd` is the result of Vite's `getCommonBase`, which finds the deepest directory that all positive patterns share with `picomatch.scan`. A glob call without a positive pattern has an empty map.
-3. **Filter and sort.** The loader removes the importer from the list and sorts the list with `Array.prototype.sort()`.
+1. **Resolve.** oxc-node joins a pattern that starts with `./` or `../` to the importer's directory, or to `base`. Glob characters in that directory are literal. A negative pattern that starts with `**` stays as written.
+2. **List.** For each positive pattern, oxc-node walks the directory that the pattern names before its first glob character. It keeps a file that matches a positive pattern and no negative pattern. It follows directory symlinks. Without `exhaustive: true`, a file below `node_modules` does not match, and a name that starts with `.` matches only when the pattern spells that name.
+3. **Filter and sort.** oxc-node removes the importer from the list and sorts the list as `Array.prototype.sort()` sorts strings.
 4. **Keys.** A key is the path of the matched file relative to the importer's directory, or to `base`. It uses `/` and starts with `./` or `../`.
 5. **Values.** A value imports the matched file by its path relative to the importer. Node.js and the loader load that file as they load any import. TypeScript, JavaScript, and JSON files work. A file that Node.js cannot run fails when it is imported.
 
-The loader expands glob calls in every file that it transforms: project files, and TypeScript files in `node_modules`. JavaScript dependencies run as published, so a glob call in one is not expanded. Only a direct call is expanded. Another use, such as `const glob = import.meta.glob`, stays as written and is `undefined` at run time, as in Node.js.
+oxc-node expands glob calls in every file that it transforms: project files, and TypeScript files in `node_modules`. JavaScript dependencies run as published, so a glob call in one is not expanded. Only a direct call is expanded. Another use, such as `const glob = import.meta.glob`, stays as written and is `undefined` at run time, as in Node.js.
 
 ### Module Format
 
-A file with a glob call is an ES module. `import.meta` is ES module syntax, so `vpx` already runs a `.ts`, `.tsx`, `.js`, or `.jsx` file that uses it as an ES module, whatever the `"type"` of its package. The expanded code keeps an `import.meta` expression, so that decision stays the same on every load path. Without it, a file whose only module syntax was the glob call would become CommonJS when Node.js loads it through `require()`.
+A file with a glob call is an ES module. `import.meta` is ES module syntax, so `vpx` already runs a `.ts`, `.tsx`, `.js`, or `.jsx` file that uses it as an ES module, whatever the `"type"` of its package. oxc-node decides the module format from the source, before the expansion, so the decision does not change.
 
-So the loader generates ES module code only:
+One load path decides again from the output: for `require()`, Node.js reads the syntax of the code that the CommonJS hook returns. When the expansion removes the only ES module syntax of a file, oxc-node therefore adds an empty `export {}`. Without it, the same file would be CommonJS for `require()` and an ES module for `import`.
 
-- `.cts` and `.cjs` files are CommonJS, and `import.meta` in them is an error today: oxc-node's `.cts` error, which suggests `.mts`, and a parse error for `.cjs`. Both errors stay, because they occur before the expansion.
+So oxc-node generates ES module code only:
+
+- `.cts` and `.cjs` files are CommonJS, and `import.meta` in them is an error today: oxc-node's `.cts` error, which suggests `.mts`, and a parse error for `.cjs`. Both errors stay.
 - `require()` of an importer works as `require()` of any ES module does: Node.js loads the file as an ES module. With `eager: true`, a matched module that uses top-level await fails with `ERR_REQUIRE_ASYNC_MODULE`, as a static import of it does.
 
 ### Expansion
 
-The loader expands glob calls in the output of oxc-node, where TypeScript is already compiled. Vite's plugin also runs after Vite's TypeScript transform. One rule covers both load paths:
+The expansion is a pass in the transform of oxc-node: a new `src/import_glob.rs`, called from `transform_program` in `src/lib.rs`. The pass runs after the TypeScript transform and before the code generator. Vite's plugin also runs after Vite's TypeScript transform. All transforms of oxc-node go through `transform_program`, so one pass covers every load path, and the loader JavaScript needs no rewrite step:
 
-1. Transform the file as today.
-2. If the output contains the text `import.meta.glob`, load `dist/script-glob.cjs` and expand the glob calls in the output.
+- **CommonJS hook** (`pirates`): `OxcTransformer.transform`.
+- **ESM load hooks**, in-thread and off-thread: `load`.
+- **oxc-node's own loader and module runner** (`register.mjs`, `esm.mjs`, `importer.mjs`), which `vpx` does not use.
 
-- **CommonJS hook** (`pirates`, in `script-preload.ts`): the output is the `source` and the `sourceMap` that the transformer returned.
-- **ESM load hooks** (in-thread in `script-preload.ts`, off-thread in `script-esm-hooks.ts`): the output is the `source` of the load result, which ends with its inline source map. One helper in `script-hooks.ts` serves both hook flavors. The expansion is synchronous, so the in-thread hooks can call it. The off-thread hooks call it when the promise of `oxcNode.load` resolves.
+The pass is off by default in oxc-node, because `import.meta.glob` is not Node.js syntax and a script may test for it. A loader turns the pass on for its thread with `setImportGlob(true)`. The `vpx` loader entries call it, so every script that `vpx` or `vite-plus/register` runs has glob imports. oxc-node's own loader turns the pass on when `OXC_IMPORT_GLOB` is set.
 
-oxc-node runs once for each file and does not change. The loader skips a dependency that it does not transform, and a URL that is not a `file:` URL. A script without a glob call pays one substring search for each transformed file. It never loads `script-glob.cjs`, `tinyglobby`, or `picomatch`.
-
-The expansion has three steps:
-
-| Step    | Where                                                                                           | What                                                                                                                                                                                                                                   |
-| ------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parse   | The binding: `oxcNode.parseImportGlob(code)` in a new `packages/cli/binding/src/import_glob.rs` | Parses the output with oxc. For each glob call it returns the position, the patterns, the literal values of the options, and whether the call is the argument of `Object.keys()` or `Object.values()`. It reports Vite's syntax errors |
-| List    | `packages/cli/src/script-glob.ts`, built to `dist/script-glob.cjs`                              | A synchronous port of Vite's `parseGlobOptions`, `toAbsoluteGlob`, `getCommonBase`, and `transformGlobImport`, with `globSync` in place of `glob`                                                                                      |
-| Rewrite | The same file                                                                                   | Puts Vite's code into the output and moves no other code (see [Generated Code](#generated-code))                                                                                                                                       |
-
-The parse is in the binding for this reason: Vite finds the calls with a regular expression over code that `strip-literal` cleaned, and then parses each call with the oxc parser through Rolldown's `parseAst`. The loader has neither `strip-literal` nor Rolldown's JavaScript in its thread. The binding calls the same parser directly and walks the syntax tree, which finds the same direct calls. Everything that Vite does in JavaScript after the parse stays JavaScript, with the same function names, so a change in Vite is easy to carry over. `script-glob.cjs` bundles `tinyglobby`, with `fdir`, and `picomatch`, at the versions that `packages/core` bundles for Vite.
+A file without a glob call keeps its cost. The parser already records each `import.meta` of a file. The pass runs only when the file has one, the source contains the text `glob`, and the pass is on.
 
 ### Generated Code
 
@@ -310,83 +304,71 @@ const routes = import.meta.glob('./routes/*.ts');
 const hooks = import.meta.glob<Hook>('./hooks/*.ts', { eager: true, import: 'default' });
 ```
 
-oxc-node compiles this file to:
+oxc-node generates code of this shape. The code generator of oxc decides the white space:
 
 ```text
+import { default as __vite_glob_1_0 } from "./hooks/auth.ts";
 import "./instrument.ts";
-const routes = import.meta.glob("./routes/*.ts");
-const hooks = import.meta.glob("./hooks/*.ts", {
-	eager: true,
-	import: "default"
-});
+const routes = Object.assign({ "./routes/health.ts": () => import("./routes/health.ts") });
+const hooks = Object.assign({ "./hooks/auth.ts": __vite_glob_1_0 });
 ```
 
-The loader expands that output to:
-
-```text
-import { default as __vite_glob_1_0 } from "./hooks/auth.ts";import "./instrument.ts";
-const routes = __vite_glob_0()                  ;
-const hooks = __vite_glob_1()
-
-
-  ;
-function __vite_glob_0() { return /* #__PURE__ */ Object.assign({"./routes/health.ts": () => import("./routes/health.ts")}); }
-function __vite_glob_1() { return /* #__PURE__ */ Object.assign({"./hooks/auth.ts": __vite_glob_1_0}); }
-import.meta;
-```
-
-- **Vite's code.** The object, the import statements, and the names `__vite_glob_<call>_<file>` are the text that Vite's plugin generates. A default value is `() => import("<path>")`, and with `import: 'name'` it is `() => import("<path>").then(m => m["name"])`. With `eager: true`, a value is the binding of a static import: `import * as`, or `import { name as }` with the `import` option. For `Object.keys()`, each value is `0` and nothing is imported. For `Object.values()`, the object is an array of the values.
-- **In place.** Vite puts the object where the glob call was. The loader puts the object into a helper function, and puts a call of that helper where the glob call was. Spaces pad the call to the length of the glob call, and a glob call that spans lines keeps its line breaks. So all other code keeps its line and column in the output.
-- **After the last line.** The helper functions follow the last line of the output. Function declarations are hoisted, so a helper works before any code of the importer runs. Each call returns a new object, as each evaluation of Vite's object does.
-- **Eager imports first.** As in Vite, the static imports go to the start of the code, so eager modules run before the importer's own imports. They go on the first line without a line break, or on the second line when the first line is a `#!` line.
-- **`import.meta;`** is the last statement. It keeps the file an ES module (see [Module Format](#module-format)).
-- **Names.** If the output already contains the text `__vite_glob_`, the loader picks another prefix.
+- **Vite's code.** The object, the import statements, and the names `__vite_glob_<call>_<file>` follow Vite's plugin. A default value is `() => import("<path>")`, and with `import: 'name'` it is `() => import("<path>").then((m) => m["name"])`. With `eager: true`, a value is the binding of a static import: `import * as`, or `import { name as }` with the `import` option. For `Object.keys()`, the object is `{ "<key>": 0 }` and nothing is imported. For `Object.values()`, it is an array of the values. Vite's `/* #__PURE__ */` comment is for bundlers and is left out.
+- **In place.** The object replaces the glob call in the syntax tree, as it replaces the call in Vite's output.
+- **Eager imports first.** As in Vite, the static imports are the first statements of the module, so eager modules run before the importer's own imports. A `#!` line stays the first line.
+- **`export {}`** is added only when no other ES module syntax is left (see [Module Format](#module-format)).
 
 ### Source Maps
 
-- The source map that oxc-node made stays valid, because the loader moves no code except on one line. The loader makes no second source map and merges none. `sourcesContent` stays the original source, so an error frame and a debugger show the file as written.
-- Eager imports move the code on their line to the right. In the `mappings` of a source map, only the first segment of a line holds an absolute column. The loader adds the length of the imports to that one number.
-- The helper functions and the eager imports have no mapping.
+The code generator of oxc makes the source map of the whole output in one step, as it does today. Generated code has no mapping. All other code maps to its line and column in the source. `sourcesContent` is the source. Nothing merges or edits a source map.
 
 ### Restarts in Watch Mode
 
-A glob call depends on files that Node.js never loads, and on files that do not exist yet. Neither reaches the watcher through the modules that Node.js reports. Vite's plugin handles them in `hotUpdate`: when a file is created or deleted, it tests the file against a `picomatch` matcher for each glob call and invalidates the importers that match. It ignores an edit. `vpx --watch` does the same with a restart:
+A glob call depends on files that Node.js never loads, and on files that do not exist yet. Neither reaches the watcher through the modules that Node.js reports. Vite's plugin handles them in `hotUpdate`: when a file is created or deleted, it tests the file against each glob call and invalidates the importers that match. It ignores an edit. `vpx --watch` does the same with a restart:
 
-1. **Report.** Under a watcher, the loader sends one `watch:glob` report for each importer, through the watch sink that it already uses. For each glob call the report holds what Vite keeps for `hotUpdate`: the resolved positive and negative patterns, `exhaustive`, and `caseSensitive`. It also holds the files that `tinyglobby` listed, and the directory of each positive pattern before its first glob character.
-2. **Match.** `script-watch.ts` gives the watcher the matcher for these reports. It is the matcher of Vite's `hotUpdate`: `picomatch(patterns, { noextglob: true, dot: exhaustive, nocase: !caseSensitive, ignore: exhaustive ? [] : ['**/node_modules/**'] })`, once for the positive patterns and once for the negative patterns, on absolute paths. A file matches when the positive matcher accepts it and the negative matcher does not.
-3. **Restart.** The watcher walks the directories of the report. A file that appears there and matches restarts the script. A listed file that disappears restarts the script. A rename does both, in one restart. An edit of a matched file does not restart the script, unless the script loaded that file. Then Node.js reported the file, and the watcher watches it as it watches any loaded module.
+1. **Record.** Under a watcher, the binding records one entry for each glob call that it expands, next to the tsconfig files and the failed resolves that it records today. The entry holds the resolved positive and negative patterns, `exhaustive`, `caseSensitive`, the files that the pass listed, and the directories that it walked.
+2. **Report.** `takeWatchGlobs()` returns the recorded entries, as `takeWatchDependencies()` returns the recorded files. `flush`, `withFlush`, and `createRelay` of `@oxc-node/core/watch-report` take it as a new optional argument and send the entries as one `watch:glob` report. The loader entries pass it at each place where they pass `takeWatchDependencies` today.
+3. **Match.** The watcher runs in a process that has not loaded the binding. `script-watch.ts` gives the watcher a `globMatcher` that loads the Vite+ binding when the first report arrives and asks its `GlobMatcher`. That is the code that listed the files, so the watcher and the map cannot disagree.
+4. **Restart.** The watcher walks the directories of the report. A file that appears there and matches restarts the script. A listed file that disappears restarts the script. A rename does both, in one restart. An edit of a matched file does not restart the script, unless the script loaded that file. Then Node.js reported the file, and the watcher watches it as it watches any loaded module.
 
 A file that matches no glob call is not watched for one, so a backup or swap file that an editor writes next to a matched file does not restart the script. Each run reports again and the watcher drops the reports of the run before, so a glob call that was removed from the source stops restarting the script. The listed files close the gap between the list and the walk: when the watcher gets a report and a listed file is already gone, or a matching file is already new, it restarts the script at once.
 
 In its walk, the watcher skips `node_modules` and `.git`, which Vite's watcher ignores too. It skips other folders whose name starts with `.` unless `exhaustive` is `true`. It does not walk through a linked folder.
 
-**Upstream dependency.** oxc-node's watcher has neither the report nor a matcher option today. It watches single files, and it walks directories only for `--include`, which is fixed when the watcher starts. The change adds the `watch:glob` report and a `globMatcher` option of `runWatch` to `@oxc-node/cli/watch`, and lets `@oxc-node/core/watch-report` send the report. oxc-node keeps `path.matchesGlob` as its default matcher and gets no new dependency. `picomatch` stays in Vite+. Vite+ takes the change with a new pin in `.upstream-versions.json`, without a patch to the vendored source.
+**Upstream.** All of this is oxc-node work. [oxc-node#937](https://github.com/oxc-project/oxc-node/pull/937) has the watcher part: the `watch:glob` report, the `globMatcher` option of `runWatch`, and the rules of step 4. The expansion, `takeWatchGlobs()`, and `GlobMatcher` are new. Vite+ compiles oxc-node from source at the commit in `.upstream-versions.json`, so a merge to oxc-node's `main` and a new pin are enough. Vite+ needs no npm release of oxc-node and no patch to the vendored source.
 
 Node.js' own watch mode (`node --watch --import vite-plus/register`) does not read the report. It restarts only for files that the script loaded.
 
 ### Glob Import Errors
 
-An unsupported form fails when the loader loads the importer, before the script runs. Where the check is Vite's check, the message is Vite's message. The loader puts the path in front, with the line and column in the original file, which it reads from the source map:
+An unsupported form fails when oxc-node transforms the importer, before the script runs. The error is an oxc-node transform error, with the position and the source line as for a syntax error. Where the check is Vite's check, the message is Vite's message:
 
 ```text
-$ vpx ./src/server.ts          # line 2: const routes = import.meta.glob(pattern);
-Error: Failed to transform /app/src/server.ts:2:16: Invalid glob import syntax: Could only use literals
+$ vpx ./src/server.ts
+Error: Failed to transform /app/src/server.ts:
+
+  x Invalid glob import syntax: Could only use literals
+   ,-[/app/src/server.ts:2:33]
+ 1 | import './instrument.ts';
+ 2 | const routes = import.meta.glob(pattern);
+   :                                 ^^^^^^^
+   `----
 ```
 
-| Cause                                                                                            | Message after the position                                                                                                  |
-| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| A pattern that is not a string                                                                   | `Invalid glob import syntax: Could only use literals`                                                                       |
-| A template literal with `${}`                                                                    | `Invalid glob import syntax: Expected glob to be a string, but got dynamic template literal`                                |
-| No argument, or more than two                                                                    | `Invalid glob import syntax: Expected 1-2 arguments, but got 3`                                                             |
-| A second argument that is not an object literal                                                  | `Invalid glob import syntax: Expected the second argument to be an object literal, but got "Identifier"`                    |
-| An option value that is not a literal                                                            | `vpx is unable to parse the glob options as the value is not static`                                                        |
-| An unknown option                                                                                | `Unknown glob option "foo"`                                                                                                 |
-| An option of the wrong type                                                                      | `Expected glob option "eager" to be of type boolean, but got string`                                                        |
-| A positive pattern or a `base` that starts with `/`, or a positive pattern that starts with `**` | `Invalid glob: "/src/*.ts" starts at the Vite project root, and vpx loads no Vite config. It must start with './' or '../'` |
-| An alias, a `#` import, or a bare pattern                                                        | `Invalid glob: "@/routes/*.ts" is not relative, and vpx resolves no aliases in patterns. It must start with './' or '../'`  |
-| `query` or `as`                                                                                  | `Glob option "query" is not supported: vpx loads each matched file as Node.js does, without import queries`                 |
+| Cause                                                                                            | Message                                                                                                           |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| A pattern that is not a string                                                                   | `Invalid glob import syntax: Could only use literals`                                                             |
+| A template literal with `${}`                                                                    | `Invalid glob import syntax: Expected glob to be a string, but got dynamic template literal`                      |
+| No argument, or more than two                                                                    | `Invalid glob import syntax: Expected 1-2 arguments, but got 3`                                                   |
+| A second argument that is not an object literal                                                  | `Invalid glob import syntax: Expected the second argument to be an object literal`                                |
+| An option value that is not a literal                                                            | `Unable to parse the glob options as the value is not static`                                                     |
+| An unknown option                                                                                | `Unknown glob option "foo"`                                                                                       |
+| An option of the wrong type                                                                      | `Expected glob option "eager" to be of type boolean, but got string`                                              |
+| A positive pattern or a `base` that starts with `/`, or a positive pattern that starts with `**` | `Invalid glob: "/src/*.ts". oxc-node has no project root, so the glob must start with './' or '../'`              |
+| An alias, a `#` import, or a bare pattern                                                        | `Invalid glob: "@/routes/*.ts". oxc-node resolves no aliases in globs, so the glob must start with './' or '../'` |
+| `query` or `as`                                                                                  | `Glob option "query" is not supported: Node.js loads each matched file as a module, without import queries`       |
 
-The first seven messages are Vite's, with `vpx` in place of `Vite` in the fifth. The last three exist only in `vpx`.
+The first seven messages follow Vite. The last three exist only in oxc-node.
 
 ### Types
 
@@ -394,65 +376,72 @@ The first seven messages are Vite's, with `vpx` in place of `Vite` in the fifth.
 
 ### Layers
 
-The feature lives in the `vite-plus` package: the binding, the loader entries in `dist`, and the bundled watcher. `dist/script-glob.cjs` is a new file that only the loader entries load. The global CLI in `crates/vp_global_cli` does not change, and the [CLI/Loader contract](#cliloader-contract) does not change: no new argument, environment variable, or entry file. The global `vpx` and the project-local bin run the loader that they resolve, the project's `vite-plus` first and the global install second, so both expand glob calls the same way. A project whose `vite-plus` is older than this change runs without glob imports under either `vpx`, because its lockfile pins the loader. `node --import vite-plus/register` loads the same entries, so it expands glob calls too.
+oxc-node owns the expansion, the report, the matcher, and the watcher. Vite+ changes little:
+
+- **Pin.** `.upstream-versions.json` moves to the oxc-node commit that has the feature.
+- **Binding.** `packages/cli/binding/src/oxc_node.rs` forwards `setImportGlob`, `takeWatchGlobs`, and `GlobMatcher` in the `oxcNode` namespace.
+- **Loader entries.** `script-preload.ts` calls `setImportGlob(true)`, and `script-esm-hooks.ts` calls it for the hooks thread. They and `script-register.ts` pass `takeWatchGlobs` to `flush`, `withFlush`, and `createRelay`.
+- **Watcher entry.** `script-watch.ts` passes the `globMatcher`.
+- **Guide and tests.** See [Guide Changes](#guide-changes) and [Glob Import Tests](#glob-import-tests).
+
+The global CLI in `crates/vp_global_cli` does not change, and the [CLI/Loader contract](#cliloader-contract) does not change: no new argument, environment variable, or entry file. The global `vpx` and the project-local bin run the loader that they resolve, the project's `vite-plus` first and the global install second, so both expand glob calls the same way. A project whose `vite-plus` is older than this change runs without glob imports under either `vpx`, because its lockfile pins the loader. `node --import vite-plus/register` loads the same entries, so it expands glob calls too.
 
 ### Differences from Vite
 
 Each difference from Vite's unbundled plugin has a reason:
 
-| Difference                                                                                                                                  | Reason                                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Patterns and `base` must be relative. A `/`-rooted pattern, a positive pattern that starts with `**`, an alias, and a `#` import are errors | Vite resolves them with its `root` and its resolver, which come from a Vite config. For a positive pattern that starts with `**`, Vite's plugin walks from the root of the file system |
-| `query` and `as` are errors                                                                                                                 | Vite's plugins give a query its meaning. Node.js loads `./a.ts?raw` as the module `./a.ts`                                                                                             |
-| Option values must be literals                                                                                                              | Vite evaluates the options with `new Function`. The loader runs in the script's process and evaluates no source text                                                                   |
-| The object is in a helper function, not in place                                                                                            | Other code keeps its position, so the source map of oxc-node stays valid                                                                                                               |
-| The loader finds glob calls in the syntax tree, not with a regular expression                                                               | The loader has the parser and not `strip-literal`. Both ways find the direct calls                                                                                                     |
-| A glob call without a positive pattern never restarts the script                                                                            | Vite's matcher accepts every file for such a call. The map of that call is always empty                                                                                                |
-| The watcher walks the directories of the positive patterns, not a project root                                                              | `vpx` has no project root, and oxc-node's watcher watches only the folders that it needs                                                                                               |
-| A glob call in a JavaScript dependency is not expanded                                                                                      | The loader runs dependencies as published                                                                                                                                              |
-| An error names `vpx` and carries the position in the original file                                                                          | The loader has no error overlay that maps Vite's `pos`                                                                                                                                 |
+| Difference                                                                                                                                                                       | Reason                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Patterns and `base` must be relative. A `/`-rooted pattern, a positive pattern that starts with `**`, an alias, and a `#` import are errors                                      | Vite resolves them with its `root` and its resolver, which come from a Vite config. For a positive pattern that starts with `**`, Vite's plugin walks from the root of the file system |
+| `query` and `as` are errors                                                                                                                                                      | Vite's plugins give a query its meaning. Node.js loads `./a.ts?raw` as the module `./a.ts`                                                                                             |
+| Option values must be literals                                                                                                                                                   | Vite evaluates the options with `new Function`. oxc-node reads the syntax tree and evaluates no source text                                                                            |
+| The glob syntax is that of `fast-glob`: `*`, `**`, `?`, `[...]`, `{a,b}`, and `\`. A brace range (`{a..c}`), a group (`(a\|b)`), and a POSIX class (`[[:alpha:]]`) match nothing | `picomatch` reads these three forms and `fast-glob` does not. A Vite build has the same limit                                                                                          |
+| Without `exhaustive`, a name that starts with `.` matches only in the directory before the first glob character, or as a file name when the last pattern segment starts with `.` | `picomatch` accepts such a name wherever a pattern segment spells the dot, also after a wildcard segment                                                                               |
+| `caseSensitive: false` compares the lower-case pattern with the lower-case path                                                                                                  | `picomatch` builds a case-insensitive regular expression. The two differ for a character range such as `[A-Z]` and for some non-ASCII letters                                          |
+| A glob call without a positive pattern never restarts the script                                                                                                                 | Vite's matcher accepts every file for such a call. The map of that call is always empty                                                                                                |
+| The watcher walks the directories of the positive patterns, not a project root                                                                                                   | oxc-node has no project root, and its watcher watches only the folders that it needs                                                                                                   |
+| A glob call in a JavaScript dependency is not expanded                                                                                                                           | The loader runs dependencies as published                                                                                                                                              |
+| An error is an oxc-node diagnostic, and two messages are shorter                                                                                                                 | oxc-node shows the source line. It does not name Vite, and it has no ESTree node name for the second argument                                                                          |
+| An empty `export {}` can follow the code                                                                                                                                         | It keeps the module format (see [Module Format](#module-format))                                                                                                                       |
 
-Side note: for bundled environments, Vite uses Rolldown's native plugin (`rolldown_plugin_vite_import_glob`) instead. It lists files with the `fast-glob` crate and matches updates with the `globstar` crate. It differs from the unbundled plugin in two ways that a script could see: keys follow the order of the directory walk, not the sorted paths, and an argument that is not a literal gives an empty map, not an error. `vpx` follows the unbundled plugin.
+Side note: for bundled environments, Vite uses Rolldown's native plugin (`rolldown_plugin_vite_import_glob`) instead of the unbundled plugin. oxc-node takes its glob crate, `fast-glob`, from that plugin, so a pattern has the same syntax under `vpx` and in a Vite build. In two things oxc-node follows the unbundled plugin and not Rolldown's: keys are sorted by path, where Rolldown's plugin keeps the order of its directory walk, and an argument that is not a literal is an error, where Rolldown's plugin gives an empty map.
 
 ### Glob Import Limits
 
 - Only relative patterns work; see [Supported Forms](#supported-forms).
-- A file that is created or deleted restarts the script only under `vpx --watch`, and only once the pinned oxc-node has the `watch:glob` report; see [Restarts in Watch Mode](#restarts-in-watch-mode).
+- A file that is created or deleted restarts the script only under `vpx --watch`.
 - A file that is created below `node_modules`, `.git`, or a linked folder does not restart the script.
 
 ### Glob Import Alternatives
 
-| Alternative                                                       | Why not                                                                                                                                                                                                                                               |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Port Rolldown's native plugin into the binding                    | It is Vite's plugin for bundled environments. Its libraries, its key order, and its errors differ from the unbundled plugin (see the side note in [Differences from Vite](#differences-from-vite))                                                    |
-| Call Vite's `transformGlobImport`                                 | Vite does not export it. It is asynchronous, and the in-thread hooks are synchronous. It needs a `root` and a resolver, and its `MagicString` output moves code                                                                                       |
-| Port `parseImportGlob` to JavaScript too                          | Needs `strip-literal`, Rolldown's `parseAst`, and `new Function` in the loader of every script that has a glob call                                                                                                                                   |
-| Expand the source before oxc-node                                 | Must read TypeScript syntax in a glob call, needs the source on every load path, and needs a second transform. Vite's plugin runs after the TypeScript transform too                                                                                  |
-| Expand inside oxc-node's transform, upstream                      | Puts a Vite feature into a general Node.js loader, and Vite+ could not ship before an oxc-node release                                                                                                                                                |
-| Define `import.meta.glob` as a function at run time               | Node.js has no hook that adds a property to `import.meta`, `eager` needs static imports, and the watcher would still need the report                                                                                                                  |
-| Vite's code shape: the object in place                            | Moves every later column on the line of the glob call, so it needs a merge of two source maps                                                                                                                                                         |
-| Eager imports after the last line                                 | Needs no change of the source map, but eager modules would run after the importer's own imports, unlike in Vite                                                                                                                                       |
-| A `picomatch` dependency in `@oxc-node/cli`                       | A new dependency of oxc-node for a matcher that only an embedder needs, and a second copy next to the one that Vite+ bundles for Vite                                                                                                                 |
-| Match restarts with `path.matchesGlob`                            | It is not Vite's matcher: it has no `dot` and `nocase` options, it ignores case on macOS and Windows, and it reads extglob syntax                                                                                                                     |
-| Report each matched file as a `watch:import`                      | An edit of a matched file that the script never loaded would restart the script. Vite ignores such an edit                                                                                                                                            |
-| Report the walked directories as watched files                    | oxc-node's watcher keeps no state for a directory, so a new entry fires nothing                                                                                                                                                                       |
-| A second watcher in `script-watch.ts` that touches a trigger file | Needs a side channel from the script and puts the trigger file in the restart log line. Its own `fs.watch` calls make libuv restart the one FSEvents stream on macOS, and oxc-node's watcher corrects for the events lost then only for its own calls |
-| Watch from the script's own process                               | That process ends with the script, and a script that has exited must restart too                                                                                                                                                                      |
-| Add `--include <entry directory>/**` to every run                 | Restarts the script for unrelated files                                                                                                                                                                                                               |
+| Alternative                                                                                                                | Why not                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Expand in the Vite+ loader, on the output of oxc-node, with `tinyglobby` and `picomatch` (the second draft of this design) | It has Vite's exact libraries. But Vite+ would own a parse function in its binding, a port of Vite's plugin, a bundle that the loader loads on demand, helper calls that are padded to keep positions, and an edit of the finished source map. oxc-node's own users would get nothing |
+| Expand the source in the Vite+ binding before oxc-node, with a port of Rolldown's plugin (the first draft)                 | A second parse and a second transform for each importer, and a repair of `sourcesContent`. It needs the source on every load path                                                                                                                                                     |
+| Call the Rolldown plugin crate from oxc-node                                                                               | Its only entry is a Rolldown plugin hook that needs a `PluginContext` from a bundler session. It also ignores an argument that is not a literal                                                                                                                                       |
+| Port `picomatch` and `tinyglobby` to Rust                                                                                  | A large port to keep in step with two JavaScript libraries, for forms that `fast-glob` lacks and scripts rarely use                                                                                                                                                                   |
+| On by default in oxc-node                                                                                                  | A script that tests for `import.meta.glob` and falls back today would change its behavior, and a guarded call with a root pattern would become an error                                                                                                                               |
+| Pass a project root or aliases to oxc-node                                                                                 | Needs a rule for the root that works without a Vite config. Aliases through tsconfig `paths` can follow later; oxc-node's resolver already lists the candidates                                                                                                                       |
+| Define `import.meta.glob` as a function at run time                                                                        | Node.js has no hook that adds a property to `import.meta`, `eager` needs static imports, and the watcher would still need the report                                                                                                                                                  |
+| Match restarts with `path.matchesGlob`, the default of oxc-node's watcher                                                  | It is not the matcher of the map: it ignores case on macOS and Windows, reads extglob syntax, and has no rule for `exhaustive`                                                                                                                                                        |
+| Match restarts with `picomatch` in `script-watch.ts` (the second draft)                                                    | `picomatch` no longer builds the map, so the watcher and the map could disagree                                                                                                                                                                                                       |
+| Report each matched file as a `watch:import`                                                                               | An edit of a matched file that the script never loaded would restart the script. Vite ignores such an edit                                                                                                                                                                            |
+| A second watcher in `script-watch.ts` that touches a trigger file                                                          | Needs a side channel from the script and puts the trigger file in the restart log line. Its own `fs.watch` calls make libuv restart the one FSEvents stream on macOS, and oxc-node's watcher corrects for the events lost then only for its own calls                                 |
+| Watch from the script's own process                                                                                        | That process ends with the script, and a script that has exited must restart too                                                                                                                                                                                                      |
+| Add `--include <entry directory>/**` to every run                                                                          | Restarts the script for unrelated files                                                                                                                                                                                                                                               |
 
 ### Glob Import Tests
 
-- **Binding** (`import_glob.rs`, run by `just test`): the positive and the error cases of Vite's `parse.spec.ts`, `Object.keys()` and `Object.values()`, a use that is not a call, and positions in code with non-ASCII text.
-- **Expansion** (`packages/cli/src/__tests__/script-glob.spec.ts`): the keys and import paths of Vite's `fixture.spec.ts` on the same file layout; the `getCommonBase` cases of Vite's `utils.spec.ts`; the `tinyglobby` options; each `vpx` error; a check that all other code keeps its line and column, with multi-line calls and a `#!` line; the changed `mappings` number, read back with `SourceMap.findEntry`; and the content of the `watch:glob` report.
-- **Loader** (`packages/cli/src/__tests__/vpx-script.spec.ts`): the helper in `script-hooks.ts` with plain and promise results, the files it skips, and a check that a script without a glob call does not load `script-glob.cjs`. A test for `script-watch.ts` compares its matcher with Vite's `hotUpdate` matcher on the same patterns and paths.
-- **Snapshots**, in both flavors. In `command_vpx_script` (Node.js 22.18.0, off-thread hooks) and in `command_vpx_script_node22`, `_node24`, and `_node26` (in-thread hooks): the script from the issue, each supported form, an importer in a package without `"type"` as the entry and through `require()`, one error, and the position of an error that is thrown after a glob call on the same line and on the line of the eager imports. In `command_script_import`: one case for `vite-plus/register`. In `command_vpx_script/watch/verify-watch.mjs`: scenarios for a matching file that is added, removed, and renamed while the entry does not change. Two more scenarios must not restart the script: a new file that does not match, and an edit of a matched file that the script did not load.
+- **oxc-node** has the tests of the feature itself: unit tests in `src/import_glob.rs` for the cases of Vite's `parse.spec.ts`, `utils.spec.ts`, and `fixture.spec.ts`, for the matching rules, and for the generated code and its source map; and specs in `packages/integrate-vitest` for both load paths, the module runner, the switch, the report, and the watcher.
+- **Loader** (`packages/cli/src/__tests__/vpx-script.spec.ts`): the binding has the three forwarders; a transform after `setImportGlob(true)` expands a glob call and one without it does not; `takeWatchGlobs()` returns the entry; and the `globMatcher` of `script-watch.ts` accepts the listed files and rejects an unmatched one.
+- **Snapshots**, in both flavors. In `command_vpx_script` (Node.js 22.18.0, off-thread hooks) and in `command_vpx_script_node22`, `_node24`, and `_node26` (in-thread hooks): the script from the issue, each supported form, an importer in a package without `"type"` as the entry and through `require()`, one error, and the position of an error that is thrown after a glob call on the same line. In `command_script_import`: one case for `vite-plus/register`. In `command_vpx_script/watch/verify-watch.mjs`: scenarios for a matching file that is added, removed, and renamed while the entry does not change. Two more scenarios must not restart the script: a new file that does not match, and an edit of a matched file that the script did not load.
 
 ### Glob Import Cost
 
-- **No glob call**: one substring search on the output of each transformed file. The change must show no measurable difference in the five scenarios of `bench/vpx-script.ts`.
-- **A glob call**: the first one in a thread loads `script-glob.cjs`. Each importer costs one parse of its output and one `tinyglobby` walk for each glob call. oxc-node still runs once.
+- **No glob call**: no pass. A file that uses `import.meta` pays one substring search for `glob`. The change must show no measurable difference in the five scenarios of `bench/vpx-script.ts`.
+- **A glob call**: one more walk of the syntax tree of that file, one directory walk for each positive pattern, and one small parse for the generated code. The file is still parsed, transformed, and printed once.
 - **Cache**: `vpx` has no transform cache, so there is nothing to invalidate.
-- **Size**: the binding gains one parse function and no crate. `dist` gains `script-glob.cjs`, and `script-watch.js` gains `picomatch`.
+- **Size**: oxc-node gains the `fast-glob` crate, which the Vite+ binding already links through Rolldown. `dist` gains no file.
 
 ### Guide Changes
 
@@ -619,4 +608,4 @@ Package mode through the global `vpx` is unchanged. What changes:
 - oxc-node source: https://github.com/oxc-project/oxc-node (`packages/core/register.mjs`, `packages/core/esm.mjs`, `src/lib.rs`); docs: https://oxc.rs/docs/guide/usage/oxc-node.html
 - Rolldown vendoring in this repository: `packages/tools/src/sync-remote-deps.ts`, `packages/tools/.upstream-versions.json`, `packages/cli/BUNDLING.md`
 - Node.js TypeScript support: https://nodejs.org/api/typescript.html; module customization hooks: https://nodejs.org/api/module.html#customization-hooks
-- Vite glob import: https://vite.dev/guide/features.html#glob-import; Vite's plugin for unbundled code: `vite/packages/vite/src/node/plugins/importMetaGlob.ts`; Rolldown's plugin for bundled environments: `rolldown/crates/rolldown_plugin_vite_import_glob`; tinyglobby: https://github.com/SuperchupuDev/tinyglobby; picomatch: https://github.com/micromatch/picomatch
+- Vite glob import: https://vite.dev/guide/features.html#glob-import; Vite's plugin for unbundled code: `vite/packages/vite/src/node/plugins/importMetaGlob.ts`; Rolldown's plugin for bundled environments: `rolldown/crates/rolldown_plugin_vite_import_glob`; fast-glob: https://crates.io/crates/fast-glob; the watcher part in oxc-node: https://github.com/oxc-project/oxc-node/pull/937
