@@ -23,6 +23,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@cloudflare/oxlint-config": "catalog:",
     "@e18e/eslint-plugin": "catalog:",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",

@@ -32,7 +32,7 @@ module.exports = binding;
 `;
 
 // The collapsed rewrite shipped before this fix (packages/core/build.ts).
-const collapsedLoader = upstreamLoader.replace(
+const collapsedLoader = upstreamLoader.replaceAll(
   /@rolldown\/binding-([a-z0-9-]+)/g,
   'vite-plus/binding',
 );
@@ -43,7 +43,7 @@ const rewrittenLoader = rewriteRolldownBindingRequires(upstreamLoader, {
   version: CORE_VERSION,
 }).source;
 
-const tmpRoots: string[] = [];
+const tmpRoots: Array<string> = [];
 afterAll(() => {
   for (const root of tmpRoots) {
     fs.rmSync(root, { recursive: true, force: true });
@@ -86,9 +86,9 @@ function buildGlobalVirtualStoreLayout(options: {
     main: './dist/rolldown-loader.cjs',
     // Layout fidelity: a real published core declares the platform package it
     // loads (injected at publish time, pinned to core's own version).
-    ...(options.platformPackageVersion
-      ? { optionalDependencies: { [PLATFORM_PACKAGE]: CORE_VERSION } }
-      : {}),
+    optionalDependencies: options.platformPackageVersion
+      ? { [PLATFORM_PACKAGE]: CORE_VERSION }
+      : undefined,
   });
   write(path.join(storeCoreDir, 'dist/rolldown-loader.cjs'), options.loader);
 
@@ -138,7 +138,7 @@ function buildGlobalVirtualStoreLayout(options: {
 }
 
 function runProject(root: string, env: Record<string, string> = {}) {
-  const childEnv: Record<string, string | undefined> = {
+  const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     NAPI_RS_ENFORCE_VERSION_CHECK: '',
     ...env,
@@ -152,12 +152,19 @@ function runProject(root: string, env: Record<string, string> = {}) {
   try {
     const stdout = execFileSync(process.execPath, [path.join(root, 'project/main.cjs')], {
       env: childEnv,
-      encoding: 'utf-8',
+      encoding: 'utf8',
       timeout: 30_000,
     });
     return { ok: true as const, stdout };
   } catch (error) {
-    return { ok: false as const, stderr: String((error as { stderr?: string }).stderr ?? error) };
+    return {
+      ok: false as const,
+      stderr: String(
+        typeof error === 'object' && error !== null && 'stderr' in error
+          ? (error.stderr ?? error)
+          : error,
+      ),
+    };
   }
 }
 

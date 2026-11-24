@@ -13,7 +13,7 @@ import {
 } from '../migrator.ts';
 import { SourceEditor } from '../vitest-v5/ast.ts';
 
-const directories: string[] = [];
+const directories: Array<string> = [];
 afterEach(() => {
   vi.restoreAllMocks();
   for (const directory of directories.splice(0)) {

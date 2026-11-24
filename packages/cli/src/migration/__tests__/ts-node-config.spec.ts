@@ -23,7 +23,7 @@ describe('prepareTsNodeRun', () => {
     fs.writeFileSync(path.join(cwd, file), JSON.stringify(value));
   }
 
-  function prepare(args: string[], environment: string[] = [], executable = 'ts-node') {
+  function prepare(args: Array<string>, environment: Array<string> = [], executable = 'ts-node') {
     return prepareTsNodeRun(args, {
       cwd,
       environment,

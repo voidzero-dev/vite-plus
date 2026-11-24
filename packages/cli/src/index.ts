@@ -6,6 +6,7 @@ export {
 } from './define-config.ts';
 export type { ResolveConfigFromFileOptions } from './define-config.ts';
 
+// oxlint-disable-next-line import/export -- The explicit Vite+ defineConfig export takes precedence over Vite's star export.
 export * from 'vite';
 
 export {

@@ -6,8 +6,8 @@ import { wrapAnsi } from 'fast-wrap-ansi';
 import color from 'picocolors';
 import { cursor, erase } from 'sisteransi';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   isTTY,
   completeColor,
@@ -24,7 +24,7 @@ export interface SpinnerOptions extends CommonOptions {
   onCancel?: () => void;
   cancelMessage?: string;
   errorMessage?: string;
-  frames?: string[];
+  frames?: Array<string>;
   delay?: number;
   styleFrame?: (frame: string) => string;
 }
@@ -83,7 +83,7 @@ const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => 
     input.setRawMode(true);
   }
   const onKeypress = (_char: string | undefined, { name, sequence }: readline.Key): void => {
-    if (sequence === '\x03') {
+    if (sequence === '\u0003') {
       onInterrupt();
       return;
     }

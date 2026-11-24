@@ -8,7 +8,7 @@ import { describe, expect, test } from 'vitest';
 
 import { cloneOrResetRepo } from '../sync-remote-deps.ts';
 
-function git(cwd: string, ...args: string[]): string {
+function git(cwd: string, ...args: Array<string>): string {
   return execFileSync(
     'git',
     [

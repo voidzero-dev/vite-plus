@@ -1,4 +1,5 @@
-import { Lang, parse, type Edit, type SgNode } from '@ast-grep/napi';
+import type { Edit, SgNode } from '@ast-grep/napi';
+import { Lang, parse } from '@ast-grep/napi';
 
 export interface ReplacementRule {
   /** The module specifier pattern to match (string for exact/prefix, RegExp for pattern) */
@@ -8,7 +9,7 @@ export interface ReplacementRule {
 }
 
 export interface RewriteOptions {
-  rules: ReplacementRule[];
+  rules: Array<ReplacementRule>;
 }
 
 /**
@@ -72,7 +73,7 @@ function matchesFrom(specifier: string, from: string): boolean {
 /**
  * Apply replacement rules to a module specifier
  */
-function applyRules(specifier: string, rules: ReplacementRule[]): string | null {
+function applyRules(specifier: string, rules: Array<ReplacementRule>): string | null {
   for (const rule of rules) {
     if (typeof rule.from === 'string') {
       // Exact match or prefix match (e.g., "vite" matches "vite", "vite/...", and "vite.xxx")
@@ -99,8 +100,8 @@ function applyRules(specifier: string, rules: ReplacementRule[]): string | null 
 /**
  * Find all string literal children within a node that could be module specifiers
  */
-function findStringLiterals(node: SgNode): SgNode[] {
-  const results: SgNode[] = [];
+function findStringLiterals(node: SgNode): Array<SgNode> {
+  const results: Array<SgNode> = [];
   const children = node.children();
   for (const child of children) {
     const kind = child.kind();
@@ -124,7 +125,7 @@ export function rewriteModuleSpecifiers(
   const lang = getLangForFile(filePath);
   const ast = parse(lang, source);
   const root = ast.root();
-  const edits: Edit[] = [];
+  const edits: Array<Edit> = [];
   const processedRanges = new Set<string>();
 
   // Find all import/export statements, call expressions, and ambient module declarations
@@ -184,7 +185,7 @@ export function rewriteModuleSpecifiers(
 /**
  * Create replacement rules for rewriting vite imports to a target package
  */
-export function createViteRewriteRules(targetPackage: string): ReplacementRule[] {
+export function createViteRewriteRules(targetPackage: string): Array<ReplacementRule> {
   return [
     // "vite" -> "targetPackage" (exact match and prefix)
     { from: 'vite', to: targetPackage },
@@ -194,7 +195,7 @@ export function createViteRewriteRules(targetPackage: string): ReplacementRule[]
 /**
  * Create replacement rules for rewriting rolldown imports to a target package
  */
-export function createRolldownRewriteRules(targetPackage: string): ReplacementRule[] {
+export function createRolldownRewriteRules(targetPackage: string): Array<ReplacementRule> {
   return [
     // "rolldown" -> "targetPackage/rolldown"
     { from: 'rolldown', to: `${targetPackage}/rolldown` },

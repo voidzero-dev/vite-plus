@@ -1,9 +1,8 @@
-import type { CANCEL_SYMBOL } from '@clack/core';
 import { SelectKeyPrompt } from '@clack/core';
 import color from 'picocolors';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   promptTitle,
   optionText,
@@ -13,11 +12,12 @@ import {
   S_POINTER_ACTIVE,
   S_POINTER_INACTIVE,
 } from './common.js';
+import { runPrompt } from './prompt-result.js';
 import type { Option } from './select.js';
 
 export interface SelectKeyOptions<Value extends string> extends CommonOptions {
   message: string;
-  options: Option<Value>[];
+  options: Array<Option<Value>>;
   initialValue?: Value;
   caseSensitive?: boolean;
 }
@@ -51,7 +51,7 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
     return withMarker(color.dim(S_POINTER_INACTIVE), color.dim(`[${option.value}] ${label}`));
   };
 
-  return new SelectKeyPrompt({
+  const prompt = new SelectKeyPrompt({
     options: opts.options,
     signal: opts.signal,
     input: opts.input,
@@ -101,5 +101,6 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
         }
       }
     },
-  }).prompt() as Promise<Value | typeof CANCEL_SYMBOL>;
+  });
+  return runPrompt<Value>(prompt);
 };

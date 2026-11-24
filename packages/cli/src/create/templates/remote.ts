@@ -1,10 +1,11 @@
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log } from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
 import { getLocalVpCommand, runCommand, runCommandSilently } from '../../utils/command.ts';
 import { checkNpmPackageExists } from '../../utils/package.ts';
-import { type ExecutionWithProjectDir, runCommandAndDetectProjectDir } from '../command.ts';
+import type { ExecutionWithProjectDir } from '../command.ts';
+import { runCommandAndDetectProjectDir } from '../command.ts';
 import type { TemplateInfo } from './types.ts';
 
 const { gray, yellow } = colors;
@@ -16,10 +17,10 @@ export async function executeRemoteTemplate(
 ): Promise<ExecutionWithProjectDir> {
   const silent = options?.silent ?? false;
   if (!silent) {
-    prompts.log.step('Generating project…');
+    log.step('Generating project…');
   }
 
-  let isGitHubTemplate = templateInfo.command === 'degit';
+  const isGitHubTemplate = templateInfo.command === 'degit';
   let result: ExecutionWithProjectDir;
   if (templateInfo.command === 'node') {
     // Template found locally - execute directly
@@ -27,7 +28,7 @@ export async function executeRemoteTemplate(
     const args = templateInfo.args;
     const envs = templateInfo.envs;
     if (!silent) {
-      prompts.log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
+      log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
     }
     result = await runCommandAndDetectProjectDir(
       { command, args, cwd: workspaceInfo.rootDir, envs },
@@ -41,7 +42,7 @@ export async function executeRemoteTemplate(
       const packageExists = await checkNpmPackageExists(templateInfo.command);
       if (!packageExists) {
         if (!silent) {
-          prompts.log.error(
+          log.error(
             `Template "${templateInfo.command}" not found on npm. Run ${yellow('vp create --list')} to see available templates.`,
           );
         }
@@ -60,14 +61,14 @@ export async function executeRemoteTemplate(
   const exitCode = result.exitCode;
   // Provide troubleshooting tips
   if (exitCode === 127) {
-    prompts.log.info(yellow('\nTroubleshooting:'));
-    prompts.log.info(`  ${gray('•')} Command not found. Make sure Node.js is installed`);
-    // prompts.log.info(`  ${gray('•')} Check if ${command} is available in PATH`);
+    log.info(yellow('\nTroubleshooting:'));
+    log.info(`  ${gray('•')} Command not found. Make sure Node.js is installed`);
+    // log.info(`  ${gray('•')} Check if ${command} is available in PATH`);
   } else if (isGitHubTemplate && exitCode !== 0) {
-    prompts.log.info(yellow('\nTroubleshooting:'));
-    prompts.log.info(`  ${gray('•')} Make sure the GitHub repository exists`);
-    prompts.log.info(`  ${gray('•')} Check your internet connection`);
-    prompts.log.info(`  ${gray('•')} Repository might be private (requires authentication)`);
+    log.info(yellow('\nTroubleshooting:'));
+    log.info(`  ${gray('•')} Make sure the GitHub repository exists`);
+    log.info(`  ${gray('•')} Check your internet connection`);
+    log.info(`  ${gray('•')} Repository might be private (requires authentication)`);
   }
   return result;
 }
@@ -95,7 +96,7 @@ export async function runRemoteTemplateCommand(
   // The global `vp` may be an older release and would pick its own Node.js outside a project.
   const { command, args } = getLocalVpCommand(dlxArgs);
   if (!silent) {
-    prompts.log.info(`Running: ${gray(`vp ${dlxArgs.join(' ')}`)}`);
+    log.info(`Running: ${gray(`vp ${dlxArgs.join(' ')}`)}`);
   }
   if (detectCreatedProjectDir) {
     return await runCommandAndDetectProjectDir(
@@ -117,23 +118,21 @@ export function autoFixRemoteTemplateCommand(
   let packageName = templateInfo.command;
   const indexOfAt = packageName.indexOf('@', 2);
   if (indexOfAt !== -1) {
-    packageName = packageName.substring(0, indexOfAt);
+    packageName = packageName.slice(0, indexOfAt);
   }
   if (packageName === 'create-vite') {
     // don't run dev server after installation
     // https://github.com/vitejs/vite/blob/main/packages/create-vite/src/index.ts#L46
-    templateInfo.args.push('--no-immediate');
-    // don't present rolldown option to users
-    templateInfo.args.push('--no-rolldown');
+    // Don't present the Rolldown option.
+    templateInfo.args.push('--no-immediate', '--no-rolldown');
   } else if (packageName === '@tanstack/cli') {
     // ensure create command is used
     if (templateInfo.args[0] !== 'create') {
       templateInfo.args.unshift('create');
     }
     // don't run npm install after project creation
-    templateInfo.args.push('--no-install');
-    // don't setup toolchain automatically
-    templateInfo.args.push('--no-toolchain');
+    // Skip automatic toolchain setup.
+    templateInfo.args.push('--no-install', '--no-toolchain');
   } else if (packageName === 'sv') {
     // ensure create command is used
     if (templateInfo.args[0] !== 'create') {

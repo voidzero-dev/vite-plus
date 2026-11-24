@@ -9,7 +9,10 @@ import { migrateVitestV5Config } from '../vitest-v5/config.ts';
 
 const options = { preserveV4: true, temporalPolyfill: true };
 const migrate = (source: string) => migrateVitestV5Config('vitest.config.mjs', source, options);
-const evaluate = (source: string) => runInNewContext(source.replace('export default', ''));
+const evaluate = (source: string) => {
+  const result: unknown = runInNewContext(source.replace('export default', ''));
+  return result;
+};
 
 describe('Vitest v4 compatibility comments', () => {
   it.each([
@@ -66,7 +69,7 @@ describe('Vitest v4 compatibility comments', () => {
     expect(
       migrateVitestV5Config('vitest.config.mjs', result.content, { preserveV4: false }),
     ).toEqual(result);
-    const withoutComments = result.content.replace(/^[\t ]*\/\/.*(?:\r?\n|$)/gm, '');
+    const withoutComments = result.content.replaceAll(/^[\t ]*\/\/.*(?:\r?\n|$)/gm, '');
     expect(migrate(withoutComments)).toEqual({ content: withoutComments, findings: [] });
     const guide = fs.readFileSync(
       new URL('../../../../../docs/guide/vitest-v5.md', import.meta.url),
@@ -86,7 +89,7 @@ describe('Vitest v4 compatibility comments', () => {
     expect(result.content).toContain('Report consumer.');
     expect(result.content).toContain(`reporters: [${reporter}]`);
     expect(result.content).not.toContain('stdout');
-    expect(evaluate(result.content).test.reporters).toEqual([['json']]);
+    expect(evaluate(result.content)).toHaveProperty(['test', 'reporters'], [['json']]);
     expect(migrate(result.content)).toEqual(result);
   });
 
@@ -105,9 +108,7 @@ describe('Vitest v4 compatibility comments', () => {
       const result = migrate(input);
       expect(result.findings).toEqual([]);
       expect(result.content).toContain('// Keep this project comment.');
-      if (newline === '\r\n') {
-        expect(result.content.replaceAll('\r\n', '')).not.toContain('\n');
-      }
+      expect(result.content.replaceAll(newline, '')).not.toMatch(/[\r\n]/);
       expect(evaluate(result.content)).toEqual({
         test: {
           clearMocks: false,
@@ -174,7 +175,7 @@ describe('Vitest v4 compatibility comments', () => {
     const input = 'export default ({ test: { value: `first\n  second` } });';
     const result = migrate(input);
     expect(result.findings).toEqual([]);
-    expect(evaluate(result.content).test.value).toBe('first\n  second');
+    expect(evaluate(result.content)).toHaveProperty(['test', 'value'], 'first\n  second');
     const editor = new SourceEditor('vitest.config.mjs', 'export default ({});');
     editor.visit({
       ObjectExpression(node) {
@@ -183,6 +184,6 @@ describe('Vitest v4 compatibility comments', () => {
     });
     const added = editor.finish();
     expect(added.findings).toEqual([]);
-    expect(evaluate(added.content).copied).toBe('first\n  second');
+    expect(evaluate(added.content)).toHaveProperty('copied', 'first\n  second');
   });
 });

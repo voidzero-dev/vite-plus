@@ -45,9 +45,8 @@ export async function vite(
     throw new Error(`Could not find the bundled Vite CLI at ${binPath}. Run \`vp install\`.`);
   }
 
-  const envs: Record<string, string> = { ...DEFAULT_ENVS };
-  if (process.env.DEBUG_DISABLE_SOURCE_MAP) {
-    envs.DEBUG_DISABLE_SOURCE_MAP = process.env.DEBUG_DISABLE_SOURCE_MAP;
-  }
+  const envs = process.env.DEBUG_DISABLE_SOURCE_MAP
+    ? { ...DEFAULT_ENVS, DEBUG_DISABLE_SOURCE_MAP: process.env.DEBUG_DISABLE_SOURCE_MAP }
+    : { ...DEFAULT_ENVS };
   return { binPath, envs };
 }

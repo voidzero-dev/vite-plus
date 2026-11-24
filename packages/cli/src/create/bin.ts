@@ -2,7 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  intro,
+  isCancel,
+  log as promptLog,
+  multiselect,
+  select,
+  spinner,
+  text,
+} from '@voidzero-dev/vite-plus-prompts';
 
 import { getPackageManagerOverride, parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
 import {
@@ -25,7 +33,9 @@ import {
   shouldSkipStagedMigrationForHooks,
   workspaceSupportsCatalog,
 } from '../migration/migrator.ts';
-import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
+import type { WorkspaceInfo } from '../types/index.ts';
+import { DependencyType, PackageManager } from '../types/index.ts';
+import { isPackageManager } from '../types/package.ts';
 import {
   COPILOT_AGENT_ID,
   detectExistingAgentTargetPaths,
@@ -42,14 +52,16 @@ import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
 import { isForceOverrideMode } from '../utils/constants.ts';
 import { documentationUrl } from '../utils/documentation.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
+import { errorMessage } from '../utils/error.ts';
 import { findGitRoot, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { readJsonFile } from '../utils/json.ts';
+import { hasOwnKey } from '../utils/object.ts';
 import { hasVitePlusDependency } from '../utils/package.ts';
 import { displayRelative } from '../utils/path.ts';
+import type { CommandRunSummary } from '../utils/prompts.ts';
 import {
   cancelAndExit,
-  type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
   promptGitHooks,
@@ -68,11 +80,12 @@ import {
 import type { ExecutionWithProjectDir } from './command.ts';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
 import { getInitialTemplateOptions } from './initial-template-options.ts';
-import { CreateConfigSchemaError, type CreateTemplateEntry } from './org-manifest.ts';
+import type { CreateTemplateEntry } from './org-manifest.ts';
+import { CreateConfigSchemaError } from './org-manifest.ts';
+import type { OrgResolution } from './org-resolve.ts';
 import {
   getConfiguredCreate,
   getConfiguredDefaultTemplate,
-  type OrgResolution,
   resolveOrgManifestForCreate,
 } from './org-resolve.ts';
 import {
@@ -151,7 +164,7 @@ export interface Options {
   interactive: boolean;
   list: boolean;
   verbose: boolean;
-  agent?: string | string[] | false;
+  agent?: string | Array<string> | false;
   editor?: string | false;
   git?: boolean;
   hooks?: boolean;
@@ -184,7 +197,7 @@ function parseArgs() {
   };
 }
 
-function describeScaffold(templateName: string, templateArgs: string[]) {
+function describeScaffold(templateName: string, templateArgs: Array<string>) {
   if (templateName === BuiltinTemplate.monorepo) {
     return 'Vite+ monorepo';
   }
@@ -207,7 +220,7 @@ function describeScaffold(templateName: string, templateArgs: string[]) {
   return undefined;
 }
 
-function getTemplateOption(args: string[]) {
+function getTemplateOption(args: Array<string>) {
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (arg === '--template' || arg === '-t') {
@@ -220,12 +233,12 @@ function getTemplateOption(args: string[]) {
   return undefined;
 }
 
-function hasExplicitTargetDir(args: string[]) {
+function hasExplicitTargetDir(args: Array<string>) {
   return args[0] !== undefined && !args[0].startsWith('-');
 }
 
 function formatTemplateName(templateName: string) {
-  const templateAliases: Record<string, string> = {
+  const templateAliases = {
     lit: 'Lit',
     preact: 'Preact',
     react: 'React',
@@ -237,12 +250,12 @@ function formatTemplateName(templateName: string) {
   };
   const isTypeScript = templateName.endsWith('-ts');
   const baseName = isTypeScript ? templateName.slice(0, -3) : templateName;
-  const frameworkName =
-    templateAliases[baseName] ??
-    baseName
-      .split(/[-_]/)
-      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-      .join(' ');
+  const frameworkName = hasOwnKey(templateAliases, baseName)
+    ? templateAliases[baseName]
+    : baseName
+        .split(/[-_]/)
+        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+        .join(' ');
 
   return `${frameworkName} + ${isTypeScript ? 'TypeScript' : 'JavaScript'}`;
 }
@@ -322,7 +335,7 @@ async function main() {
 
   // #region Prepare Stage
   if (options.interactive) {
-    prompts.intro(vitePlusHeader());
+    intro(vitePlusHeader());
   }
 
   // check --directory option is valid
@@ -331,7 +344,7 @@ async function main() {
   if (options.directory) {
     const formatted = formatTargetDir(options.directory);
     if (formatted.error) {
-      prompts.log.error(formatted.error);
+      promptLog.error(formatted.error);
       cancelAndExit('The --directory option is invalid', 1);
     }
     targetDir = formatted.directory;
@@ -361,9 +374,9 @@ async function main() {
   const shouldOfferCwdOption = isInSubdirectory && !cwdUnderParentDir;
 
   // Interactive mode: prompt for template if not provided
-  let selectedTemplateName = templateName as string;
+  let selectedTemplateName = templateName ?? '';
   let selectedTemplateArgs = [...templateArgs];
-  let selectedAgentTargetPaths: string[] | undefined;
+  let selectedAgentTargetPaths: Array<string> | undefined;
   let shouldWriteCopilotSetupWorkflow = false;
   let selectedEditors: Awaited<ReturnType<typeof selectEditors>>;
   let selectedParentDir: string | undefined;
@@ -383,7 +396,7 @@ async function main() {
   // error is a real misconfiguration: exit cleanly with the message. An
   // unevaluable config only disables local templates: warn so a registered
   // name does not silently fall through to an npm package.
-  let localTemplates: CreateTemplateEntry[] = [];
+  let localTemplates: Array<CreateTemplateEntry> = [];
   if (isMonorepo) {
     try {
       const configuredCreate = await getConfiguredCreate(workspaceInfoOptional.rootDir, {
@@ -397,8 +410,8 @@ async function main() {
       if (error instanceof CreateConfigSchemaError) {
         cancelAndExit(error.message, 1);
       }
-      prompts.log.warn(
-        `Could not read \`create\` config from the workspace vite.config (${(error as Error).message}); local templates are unavailable`,
+      promptLog.warn(
+        `Could not read \`create\` config from the workspace vite.config (${errorMessage(error)}); local templates are unavailable`,
       );
     }
   } else if (!selectedTemplateName) {
@@ -460,12 +473,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   if (!selectedTemplateName) {
-    const template = await prompts.select({
+    const template = await select({
       message: '',
       options: getInitialTemplateOptions(isMonorepo, localTemplates),
     });
 
-    if (prompts.isCancel(template)) {
+    if (isCancel(template)) {
       cancelAndExit();
     }
 
@@ -504,13 +517,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     );
   }
   if (selectedTemplateName === BuiltinTemplate.monorepo && isMonorepo) {
-    prompts.log.info(
+    promptLog.info(
       'You are already in a monorepo workspace.\nUse a different template or run this command outside the monorepo',
     );
     cancelAndExit('Cannot create a monorepo inside an existing monorepo', 1);
   }
   if (selectedTemplateName === BuiltinTemplate.generator && !isMonorepo) {
-    prompts.log.info(
+    promptLog.info(
       'The vite:generator template requires a monorepo workspace.\nRun this command inside a Vite+ monorepo, or create one first with `vp create vite:monorepo`',
     );
     cancelAndExit('Cannot create a generator outside a monorepo', 1);
@@ -523,7 +536,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   if (isInSubdirectory && !compactOutput) {
-    prompts.log.info(`Detected monorepo root at ${accent(workspaceInfoOptional.rootDir)}`);
+    promptLog.info(`Detected monorepo root at ${accent(workspaceInfoOptional.rootDir)}`);
   }
 
   if (isMonorepo && options.interactive && !targetDir) {
@@ -531,7 +544,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     const hasParentDirs = workspaceInfoOptional.parentDirs.length > 0;
 
     if (hasParentDirs || isInSubdirectory) {
-      const dirOptions: { label: string; value: string; hint: string }[] =
+      const dirOptions: Array<{ label: string; value: string; hint: string }> =
         workspaceInfoOptional.parentDirs.map((dir) => ({
           label: `${dir}/`,
           value: dir,
@@ -557,13 +570,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         : (inferParentDir(selectedTemplateName, workspaceInfoOptional, isLocalTemplate) ??
           workspaceInfoOptional.parentDirs[0]);
 
-      const selected = await prompts.select({
+      const selected = await select({
         message: 'Where should the new package be added to the monorepo:',
         options: dirOptions,
         initialValue: defaultParentDir,
       });
 
-      if (prompts.isCancel(selected)) {
+      if (isCancel(selected)) {
         cancelAndExit();
       }
 
@@ -573,7 +586,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
 
     if (!parentDir) {
-      const customTargetDir = await prompts.text({
+      const customTargetDir = await text({
         message: 'Where should the new package be added to the monorepo:',
         placeholder: 'e.g., packages/',
         validate: (value) => {
@@ -581,7 +594,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         },
       });
 
-      if (prompts.isCancel(customTargetDir)) {
+      if (isCancel(customTargetDir)) {
         cancelAndExit();
       }
 
@@ -592,7 +605,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
   if (isMonorepo && !options.interactive && !targetDir) {
     if (isInSubdirectory && !compactOutput) {
-      prompts.log.info(`Use ${accent('--directory')} to specify a different target location.`);
+      promptLog.info(`Use ${accent('--directory')} to specify a different target location.`);
     }
     const inferredParentDir =
       inferParentDir(selectedTemplateName, workspaceInfoOptional, isLocalTemplate) ??
@@ -610,7 +623,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         : workspaceInfoOptional.rootDir;
       const defaultTargetDir = suggestAvailableTargetDir(inferredTargetDir, remoteTargetBaseDir);
       if (defaultTargetDir !== inferredTargetDir && options.interactive) {
-        prompts.log.info(
+        promptLog.info(
           `  Target directory "${inferredTargetDir}" already exists. Suggested: ${accent(defaultTargetDir)}`,
         );
       }
@@ -657,7 +670,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         // so that scaffolding happens in cwd, not at the workspace root
         targetDir = cwdRelativeToRoot;
       }
-      prompts.log.info(`Using package name: ${accent(packageName)}`);
+      promptLog.info(`Using package name: ${accent(packageName)}`);
     } else if (selectedTemplateName === BuiltinTemplate.monorepo) {
       const selected = await promptPackageNameAndTargetDir(
         getRandomProjectName({ fallbackName: 'vite-plus-monorepo' }),
@@ -688,7 +701,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     : (requestedPackageManager ?? detectedPackageManager);
   const launcherPackageManager = detectLauncherPackageManager();
   const chosenPackageManager =
-    (packageManagerOverride?.name as PackageManager | undefined) ??
+    (isPackageManager(packageManagerOverride?.name) ? packageManagerOverride.name : undefined) ??
     preferredPackageManager ??
     launcherPackageManager;
   // Only the non-interactive default is Vite+'s own choice, so only it may become npm when pnpm is unavailable.
@@ -713,7 +726,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     packageManagerOverride?.expectedHash ?? undefined,
     fallbackToNpm,
   );
-  const packageManager = downloadResult.name as PackageManager;
+  const packageManager = downloadResult.name;
+  if (!isPackageManager(packageManager)) {
+    throw new Error(`Unsupported package manager: ${packageManager}`);
+  }
   let resolvedPackageManagerOverride: string | undefined;
   if (packageManagerOverride) {
     resolvedPackageManagerOverride = `${packageManager}@${downloadResult.version}`;
@@ -801,7 +817,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const createProgress =
-    options.interactive && compactOutput ? prompts.spinner({ indicator: 'timer' }) : undefined;
+    options.interactive && compactOutput ? spinner({ indicator: 'timer' }) : undefined;
   let createProgressStarted = false;
   let createProgressMessage = 'Scaffolding project';
   const updateCreateProgress = (message: string) => {
@@ -849,7 +865,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // Gated builds reported by the ESLint/Prettier migration pre-install. yarn
   // only emits YN0004 on the first install, so the later main install won't
   // re-report them; carry them forward so detection still sees them.
-  let migratePendingBuilds: string[] = [];
+  let migratePendingBuilds: Array<string> = [];
 
   const handleIgnoredBuilds = async (
     projectPath: string,
@@ -1140,8 +1156,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         );
       }
     } catch (error) {
-      prompts.log.warn(
-        `Could not register the generator in create.templates (${(error as Error).message}).\n` +
+      promptLog.warn(
+        `Could not register the generator in create.templates (${errorMessage(error)}).\n` +
           `Add it by hand: { name: '${generatorName || path.basename(projectDir)}', template: '${generatorTemplatePath}' }`,
       );
     }
@@ -1254,7 +1270,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   if (isMonorepo) {
     if (!compactOutput) {
-      prompts.log.step('Monorepo integration...');
+      promptLog.step('Monorepo integration...');
     }
 
     // The package list predates scaffolding, so an overwritten target can still appear in it.
@@ -1268,7 +1284,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     if (dependencyCandidates.length > 0) {
       if (options.interactive) {
         pauseCreateProgress();
-        const selectedDepTypeOptions = await prompts.multiselect({
+        const selectedDepTypeOptions = await multiselect({
           message: `Add workspace dependencies to ${accent(projectDir)}?`,
           options: [
             {
@@ -1287,13 +1303,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
           required: false,
         });
 
-        let selectedDepTypes: DependencyType[] = [];
-        if (!prompts.isCancel(selectedDepTypeOptions)) {
+        let selectedDepTypes: Array<DependencyType> = [];
+        if (!isCancel(selectedDepTypeOptions)) {
           selectedDepTypes = selectedDepTypeOptions;
         }
 
         for (const selectedDepType of selectedDepTypes) {
-          const selected = await prompts.multiselect({
+          const selected = await multiselect({
             message: `Which packages should be added as ${selectedDepType} to ${success(
               projectDir,
             )}?`,
@@ -1303,8 +1319,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
             })),
             required: false,
           });
-          let selectedDeps: string[] = [];
-          if (!prompts.isCancel(selected)) {
+          let selectedDeps: Array<string> = [];
+          if (!isCancel(selected)) {
             selectedDeps = selected;
           }
 
@@ -1452,8 +1468,8 @@ async function showAvailableTemplates() {
   log(listTemplatesMessage);
 }
 
-main().catch((err) => {
-  prompts.log.error(err.message);
-  console.error(err);
-  cancelAndExit(`Failed to generate code: ${err.message}`, 1);
+await main().catch((error: unknown) => {
+  promptLog.error(errorMessage(error));
+  console.error(error);
+  cancelAndExit(`Failed to generate code: ${errorMessage(error)}`, 1);
 });

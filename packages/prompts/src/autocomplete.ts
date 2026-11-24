@@ -1,11 +1,11 @@
 import type { Writable } from 'node:stream';
 
-import type { CANCEL_SYMBOL, Validate } from '@clack/core';
+import type { AutocompleteOptions as ClackAutocompleteOptions, Validate } from '@clack/core';
 import { AutocompletePrompt, runValidation } from '@clack/core';
 import color from 'picocolors';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   promptTitle,
   optionText,
@@ -18,6 +18,8 @@ import {
   S_POINTER_INACTIVE,
 } from './common.js';
 import { limitOptions } from './limit-options.js';
+import type { PromptResult } from './prompt-result.js';
+import { runPrompt } from './prompt-result.js';
 import type { Option } from './select.js';
 
 function getLabel<T>(option: Option<T>) {
@@ -36,8 +38,8 @@ function getFilteredOption<T>(searchText: string, option: Option<T>): boolean {
   return label.includes(term) || hint.includes(term) || value.includes(term);
 }
 
-function getSelectedOptions<T>(values: T[], options: Option<T>[]): Option<T>[] {
-  const results: Option<T>[] = [];
+function getSelectedOptions<T>(values: Array<T>, options: Array<Option<T>>): Array<Option<T>> {
+  const results: Array<Option<T>> = [];
 
   for (const option of options) {
     if (values.includes(option.value)) {
@@ -73,7 +75,9 @@ interface AutocompleteSharedOptions<Value> extends CommonOptions {
   /**
    * Available options for the autocomplete prompt.
    */
-  options: Option<Value>[] | ((this: AutocompletePrompt<Option<Value>>) => Option<Value>[]);
+  options:
+    | Array<Option<Value>>
+    | ((this: AutocompletePrompt<Option<Value>>) => Array<Option<Value>>);
   /**
    * Maximum number of items to display at once.
    */
@@ -85,7 +89,7 @@ interface AutocompleteSharedOptions<Value> extends CommonOptions {
   /**
    * Validates the value
    */
-  validate?: Validate<Value | Value[]>;
+  validate?: Validate<Value | Array<Value>>;
   /**
    * Custom filter function to match options against search input.
    * If not provided, a default filter that matches label, hint, and value is used.
@@ -106,8 +110,18 @@ export interface AutocompleteOptions<Value> extends AutocompleteSharedOptions<Va
   completeOnTab?: boolean;
 }
 
+function runAutocomplete<Value>(
+  options: ClackAutocompleteOptions<Option<Value>> & { multiple: true },
+): PromptResult<Array<Value>>;
+function runAutocomplete<Value>(
+  options: ClackAutocompleteOptions<Option<Value>> & { multiple?: false },
+): PromptResult<Value>;
+function runAutocomplete<Value>(options: ClackAutocompleteOptions<Option<Value>>) {
+  return runPrompt<Value | Array<Value>>(new AutocompletePrompt(options));
+}
+
 export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
-  const prompt = new AutocompletePrompt({
+  return runAutocomplete<Value>({
     options: opts.options,
     initialValue: opts.initialValue !== undefined ? [opts.initialValue] : undefined,
     initialUserInput: opts.initialUserInput,
@@ -154,7 +168,7 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
           const guidePrefix = hasGuide ? `${barColor(S_BAR)} ` : nestedPrefix;
           const guidePrefixEnd = hasGuide ? barColor(S_BAR_END) : '';
           // Display cursor position - show plain text in navigation mode
-          let searchText = '';
+          let searchText: string;
           if (this.isNavigating || showPlaceholder) {
             const searchTextValue = showPlaceholder ? placeholder : userInput;
             searchText = searchTextValue !== '' ? ` ${color.dim(searchTextValue)}` : '';
@@ -265,9 +279,6 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
       }
     },
   });
-
-  // Return the result or cancel symbol
-  return prompt.prompt() as Promise<Value | typeof CANCEL_SYMBOL>;
 };
 
 // Type definition for the autocompleteMultiselect component
@@ -275,7 +286,7 @@ export interface AutocompleteMultiSelectOptions<Value> extends AutocompleteShare
   /**
    * The initial selected values
    */
-  initialValues?: Value[];
+  initialValues?: Array<Value>;
   /**
    * If true, at least one option must be selected
    */
@@ -289,7 +300,7 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
   const formatOption = (
     option: Option<Value>,
     active: boolean,
-    selectedValues: Value[],
+    selectedValues: Array<Value>,
     focusedValue: Value | undefined,
   ) => {
     if (option.disabled) {
@@ -321,7 +332,7 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
   };
 
   // Create text prompt which we'll use as foundation
-  const prompt = new AutocompletePrompt<Option<Value>>({
+  return runAutocomplete<Value>({
     options: opts.options,
     multiple: true,
     placeholder: opts.placeholder,
@@ -442,7 +453,4 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
       }
     },
   });
-
-  // Return the result or cancel symbol
-  return prompt.prompt() as Promise<Value[] | typeof CANCEL_SYMBOL>;
 };

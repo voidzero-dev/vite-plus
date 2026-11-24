@@ -1,5 +1,7 @@
 import { documentationUrl } from './utils/documentation.ts';
-import { renderCliDoc, type CliDoc } from './utils/help.ts';
+import type { CliDoc } from './utils/help.ts';
+import { renderCliDoc } from './utils/help.ts';
+import { hasOwnKey } from './utils/object.ts';
 import { log, printHeader } from './utils/terminal.ts';
 
 // Tool-backed docs mirror upstream even when Vite+ overrides the documented behavior.
@@ -1129,13 +1131,13 @@ const commandHelpDocs = {
   },
 } satisfies Record<string, CliDoc>;
 
-export function maybePrintCommandHelp(args: readonly string[]): boolean {
+export function maybePrintCommandHelp(args: ReadonlyArray<string>): boolean {
   const command = args[0] === 'format' ? 'fmt' : args[0];
-  const doc = commandHelpDocs[command as keyof typeof commandHelpDocs];
-  if (!doc) {
+  if (!hasOwnKey(commandHelpDocs, command)) {
     return false;
   }
 
+  const doc = commandHelpDocs[command];
   const commandArgs = args.slice(1);
   const isTopLevelHelp =
     commandArgs.length === 1 && (commandArgs[0] === '-h' || commandArgs[0] === '--help');

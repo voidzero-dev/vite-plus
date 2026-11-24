@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { normalizePath } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { resolveConfigFromFile } from '../index.js';
+import { resolveConfigFromFile } from '../index.ts';
 
 let tempDir: string;
 const exec = promisify(execFile);
@@ -327,20 +327,22 @@ export default ${exportValue};\n`,
       }
 
       // Start outside Vitest's NODE_ENV=test and cached Vite Task client state.
-      await exec(
-        process.execPath,
-        [
-          '--input-type=module',
-          '--eval',
-          `import assert from 'node:assert/strict';
+      await expect(
+        exec(
+          process.execPath,
+          [
+            '--input-type=module',
+            '--eval',
+            `import assert from 'node:assert/strict';
 import { resolveConfigFromFile } from ${JSON.stringify(new URL('../define-config.ts', import.meta.url).href)};
 const first = await resolveConfigFromFile(${JSON.stringify(configFile)});
 const second = await resolveConfigFromFile(${JSON.stringify(configFile)});
 assert.equal(first.nodeEnv, ${JSON.stringify(expected)});
 assert.equal(second.nodeEnv, ${JSON.stringify(expected)});`,
-        ],
-        { env, cwd: tempDir },
-      );
+          ],
+          { env, cwd: tempDir },
+        ),
+      ).resolves.toBeDefined();
     },
   );
 
@@ -412,12 +414,13 @@ export default defineConfig({
 });\n`,
     );
 
-    await exec(
-      process.execPath,
-      [
-        '--input-type=module',
-        '--eval',
-        `import assert from 'node:assert/strict';
+    await expect(
+      exec(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          `import assert from 'node:assert/strict';
 import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const api = ${loadApi};
@@ -440,8 +443,9 @@ for (const rootBase of [cwd, '']) {
 }
 assert.equal(process.cwd(), cwd);
 assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, marker);`,
-      ],
-      { cwd: launcher },
-    );
+        ],
+        { cwd: launcher },
+      ),
+    ).resolves.toBeDefined();
   });
 });

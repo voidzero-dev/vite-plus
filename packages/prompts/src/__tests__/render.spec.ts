@@ -3,11 +3,25 @@ import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 // Keep Unicode snapshots independent of the host terminal and platform.
 vi.mock('is-unicode-supported', () => ({ default: () => true }));
 
+interface RenderContext {
+  state: string;
+  options?: ReadonlyArray<{ value: string; label?: string | null; group?: string | boolean }>;
+  filteredOptions?: ReadonlyArray<{ value: string; label?: string }>;
+  selectedValues?: Array<string>;
+  cursor?: number;
+  focusedValue?: string;
+  isNavigating?: boolean;
+  isGroupSelected?: () => boolean;
+  userInput?: string;
+  userInputWithCursor?: string;
+  value?: string | boolean | Array<string>;
+}
+
 type PromptConfig = {
-  render: (this: Record<string, unknown>) => string;
+  render: (this: RenderContext) => string;
 };
 
-const captured: {
+interface CapturedPrompts {
   select?: PromptConfig;
   multiSelect?: PromptConfig;
   groupMultiSelect?: PromptConfig;
@@ -16,7 +30,9 @@ const captured: {
   selectKey?: PromptConfig;
   text?: PromptConfig;
   password?: PromptConfig;
-} = {};
+}
+
+const captured: CapturedPrompts = {};
 
 class SelectPrompt<_Value> {
   constructor(config: PromptConfig) {
@@ -99,7 +115,7 @@ class PasswordPrompt {
 }
 
 vi.mock('@clack/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@clack/core')>();
+  const actual = await importOriginal<object>();
   return {
     ...actual,
     getColumns: (output?: { columns?: number }) => output?.columns ?? 80,
@@ -116,10 +132,10 @@ vi.mock('@clack/core', async (importOriginal) => {
 });
 
 // oxlint-disable-next-line no-control-regex
-const stripAnsi = (value: string): string => value.replaceAll(/\x1b\[[0-9;]*m/gu, '');
+const stripAnsi = (value: string): string => value.replaceAll(/\u001b\[[0-9;]*m/gu, '');
 const normalize = (value: string): string => stripAnsi(value).replaceAll('\r\n', '\n');
 
-const renderWith = (config: PromptConfig | undefined, ctx: Record<string, unknown>): string => {
+const renderWith = (config: PromptConfig | undefined, ctx: RenderContext): string => {
   if (config === undefined) {
     throw new Error('Prompt config was not captured');
   }
@@ -139,7 +155,7 @@ beforeEach(() => {
 
 describe('prompt renderers', () => {
   it('renders select with pointer markers and aligned multiline labels', async () => {
-    const { select } = await import('../select.js');
+    const { select } = await import('../select.ts');
     const options = [
       { value: 'alpha', label: 'Alpha\nSecond line', hint: 'recommended' },
       { value: 'beta', label: 'Beta' },
@@ -158,7 +174,7 @@ describe('prompt renderers', () => {
   });
 
   it('renders multiselect with cursor marker plus checkbox state', async () => {
-    const { multiselect } = await import('../multi-select.js');
+    const { multiselect } = await import('../multi-select.ts');
     const options = [
       { value: 'alpha', label: 'Alpha\nSecond line', hint: 'recommended' },
       { value: 'beta', label: 'Beta' },
@@ -179,7 +195,7 @@ describe('prompt renderers', () => {
   });
 
   it('renders grouped multiselect with marker, tree branch, and checkbox alignment', async () => {
-    const { groupMultiselect } = await import('../group-multi-select.js');
+    const { groupMultiselect } = await import('../group-multi-select.ts');
     void groupMultiselect({
       message: 'Grouped choices',
       options: {
@@ -211,7 +227,7 @@ describe('prompt renderers', () => {
   });
 
   it('renders autocomplete with pointer markers and focused hint', async () => {
-    const { autocomplete } = await import('../autocomplete.js');
+    const { autocomplete } = await import('../autocomplete.ts');
     const options = [
       { value: 'alpha', label: 'Alpha\nSecond line', hint: 'recommended' },
       { value: 'beta', label: 'Beta' },
@@ -237,7 +253,7 @@ describe('prompt renderers', () => {
   });
 
   it('renders autocomplete multiselect with pointer markers plus checkboxes', async () => {
-    const { autocompleteMultiselect } = await import('../autocomplete.js');
+    const { autocompleteMultiselect } = await import('../autocomplete.ts');
     const options = [
       { value: 'alpha', label: 'Alpha\nSecond line', hint: 'recommended' },
       { value: 'beta', label: 'Beta' },
@@ -264,8 +280,8 @@ describe('prompt renderers', () => {
 
   it('renders confirm and select-key in pointer style', async () => {
     const [{ confirm }, { selectKey }] = await Promise.all([
-      import('../confirm.js'),
-      import('../select-key.js'),
+      import('../confirm.ts'),
+      import('../select-key.ts'),
     ]);
     void confirm({ message: 'Proceed?' });
     const confirmOutput = renderWith(captured.confirm, {
@@ -292,9 +308,9 @@ describe('prompt renderers', () => {
 
   it('renders submitted prompts without extra blank lines', async () => {
     const [{ multiselect }, { confirm }, { text }] = await Promise.all([
-      import('../multi-select.js'),
-      import('../confirm.js'),
-      import('../text.js'),
+      import('../multi-select.ts'),
+      import('../confirm.ts'),
+      import('../text.ts'),
     ]);
 
     const multiOptions = [
@@ -329,7 +345,7 @@ describe('prompt renderers', () => {
 
 describe('renderer edge cases', () => {
   it('hides inactive hints and supports hiding keyboard instructions', async () => {
-    const { select } = await import('../select.js');
+    const { select } = await import('../select.ts');
     const options = [
       { value: 'a', label: 'Alpha', hint: 'Focused hint' },
       { value: 'b', label: 'Beta', hint: 'Hidden hint' },
@@ -342,7 +358,7 @@ describe('renderer edge cases', () => {
   });
 
   it('wraps headings, labels, and instructions within visible columns with guides', async () => {
-    const { select } = await import('../select.js');
+    const { select } = await import('../select.ts');
     const { Writable } = await import('node:stream');
     const output = Object.assign(
       new Writable({
@@ -368,9 +384,9 @@ describe('renderer edge cases', () => {
 
   it('renders empty lists on submit and cancellation without dereferencing a missing option', async () => {
     const [{ select }, { selectKey }, { groupMultiselect }] = await Promise.all([
-      import('../select.js'),
-      import('../select-key.js'),
-      import('../group-multi-select.js'),
+      import('../select.ts'),
+      import('../select-key.ts'),
+      import('../group-multi-select.ts'),
     ]);
     void select({ message: 'Choose', options: [] });
     void selectKey({ message: 'Choose', options: [] });

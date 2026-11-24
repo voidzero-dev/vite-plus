@@ -4,7 +4,7 @@ import { PackageManager } from '../../types/index.ts';
 
 vi.mock(import('../command.ts'), async (importOriginal) => ({
   ...(await importOriginal()),
-  runCommandSilently: vi.fn(),
+  runCommandSilently: vi.fn<typeof runCommandSilently>(),
 }));
 
 import { runCommandSilently } from '../command.ts';

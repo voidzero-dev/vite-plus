@@ -11,5 +11,5 @@ export interface TrustedStackStatProject {
 }
 
 export interface TrustedStackStatsFile {
-  projects: TrustedStackStatProject[];
+  projects: Array<TrustedStackStatProject>;
 }

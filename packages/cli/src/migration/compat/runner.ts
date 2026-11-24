@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import type { OxlintConfig } from 'oxlint';
 
 import { runCommandSilently } from '../../utils/command.ts';
-import { addMigrationWarning, type MigrationReport } from '../report.ts';
+import { parseJsonValue, isObjectValue } from '../../utils/json-value.ts';
+import type { JsonObject } from '../../utils/json.ts';
+import type { MigrationReport } from '../report.ts';
+import { addMigrationWarning } from '../report.ts';
 import { LINT_CONFIG_RESULT_PREFIX, ROLLDOWN_COMPAT_RESULT_PREFIX } from './protocol.ts';
 
 export { ROLLDOWN_COMPAT_RESULT_PREFIX };
@@ -29,7 +32,7 @@ function resolveWorkerPath(): string {
 
 // A project's config can crash or block. Both probes use the same child process
 // settings and timeout, and their callers decide how to handle failure.
-async function runConfigWorker(rootDir: string, ...args: string[]): Promise<Buffer> {
+async function runConfigWorker(rootDir: string, ...args: Array<string>): Promise<Buffer> {
   const { exitCode, stdout } = await runCommandSilently({
     command: process.execPath,
     args: [resolveWorkerPath(), rootDir, ...args],
@@ -43,7 +46,7 @@ async function runConfigWorker(rootDir: string, ...args: string[]): Promise<Buff
   return stdout;
 }
 
-function parseWorkerResult(stdout: Buffer, prefix: string): Record<string, unknown> | undefined {
+function parseWorkerResult(stdout: Buffer, prefix: string): JsonObject | undefined {
   const output = stdout.toString();
   const markerIndex = output.lastIndexOf(prefix);
   if (markerIndex === -1) {
@@ -55,8 +58,8 @@ function parseWorkerResult(stdout: Buffer, prefix: string): Record<string, unkno
   const serialized = output.slice(resultStart, resultEnd === -1 ? undefined : resultEnd).trim();
 
   try {
-    const result = JSON.parse(serialized);
-    return result !== null && typeof result === 'object' ? result : undefined;
+    const result = parseJsonValue(serialized);
+    return isObjectValue(result) ? result : undefined;
   } catch {
     return undefined;
   }

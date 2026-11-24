@@ -3,15 +3,16 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parse as parseYaml } from 'yaml';
 
-import { DependencyType, PackageManager, type WorkspaceInfo } from '../../types/index.ts';
+import { makeWorkspaceInfo } from '../../create/__tests__/workspace-fixture.ts';
+import { DependencyType, PackageManager } from '../../types/index.ts';
 import {
   discoverWorkspacePackages,
   findPackageJsonFilesFromPatterns,
   updatePackageJsonWithDeps,
   updateWorkspaceConfig,
 } from '../workspace.ts';
+import { readYamlFile } from '../yaml.ts';
 
 let tmpDir: string;
 
@@ -28,62 +29,39 @@ function writeJson(p: string, data: unknown) {
   fs.writeFileSync(p, JSON.stringify(data, null, 2));
 }
 
-function makeWorkspaceInfo(overrides: Partial<WorkspaceInfo> = {}): WorkspaceInfo {
-  return {
-    rootDir: tmpDir,
-    packageManager: PackageManager.pnpm,
-    packageManagerVersion: 'latest',
-    isMonorepo: true,
-    monorepoScope: '',
-    workspacePatterns: [],
-    parentDirs: [],
-    packages: [],
-    downloadPackageManager: {
-      name: '',
-      installDir: '',
-      binPrefix: '',
-      binPaths: {},
-      packageName: '',
-      version: '',
-    },
-    ...overrides,
-  };
-}
-
 describe('updateWorkspaceConfig pattern derivation', () => {
   it('derives "packages/*" from a nested project path (pnpm)', () => {
     fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), "packages:\n  - 'apps/*'\n");
-    updateWorkspaceConfig('packages/my-app', makeWorkspaceInfo({ workspacePatterns: ['apps/*'] }));
-    const content = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8');
-    const parsed = parseYaml(content) as { packages: string[] };
-    expect(parsed.packages).toEqual(['apps/*', 'packages/*']);
+    updateWorkspaceConfig(
+      'packages/my-app',
+      makeWorkspaceInfo(tmpDir, { workspacePatterns: ['apps/*'] }),
+    );
+    const parsed = readYamlFile(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(parsed?.packages).toEqual(['apps/*', 'packages/*']);
   });
 
   it('derives "foo/bar/*" from a deeply nested project path (pnpm)', () => {
     fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: []\n');
-    updateWorkspaceConfig('foo/bar/app', makeWorkspaceInfo({ workspacePatterns: [] }));
-    const parsed = parseYaml(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')) as {
-      packages: string[];
-    };
-    expect(parsed.packages).toEqual(['foo/bar/*']);
+    updateWorkspaceConfig('foo/bar/app', makeWorkspaceInfo(tmpDir, { workspacePatterns: [] }));
+    const parsed = readYamlFile(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(parsed?.packages).toEqual(['foo/bar/*']);
   });
 
   it('keeps a single-segment project path literal (pnpm)', () => {
     fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: []\n');
-    updateWorkspaceConfig('website', makeWorkspaceInfo({ workspacePatterns: [] }));
-    const parsed = parseYaml(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')) as {
-      packages: string[];
-    };
-    expect(parsed.packages).toEqual(['website']);
+    updateWorkspaceConfig('website', makeWorkspaceInfo(tmpDir, { workspacePatterns: [] }));
+    const parsed = readYamlFile(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(parsed?.packages).toEqual(['website']);
   });
 
   it('skips update when the project path already matches an existing pattern', () => {
     fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), "packages:\n  - 'apps/*'\n");
-    updateWorkspaceConfig('apps/admin', makeWorkspaceInfo({ workspacePatterns: ['apps/*'] }));
-    const parsed = parseYaml(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')) as {
-      packages: string[];
-    };
-    expect(parsed.packages).toEqual(['apps/*']);
+    updateWorkspaceConfig(
+      'apps/admin',
+      makeWorkspaceInfo(tmpDir, { workspacePatterns: ['apps/*'] }),
+    );
+    const parsed = readYamlFile(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(parsed?.packages).toEqual(['apps/*']);
   });
 
   it.each([PackageManager.npm, PackageManager.bun, PackageManager.yarn])(
@@ -95,7 +73,7 @@ describe('updateWorkspaceConfig pattern derivation', () => {
       });
       updateWorkspaceConfig(
         'apps/admin',
-        makeWorkspaceInfo({ packageManager, workspacePatterns: ['apps/*'] }),
+        makeWorkspaceInfo(tmpDir, { packageManager, workspacePatterns: ['apps/*'] }),
       );
       const pkg = JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8'));
       expect(pkg.workspaces).toEqual(['apps/*']);
@@ -104,20 +82,17 @@ describe('updateWorkspaceConfig pattern derivation', () => {
 
   it('initializes packages key when pnpm-workspace.yaml has no packages field', () => {
     fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  foo: ^1.0.0\n');
-    updateWorkspaceConfig('website', makeWorkspaceInfo({ workspacePatterns: [] }));
-    const parsed = parseYaml(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')) as {
-      packages: string[];
-      catalog: Record<string, string>;
-    };
-    expect(parsed.packages).toEqual(['website']);
-    expect(parsed.catalog).toEqual({ foo: '^1.0.0' });
+    updateWorkspaceConfig('website', makeWorkspaceInfo(tmpDir, { workspacePatterns: [] }));
+    const parsed = readYamlFile(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(parsed?.packages).toEqual(['website']);
+    expect(parsed?.catalog).toEqual({ foo: '^1.0.0' });
   });
 
   it('initializes workspaces field when package.json has none (npm)', () => {
     writeJson(path.join(tmpDir, 'package.json'), { name: 'root' });
     updateWorkspaceConfig(
       'packages/foo',
-      makeWorkspaceInfo({ packageManager: PackageManager.npm, workspacePatterns: [] }),
+      makeWorkspaceInfo(tmpDir, { packageManager: PackageManager.npm, workspacePatterns: [] }),
     );
     const pkg = JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8'));
     expect(pkg.workspaces).toEqual(['packages/*']);
@@ -130,7 +105,7 @@ describe('updateWorkspaceConfig pattern derivation', () => {
     });
     updateWorkspaceConfig(
       'packages/foo',
-      makeWorkspaceInfo({
+      makeWorkspaceInfo(tmpDir, {
         packageManager: PackageManager.npm,
         workspacePatterns: ['apps/*'],
       }),
@@ -149,7 +124,7 @@ describe('updateWorkspaceConfig pattern derivation', () => {
     });
     updateWorkspaceConfig(
       'packages/foo',
-      makeWorkspaceInfo({
+      makeWorkspaceInfo(tmpDir, {
         packageManager: PackageManager.bun,
         workspacePatterns: ['apps/*'],
       }),

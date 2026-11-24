@@ -2,21 +2,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { runCommandSilently } from '../utils/command.ts';
-import { type CommandRunSummary, runViteFmt } from '../utils/prompts.ts';
+import type { CommandRunSummary } from '../utils/prompts.ts';
+import { runViteFmt } from '../utils/prompts.ts';
 import { STANDALONE_RENOVATE_CONFIG_FILES } from './renovate.ts';
-import { addMigrationWarning, type MigrationReport } from './report.ts';
+import type { MigrationReport } from './report.ts';
+import { addMigrationWarning } from './report.ts';
 
-type FormatRunner = (
+export type FormatRunner = (
   cwd: string,
   interactive?: boolean,
-  paths?: string[],
-  options?: { silent?: boolean; command?: string; commandArgs?: string[] },
+  paths?: Array<string>,
+  options?: { silent?: boolean; command?: string; commandArgs?: Array<string> },
 ) => Promise<CommandRunSummary>;
 
 type FormatPathCollector = (
   cwd: string,
   excludedPaths?: ReadonlySet<string>,
-) => Promise<string[] | undefined>;
+) => Promise<Array<string> | undefined>;
 
 interface FormatMigratedProjectOptions {
   format?: FormatRunner;
@@ -35,9 +37,9 @@ const FORMAT_FAILURE_MESSAGE =
 // command line at 32,767 characters (shared with the node path and CLI entry).
 const MAX_FORMAT_ARG_BYTES = process.platform === 'win32' ? 24_000 : 100_000;
 
-function chunkPathsByArgLength(paths: string[]): string[][] {
-  const chunks: string[][] = [];
-  let current: string[] = [];
+function chunkPathsByArgLength(paths: Array<string>): Array<Array<string>> {
+  const chunks: Array<Array<string>> = [];
+  let current: Array<string> = [];
   let currentBytes = 0;
   for (const filePath of paths) {
     const bytes = Buffer.byteLength(filePath) + 1; // +1 for the argument separator
@@ -55,7 +57,7 @@ function chunkPathsByArgLength(paths: string[]): string[][] {
   return chunks;
 }
 
-function parseNullDelimitedPaths(output: Buffer): string[] {
+function parseNullDelimitedPaths(output: Buffer): Array<string> {
   return output.toString().split('\0').filter(Boolean);
 }
 
@@ -68,7 +70,7 @@ function isExistingFile(projectRoot: string, relativePath: string): boolean {
   }
 }
 
-function wholeProjectFormatPaths(projectRoot: string): string[] | undefined {
+function wholeProjectFormatPaths(projectRoot: string): Array<string> | undefined {
   // Anchor the exclusions so nested files with the same name still get formatted.
   const exclusions = STANDALONE_RENOVATE_CONFIG_FILES.filter((file) =>
     isExistingFile(projectRoot, file),
@@ -87,9 +89,9 @@ function wholeProjectFormatPaths(projectRoot: string): string[] | undefined {
 export async function collectChangedFormatPaths(
   projectRoot: string,
   excludedPaths?: ReadonlySet<string>,
-): Promise<string[] | undefined> {
+): Promise<Array<string> | undefined> {
   try {
-    const git = (args: string[]) =>
+    const git = (args: Array<string>) =>
       runCommandSilently({ command: 'git', args, cwd: projectRoot, envs: process.env });
 
     // Only fall back to whole-project formatting when the project is genuinely
@@ -184,7 +186,7 @@ export async function formatMigratedProject(
       silent: false,
       ...(cliEntry
         ? { command: process.execPath, commandArgs: [...process.execArgv, cliEntry] }
-        : {}),
+        : undefined),
     };
     // `undefined` means "format the whole project" (single invocation); a path
     // list is batched so a huge monorepo cannot overflow the command line.

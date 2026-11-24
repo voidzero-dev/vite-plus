@@ -2,11 +2,14 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
+import { isJsonObject, isObjectValue } from '../../packages/cli/src/utils/json-value.ts';
+import { readJsonObject } from '../../scripts/json.ts';
+
 type DependencyField = 'dependencies' | 'optionalDependencies';
 
 export function getBundledDependencyRanges(
   root: string,
-): { name: string; field: DependencyField; range: string }[] {
+): Array<{ name: string; field: DependencyField; range: string }> {
   // Core's direct rolldown-plugin-dts can differ from the copy bundled with tsdown.
   const coreRequire = createRequire(join(root, 'packages/core/package.json'));
   const tsdownRequire = createRequire(coreRequire.resolve('tsdown/package.json'));
@@ -14,32 +17,27 @@ export function getBundledDependencyRanges(
   const vitePath = join(root, 'vite/packages/vite/package.json');
   // These packages stay external in packages/core/build.ts. Follow their
   // bundled consumers rather than independently selecting the latest releases.
-  const sources: { path: string; field: DependencyField; names: string[] }[] = [
-    { path: pluginPath, field: 'dependencies', names: ['yuku-parser'] },
-    { path: vitePath, field: 'dependencies', names: ['postcss'] },
-    { path: vitePath, field: 'optionalDependencies', names: ['fsevents'] },
+  const sources: Array<{ path: string; field: DependencyField; name: string }> = [
+    { path: pluginPath, field: 'dependencies', name: 'yuku-parser' },
+    { path: vitePath, field: 'dependencies', name: 'postcss' },
+    { path: vitePath, field: 'optionalDependencies', name: 'fsevents' },
   ];
-  return sources.flatMap(({ path, field, names }) => {
-    const pkg = JSON.parse(readFileSync(path, 'utf8')) as Partial<
-      Record<DependencyField, Record<string, string>>
-    >;
-    return names.map((name) => {
-      let range = pkg[field]?.[name];
-      if (typeof range !== 'string' || range.trim() === '') {
-        throw new Error(`Missing ${field}.${name} in ${path}; review core's externals`);
+  return sources.map(({ path, field, name }) => {
+    const dependencies = readJsonObject(path)[field];
+    let range = isObjectValue(dependencies) ? dependencies[name] : undefined;
+    if (typeof range !== 'string' || range.trim() === '') {
+      throw new Error(`Missing ${field}.${name} in ${path}; review core's externals`);
+    }
+    if (name === 'yuku-parser') {
+      // Pin the runtime parser to the exact version resolved by the bundled plugin.
+      const parserPath = createRequire(path).resolve('yuku-parser/package.json');
+      const { version } = readJsonObject(parserPath);
+      if (typeof version !== 'string' || version.trim() === '') {
+        throw new Error(`Missing version in ${parserPath}; review core's externals`);
       }
-      if (name === 'yuku-parser') {
-        // The AST helpers and codegen are bundled. Pin the runtime parser to
-        // the exact version resolved by the same plugin so it cannot drift.
-        const parserPath = createRequire(path).resolve('yuku-parser/package.json');
-        const { version } = JSON.parse(readFileSync(parserPath, 'utf8')) as { version?: unknown };
-        if (typeof version !== 'string' || version.trim() === '') {
-          throw new Error(`Missing version in ${parserPath}; review core's externals`);
-        }
-        range = version;
-      }
-      return { name, field, range };
-    });
+      range = version;
+    }
+    return { name, field, range };
   });
 }
 
@@ -131,14 +129,11 @@ export async function getPnpmInstallerIntegrity(version: string): Promise<string
   if (!response.ok) {
     throw new Error(`Failed to fetch pnpm ${version}: ${response.status} ${response.statusText}`);
   }
-  const data = (await response.json()) as {
-    version?: unknown;
-    dist?: { integrity?: unknown };
-  } | null;
-  if (data?.version !== version) {
+  const data: unknown = await response.json();
+  if (!isJsonObject(data) || data.version !== version) {
     throw new Error(`Invalid npm response for pnpm ${version}: version mismatch`);
   }
-  const integrity = data.dist?.integrity;
+  const integrity = isObjectValue(data.dist) ? data.dist.integrity : undefined;
   const match = typeof integrity === 'string' && /^sha512-([A-Za-z0-9+/]{86}==)$/.exec(integrity);
   if (!match) {
     throw new Error(`Invalid npm response for pnpm ${version}: expected SHA-512 dist.integrity`);
@@ -151,11 +146,7 @@ export async function getPnpmInstallerIntegrity(version: string): Promise<string
   return `sha512.${digest.toString('hex')}`;
 }
 
-export function updatePnpmInstallerPins(
-  root: string,
-  version: string,
-  integrity: string,
-): { oldVersion: string; oldIntegrity: string } {
+export function updatePnpmInstallerPins(root: string, version: string, integrity: string) {
   const files = [
     {
       path: 'crates/vp_setup/src/install.rs',
@@ -205,7 +196,7 @@ export function updatePnpmInstallerPins(
     );
   }
   const oldIntegrity = integrityMatches[0][1];
-  installer.updated = installer.updated.replace(integrityPattern, (match: string) =>
+  installer.updated = installer.updated.replaceAll(integrityPattern, (match: string) =>
     match.replace(oldIntegrity, integrity),
   );
   // Validate every copy before writing so a stale pattern cannot leave partial pins.

@@ -4,12 +4,14 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { PackageManager } from '../../types/index.js';
+import { PackageManager } from '../../types/index.ts';
+import { isStringRecord } from '../../utils/json-value.ts';
+import { readJsonFile } from '../../utils/json.ts';
 import {
   alignMonorepoTypeScriptVersion,
   dropAliasedRuntimeDevDeps,
   removeNestedLibraryToolConfig,
-} from '../templates/monorepo.js';
+} from '../templates/monorepo.ts';
 
 function writePackageJson(directory: string, devDependencies: Record<string, string>): void {
   fs.writeFileSync(
@@ -19,10 +21,14 @@ function writePackageJson(directory: string, devDependencies: Record<string, str
 }
 
 function readDevDependencies(directory: string): Record<string, string> {
-  const pkg = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8')) as {
-    devDependencies?: Record<string, string>;
-  };
-  return pkg.devDependencies ?? {};
+  const { devDependencies } = readJsonFile(path.join(directory, 'package.json'));
+  if (devDependencies === undefined) {
+    return {};
+  }
+  if (!isStringRecord(devDependencies)) {
+    throw new Error('Invalid devDependencies');
+  }
+  return devDependencies;
 }
 
 describe('alignMonorepoTypeScriptVersion', () => {
@@ -282,10 +288,14 @@ describe('dropAliasedRuntimeDevDeps', () => {
   }
 
   function readDevDependencies(): Record<string, string> {
-    const pkg = JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')) as {
-      devDependencies?: Record<string, string>;
-    };
-    return pkg.devDependencies ?? {};
+    const { devDependencies } = readJsonFile(path.join(tmpDir, 'package.json'));
+    if (devDependencies === undefined) {
+      return {};
+    }
+    if (!isStringRecord(devDependencies)) {
+      throw new Error('Invalid devDependencies');
+    }
+    return devDependencies;
   }
 
   // Regression test for "vp why vite reports the override as ineffective" in a

@@ -6,6 +6,10 @@ import { createTarGzip, parseTarGzip } from 'nanotar';
 import { describe, expect, it, vi } from 'vitest';
 import { stringify } from 'yaml';
 
+import type {
+  generateInstallLockfile as generateInstallLockfileImplementation,
+  publishedInstallLockfile as publishedInstallLockfileImplementation,
+} from '../../generate-install-lockfile.ts';
 import {
   INSTALL_LOCKFILE,
   PREVIEW_REGISTRY,
@@ -71,7 +75,9 @@ async function withBatch(run: (directory: string) => Promise<void>) {
 describe('preview installation lockfile', () => {
   it('resolves the published commit version and bundles the unchanged pnpm lockfile', async () => {
     await withBatch(async (directory) => {
-      const resolveLockfile = vi.fn(async () => lockfile);
+      const resolveLockfile = vi.fn<typeof generateInstallLockfileImplementation>(
+        async () => lockfile,
+      );
       expect(
         await preparePreviewPackages(directory, version, resolveLockfile, noPublishedLockfile),
       ).toBe(lockfile);
@@ -122,7 +128,9 @@ describe('preview installation lockfile', () => {
         { name: 'package/package.json', data: JSON.stringify({ name: 'vite-plus', version }) },
       ]);
       await writeFile(join(directory, 'pkg-2.tgz'), archive);
-      const resolveLockfile = vi.fn(async () => lockfile);
+      const resolveLockfile = vi.fn<typeof generateInstallLockfileImplementation>(
+        async () => lockfile,
+      );
       await expect(
         preparePreviewPackages(directory, version, resolveLockfile, noPublishedLockfile),
       ).rejects.toThrow('Expected unique global CLI platform packages');
@@ -159,8 +167,12 @@ describe('preview installation lockfile', () => {
 
   it('reuses the published lockfile after a partial publication without a saved artifact', async () => {
     await withBatch(async (directory) => {
-      const resolveLockfile = vi.fn(async () => lockfile.replace('published-cli', 'new-cli'));
-      const recoverLockfile = vi.fn(async () => lockfile);
+      const resolveLockfile = vi.fn<typeof generateInstallLockfileImplementation>(async () =>
+        lockfile.replace('published-cli', 'new-cli'),
+      );
+      const recoverLockfile = vi.fn<typeof publishedInstallLockfileImplementation>(
+        async () => lockfile,
+      );
       expect(
         await preparePreviewPackages(directory, version, resolveLockfile, recoverLockfile),
       ).toBe(lockfile);
@@ -180,7 +192,9 @@ describe('preview installation lockfile', () => {
   it('does not resolve again when recovery of an existing publication fails', async () => {
     await withBatch(async (directory) => {
       const before = await readFile(join(directory, 'pkg-0.tgz'));
-      const resolveLockfile = vi.fn(async () => lockfile);
+      const resolveLockfile = vi.fn<typeof generateInstallLockfileImplementation>(
+        async () => lockfile,
+      );
       await expect(
         preparePreviewPackages(directory, version, resolveLockfile, async () => {
           throw new Error('registry unavailable');

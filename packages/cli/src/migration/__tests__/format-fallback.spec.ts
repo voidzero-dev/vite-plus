@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../utils/command.ts', () => ({
-  runCommandSilently: vi.fn(),
+  runCommandSilently: vi.fn<typeof runCommandSilently>(),
 }));
 
 import { runCommandSilently } from '../../utils/command.ts';

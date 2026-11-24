@@ -3,7 +3,6 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { createTarGzip, parseTarGzip } from 'nanotar';
-import { parse } from 'yaml';
 
 import {
   generateInstallLockfile,
@@ -13,6 +12,7 @@ import {
   publishedInstallLockfile,
   validateInstallLockfile,
 } from './generate-install-lockfile.ts';
+import { parseJsonObject } from './src/utils/json-value.ts';
 
 const platformPrefix = '@voidzero-dev/vite-plus-cli-';
 const decoder = new TextDecoder();
@@ -35,10 +35,12 @@ export async function preparePreviewPackages(
     if (!manifest?.data) {
       throw new Error(`${file} is missing package/package.json`);
     }
-    const packageJson = JSON.parse(decoder.decode(manifest.data));
-    const name = packageJson.name as string;
-    if (!name?.startsWith(platformPrefix) || names.has(name)) {
-      throw new Error(`Expected unique global CLI platform packages, found ${name}`);
+    const packageJson = parseJsonObject(decoder.decode(manifest.data));
+    const { name } = packageJson;
+    if (typeof name !== 'string' || !name.startsWith(platformPrefix) || names.has(name)) {
+      throw new Error(
+        `Expected unique global CLI platform packages, found ${JSON.stringify(name)}`,
+      );
     }
     names.add(name);
     archives.push({ file, entries, manifest, packageJson });
@@ -52,18 +54,21 @@ export async function preparePreviewPackages(
   const content =
     (await recoverLockfile(version, PREVIEW_REGISTRY, [...names])) ??
     (await resolveLockfile(version, PREVIEW_REGISTRY));
-  validateInstallLockfile(content, version);
-  const lock = parse(content) as { packages: Record<string, unknown> };
+  const lock = validateInstallLockfile(content, version);
   if (Object.keys(lock.packages).some((name) => name.startsWith(platformPrefix))) {
     throw new Error(`Installation lockfile must not depend on ${platformPrefix} packages`);
   }
 
   for (const { file, entries, manifest, packageJson } of archives) {
+    const files = packageJson.files ?? [];
+    if (!Array.isArray(files) || !files.every((name) => typeof name === 'string')) {
+      throw new TypeError(`Invalid files list in ${file}`);
+    }
     manifest.data = new TextEncoder().encode(
       JSON.stringify({
         ...packageJson,
         vpInstallLockfile: true,
-        files: [...new Set([...((packageJson.files as string[]) ?? []), INSTALL_LOCKFILE])],
+        files: [...new Set([...files, INSTALL_LOCKFILE])],
       }),
     );
     await writeFile(
@@ -88,7 +93,7 @@ async function main(): Promise<void> {
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  main().catch((error: unknown) => {
+  await main().catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;
   });

@@ -8,9 +8,9 @@ import {
   findTsconfigFilesWithBaseUrl,
   fixBaseUrlInTsconfig,
   hasBaseUrlInTsconfig,
-} from '../utils/tsconfig.js';
+} from '../utils/tsconfig.ts';
 
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 const originalVpCliBin = process.env.VP_CLI_BIN;
 
 function createTempDir() {
@@ -162,7 +162,10 @@ fs.writeFileSync(tsconfigPath, text.replace(/\\n\\s*"baseUrl": "\\.",?/, ''));
 
     await expect(fixBaseUrlInTsconfig(projectPath)).resolves.toBe('fixed');
 
-    const invocations = JSON.parse(fs.readFileSync(invocationsPath, 'utf8')) as string[];
+    const invocations: unknown = JSON.parse(fs.readFileSync(invocationsPath, 'utf8'));
+    if (!Array.isArray(invocations)) {
+      throw new TypeError('Expected an invocation list');
+    }
     expect(new Set(invocations)).toEqual(new Set(['tsconfig.app.json', 'tsconfig.node.json']));
     expect(invocations).toHaveLength(2);
     expect(hasBaseUrlInTsconfig(projectPath)).toBe(false);

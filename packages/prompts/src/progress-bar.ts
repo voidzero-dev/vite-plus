@@ -2,7 +2,8 @@ import type { State } from '@clack/core';
 import color from 'picocolors';
 
 import { completeColor, unicodeOr } from './common.js';
-import { type SpinnerOptions, type SpinnerResult, spinner } from './spinner.js';
+import type { SpinnerOptions, SpinnerResult } from './spinner.js';
+import { spinner } from './spinner.js';
 
 const S_PROGRESS_CHAR: Record<NonNullable<ProgressOptions['style']>, string> = {
   light: unicodeOr('─', '-'),

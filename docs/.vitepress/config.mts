@@ -2,7 +2,8 @@ import { resolve } from 'node:path';
 
 import type { VoidZeroThemeConfig } from '@voidzero-dev/vitepress-theme';
 import { extendConfig } from '@voidzero-dev/vitepress-theme/config';
-import { defineConfig, type HeadConfig } from 'vitepress';
+import type { HeadConfig } from 'vitepress';
+import { defineConfig } from 'vitepress';
 import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons';
 import llmstxt from 'vitepress-plugin-llms';
 import { withMermaid } from 'vitepress-plugin-mermaid';
@@ -344,37 +345,26 @@ export default extendConfig(
           ],
         },
       },
-      transformHead({ page, pageData }) {
+      transformHead({ page, pageData: { frontmatter } }): Array<HeadConfig> {
         const url = 'https://viteplus.dev/' + page.replace(/\.md$/, '').replace(/index$/, '');
-
-        const canonicalUrlEntry: HeadConfig = [
-          'link',
-          {
-            rel: 'canonical',
-            href: url,
-          },
-        ];
-
-        const ogInfo: HeadConfig[] = [
-          ['meta', { property: 'og:title', content: pageData.frontmatter.title ?? 'Vite+' }],
+        const title = typeof frontmatter.title === 'string' ? frontmatter.title : 'Vite+';
+        const description =
+          typeof frontmatter.description === 'string'
+            ? frontmatter.description
+            : 'The Unified Toolchain for the Web';
+        return [
+          ['meta', { property: 'og:title', content: title }],
           [
             'meta',
             {
               property: 'og:image',
-              content: `https://viteplus.dev/${pageData.frontmatter.cover ?? 'og.jpg'}`,
+              content: `https://viteplus.dev/${frontmatter.cover ?? 'og.jpg'}`,
             },
           ],
           ['meta', { property: 'og:url', content: url }],
-          [
-            'meta',
-            {
-              property: 'og:description',
-              content: pageData.frontmatter.description ?? 'The Unified Toolchain for the Web',
-            },
-          ],
+          ['meta', { property: 'og:description', content: description }],
+          ['link', { rel: 'canonical', href: url }],
         ];
-
-        return [...ogInfo, canonicalUrlEntry];
       },
       markdown: {
         config(md) {

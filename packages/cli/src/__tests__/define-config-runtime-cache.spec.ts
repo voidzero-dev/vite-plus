@@ -3,21 +3,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveConfig, type UserConfig } from 'vite';
+import type { UserConfig } from 'vite';
+import { resolveConfig } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AUTO_INLINE_DEPS, defineConfig } from '../define-config.ts';
 
-const probes = vi.hoisted(() => [] as { from: string; id: string }[]);
+const probes = vi.hoisted(() => [] as Array<{ from: string; id: string }>);
 
-vi.mock('node:module', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:module')>();
+vi.mock(import('node:module'), async (importOriginal) => {
+  const actual = await importOriginal();
   return Object.assign({}, actual, {
     createRequire(from: string | URL) {
       const require = actual.createRequire(from);
       const resolve = require.resolve;
       require.resolve = Object.assign(
-        (id: string, options?: { paths?: string[] }) => {
+        (id: string, options?: { paths?: Array<string> }) => {
           probes.push({ from: String(from), id });
           return resolve(id, options);
         },
@@ -28,10 +29,7 @@ vi.mock('node:module', async (importOriginal) => {
   });
 });
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs')>();
-  return { ...actual, readFileSync: vi.fn(actual.readFileSync) };
-});
+vi.mock('node:fs', { spy: true });
 
 function loadVitestConfig(root: string) {
   return resolveConfig(

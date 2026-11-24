@@ -7,7 +7,7 @@ export interface TerminalSegment {
 }
 
 export interface TerminalLine {
-  segments: TerminalSegment[];
+  segments: Array<TerminalSegment>;
   tone?: TerminalTone;
 }
 
@@ -19,10 +19,10 @@ export interface TerminalTranscript {
   prompt?: string;
   lineDelay?: number;
   completionDelay?: number;
-  lines: TerminalLine[];
+  lines: Array<TerminalLine>;
 }
 
-export const terminalTranscripts: TerminalTranscript[] = [
+export const terminalTranscripts: Array<TerminalTranscript> = [
   {
     id: 'create',
     label: 'create',

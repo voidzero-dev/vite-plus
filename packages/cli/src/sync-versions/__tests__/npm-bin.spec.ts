@@ -1,7 +1,10 @@
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+
+import { parseJsonObject, isObjectValue } from '../../utils/json-value.ts';
 
 const cliBinPath = fileURLToPath(new URL('../../../dist/bin.js', import.meta.url));
 
@@ -18,11 +21,10 @@ describe('npm CLI sync-versions command', () => {
       input: request,
       encoding: 'utf8',
     });
-    const plan = JSON.parse(stdout) as {
-      tool: { name: string; version: string };
-      replacements: Array<{ before: string; after: string }>;
-    };
+    const plan = parseJsonObject(stdout);
+    assert(isObjectValue(plan.tool));
 
+    assert(typeof plan.tool.version === 'string');
     expect(plan.tool.name).toBe('vite-plus');
     expect(plan.tool.version).toMatch(/^\d+\.\d+\.\d+/u);
     expect(plan.replacements).toEqual([

@@ -39,12 +39,12 @@ function replaceInFile(
   search: string,
   replacement: string,
 ): 'patched' | 'already' {
-  const content = readFileSync(filePath, 'utf-8');
+  const content = readFileSync(filePath, 'utf8');
   const newContent = replaceInSource(filePath, content, search, replacement);
   if (content === newContent) {
     return 'already';
   }
-  writeFileSync(filePath, newContent, 'utf-8');
+  writeFileSync(filePath, newContent, 'utf8');
   return 'patched';
 }
 
@@ -70,12 +70,12 @@ function replaceInSource(
 }
 
 function removeAnyInFile(filePath: string, searches: Array<string | RegExp>): 'patched' {
-  const content = readFileSync(filePath, 'utf-8');
+  const content = readFileSync(filePath, 'utf8');
   for (const search of searches) {
     if (typeof search === 'string') {
       if (content.includes(search)) {
         const newContent = content.replace(search, '');
-        writeFileSync(filePath, newContent, 'utf-8');
+        writeFileSync(filePath, newContent, 'utf8');
         return 'patched';
       }
       continue;
@@ -83,7 +83,7 @@ function removeAnyInFile(filePath: string, searches: Array<string | RegExp>): 'p
 
     if (search.test(content)) {
       const newContent = content.replace(search, '');
-      writeFileSync(filePath, newContent, 'utf-8');
+      writeFileSync(filePath, newContent, 'utf8');
       return 'patched';
     }
   }
@@ -215,7 +215,7 @@ export function brandVite(rootDir: string = process.cwd()): void {
   // `nativeIncompatibilities` list empty and no warning is emitted. The `false`
   // guard keeps the import referenced so the type-check stays clean.
   const configFile = join(nodeDir, 'config.ts');
-  const configSource = readFileSync(configFile, 'utf-8');
+  const configSource = readFileSync(configFile, 'utf8');
   // Validate both config patches in memory before writing either edit.
   const configWithoutNotice = replaceInSource(
     configFile,
@@ -225,7 +225,7 @@ export function brandVite(rootDir: string = process.cwd()): void {
   );
   const patchedConfig = patchViteConfig(configWithoutNotice);
   if (patchedConfig !== configSource) {
-    writeFileSync(configFile, patchedConfig, 'utf-8');
+    writeFileSync(configFile, patchedConfig, 'utf8');
   }
   logPatch(
     'config.ts',

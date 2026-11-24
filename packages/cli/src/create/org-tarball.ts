@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { getVpDirs } from '../../binding/index.js';
+import { errorCode } from '../utils/error.ts';
+import type { JsonValue } from '../utils/json-value.ts';
+import { parseJsonValue } from '../utils/json-value.ts';
 import { fetchNpmResource } from '../utils/npm-config.ts';
 import type { OrgManifest } from './org-manifest.ts';
 import { parseOrgTarball } from './org-tarball-reader.ts';
@@ -99,7 +102,7 @@ async function downloadTarball(url: string): Promise<Uint8Array> {
   if (!reader) {
     throw new Error(`tarball response has no body: ${url}`);
   }
-  const chunks: Uint8Array[] = [];
+  const chunks: Array<Uint8Array> = [];
   let total = 0;
   while (true) {
     const { done, value } = await reader.read();
@@ -136,7 +139,7 @@ async function downloadTarball(url: string): Promise<Uint8Array> {
 export async function readPackageJsonFromTarball(
   tarballUrl: string,
   integrity?: string,
-): Promise<unknown> {
+): Promise<JsonValue> {
   const bytes = await downloadTarball(tarballUrl);
   verifyIntegrity(bytes, integrity);
   const entries = await parseOrgTarball(bytes);
@@ -146,7 +149,7 @@ export async function readPackageJsonFromTarball(
     }
     const text = new TextDecoder().decode(entry.data);
     try {
-      return JSON.parse(text) as unknown;
+      return parseJsonValue(text);
     } catch {
       throw new Error(`invalid package.json in tarball: ${tarballUrl}`);
     }
@@ -179,7 +182,7 @@ export function parseEntryMode(raw: string | undefined): number | undefined {
  * `package/`).
  */
 export function normalizeEntryName(rawName: string): string | null {
-  const name = rawName.replace(/^\.\//, '').replace(/\\/g, '/');
+  const name = rawName.replace(/^\.\//, '').replaceAll('\\', '/');
   if (!name || name === 'package' || name === 'package/') {
     return null;
   }
@@ -238,7 +241,7 @@ async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<voi
       // already populated `destDir`. Confirm that's actually what happened
       // (rather than permissions / read-only FS masquerading as a race)
       // before swallowing the error and treating our work as redundant.
-      const code = (error as NodeJS.ErrnoException).code;
+      const code = errorCode(error);
       if (
         (code === 'ENOTEMPTY' || code === 'EEXIST') &&
         fs.existsSync(path.join(destDir, 'package.json'))
@@ -267,7 +270,7 @@ export async function cleanupStaleStagingDirs(destDir: string): Promise<void> {
   const parent = path.dirname(destDir);
   const basename = path.basename(destDir);
   const prefix = `${basename}${STAGING_SUFFIX_PREFIX}`;
-  let entries: string[];
+  let entries: Array<string>;
   try {
     entries = await fs.promises.readdir(parent);
   } catch {

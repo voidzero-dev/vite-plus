@@ -3,13 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { ObjectExpression, Program } from '@oxc-project/types';
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import type { ObjectExpression } from '@oxc-project/types';
+import { log as promptLog } from '@voidzero-dev/vite-plus-prompts';
 import { braceExpand } from 'minimatch';
-import { type OxlintConfig } from 'oxlint';
+import type { OxlintConfig } from 'oxlint';
 
 import {
-  analyzeMigrationSource,
   hasConfigKey,
   mergeJsonConfig,
   mergeTsdownConfig,
@@ -25,15 +24,18 @@ import {
   ensureVitePlusImportRuleDefaults,
   PREFER_VITE_PLUS_IMPORTS_RULE,
 } from '../../oxlint-plugin-config.ts';
-import { type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from '../../utils/constants.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
+import { parseJsonValue, isObjectValue } from '../../utils/json-value.ts';
+import type { JsonObject } from '../../utils/json.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { parseSource, sameStaticValue } from '../ast-utils.ts';
 import { readLintConfigInWorker } from '../compat/runner.ts';
-import { detectConfigs, type ConfigFiles } from '../detector.ts';
+import type { ConfigFiles } from '../detector.ts';
+import { detectConfigs } from '../detector.ts';
 import {
   collectInstalledPackageNames,
   oxlintMigrationMarker,
@@ -45,11 +47,10 @@ import {
   sanitizeMigratedOxlintConfig,
   sanitizeInheritedJsPlugins,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
+import type { OxlintConfigMigration, OxlintModulePlan, PreparedOxlintConfigs } from './shared.ts';
+import { rewriteScriptMap } from './shared.ts';
 import {
-  type OxlintConfigMigration,
-  type OxlintModulePlan,
-  type PreparedOxlintConfigs,
   DISABLED_IMPORT_RULE_CONFIG,
   OXLINT_OWNER_CONFIG_KEYS,
   LINT_STAGED_JSON_CONFIG_FILES,
@@ -68,7 +69,7 @@ const SVELTE_RUNE_GLOBALS = {
   $host: 'readonly',
 } satisfies Record<string, 'readonly'>;
 
-function oxlintConfigLayers(config: OxlintConfig): OxlintConfig[] {
+function oxlintConfigLayers(config: OxlintConfig): Array<OxlintConfig> {
   return [...(config.extends ?? []).flatMap(oxlintConfigLayers), config];
 }
 
@@ -93,13 +94,16 @@ export function ensureSvelteRuneGlobals(config: OxlintConfig): void {
 // Remove the "lint-staged" key from package.json after config has been
 // successfully merged into vite.config.ts.
 export function removeLintStagedFromPackageJson(packageJsonPath: string): void {
-  editJsonFile<{ 'lint-staged'?: Record<string, string | string[]> }>(packageJsonPath, (pkg) => {
-    if (pkg['lint-staged']) {
-      delete pkg['lint-staged'];
-      return pkg;
-    }
-    return undefined;
-  });
+  editJsonFile<{ 'lint-staged'?: Record<string, string | Array<string>> }>(
+    packageJsonPath,
+    (pkg) => {
+      if (pkg['lint-staged']) {
+        delete pkg['lint-staged'];
+        return pkg;
+      }
+      return undefined;
+    },
+  );
 }
 
 // Migrate standalone lint-staged config files into staged in vite.config.ts.
@@ -124,8 +128,10 @@ export function rewriteLintStagedConfigFile(projectPath: string, report?: Migrat
     // Skip if staged already exists in vite.config.ts (already migrated by rewritePackageJson).
     if (!hasStagedConfigInViteConfig(projectPath)) {
       const config = readJsonFile(configPath);
-      const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
-      const finalConfig = updated ? JSON.parse(updated) : config;
+      const updated = rewriteScriptMap(config, (serialized) =>
+        rewriteScripts(serialized, readRulesYaml()),
+      );
+      const finalConfig = updated ?? config;
       if (!mergeStagedConfigToViteConfig(projectPath, finalConfig, true, report)) {
         // Merge failed — preserve the original config file so the user doesn't lose their rules
         continue;
@@ -185,7 +191,7 @@ export default defineConfig({});
       report.createdViteConfigCount++;
     }
     if (!silent) {
-      prompts.log.success(`✔ Created vite.config.ts in ${displayRelative(viteConfigPath)}`);
+      promptLog.success(`✔ Created vite.config.ts in ${displayRelative(viteConfigPath)}`);
     }
   }
   return configs.viteConfig;
@@ -249,7 +255,7 @@ export function mergeTsdownConfigFile(
       report.tsdownImportCount++;
     }
     if (!silent) {
-      prompts.log.success(
+      promptLog.success(
         `✔ Added import for ${displayRelative(fullTsdownConfigPath)} in ${displayRelative(fullViteConfigPath)}`,
       );
     }
@@ -269,7 +275,7 @@ export function mergeViteConfigFiles(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
   // For per-sub-package callers: the workspace root that `packages[].path`
   // is relative to. When undefined we resolve relative to `projectPath`
   // (correct for the top-level standalone/monorepo callers, where
@@ -309,7 +315,7 @@ export function retryPreservedOxlintConfigs(
   workspaceRoot: string,
   silent = false,
   report?: MigrationReport,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): boolean {
   const prepared = prepareOxlintConfigs([
     workspaceRoot,
@@ -354,7 +360,7 @@ function mergeOxlintConfigFile(
   oxlintConfig: string,
   silent: boolean,
   report?: MigrationReport,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
   workspaceRoot?: string,
   preparedOxlintConfigs?: PreparedOxlintConfigs,
 ): void {
@@ -469,7 +475,7 @@ function mergeOxlintConfigFile(
   const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
   if (hasInheritedImportRule && oxlintJson.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE] === undefined) {
     // Keep the shared rule live: copying its value into the root would mask later edits.
-    delete normalizedOxlintConfig.rules![PREFER_VITE_PLUS_IMPORTS_RULE];
+    delete normalizedOxlintConfig.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE];
   }
   try {
     const plan: OxlintModulePlan =
@@ -614,18 +620,15 @@ function injectConfigDefaults(
 }
 
 function configImportOffset(filename: string, source: string): number {
-  const { ast, comments } = JSON.parse(analyzeMigrationSource(filename, source)) as {
-    ast: { node: Program };
-    comments: Array<{ start: number; end: number }>;
-  };
-  let offset = ast.node.hashbang?.end ?? 0;
-  for (const statement of ast.node.body) {
+  const { program, comments } = parseSource(filename, source);
+  let offset = program.hashbang?.end ?? 0;
+  for (const statement of program.body) {
     if (statement.type !== 'ExpressionStatement' || typeof statement.directive !== 'string') {
       break;
     }
     offset = statement.end;
   }
-  const firstStatement = ast.node.body[0]?.start ?? source.length;
+  const firstStatement = program.body[0]?.start ?? source.length;
   for (const comment of comments) {
     if (comment.end > firstStatement) {
       break;
@@ -642,6 +645,18 @@ function configImportOffset(filename: string, source: string): number {
   return offset;
 }
 
+// The native parser supplies AST nodes tagged with their ESTree type.
+function isAstObjectExpression(node: unknown): node is ObjectExpression {
+  return (
+    typeof node === 'object' &&
+    node !== null &&
+    'type' in node &&
+    node.type === 'ObjectExpression' &&
+    'properties' in node &&
+    Array.isArray(node.properties)
+  );
+}
+
 function staticValue(source: string) {
   const statement = parseSource('value.ts', `const value = ${source};`).program.body[0];
   return statement?.type === 'VariableDeclaration' ? statement.declarations[0]?.init : undefined;
@@ -655,8 +670,8 @@ function followsSpread(node: unknown, offset: number): boolean | undefined {
   if (typeof node !== 'object' || node === null) {
     return undefined;
   }
-  if ((node as { type?: unknown }).type === 'ObjectExpression') {
-    const { properties } = node as ObjectExpression;
+  if (isAstObjectExpression(node)) {
+    const { properties } = node;
     const index = properties.findIndex(
       (property) => property.type === 'Property' && property.value.start === offset,
     );
@@ -695,7 +710,7 @@ export function hasOnlyInjectedDefaults(viteConfigPath: string, configKey: strin
   const placeholder = `"${randomUUID()}"`;
   const placeholderPath = path.join(os.tmpdir(), `vite-plus-config-${randomUUID()}.json`);
   fs.writeFileSync(placeholderPath, placeholder);
-  let marked: string[];
+  let marked: Array<string>;
   try {
     marked = upsertJsonConfig(viteConfigPath, placeholderPath, configKey).content.split(
       placeholder,
@@ -776,7 +791,7 @@ function mergeAndRemoveJsonConfig(
       fs.unlinkSync(fullJsonConfigPath);
     }
     if (!silent) {
-      prompts.log.info(
+      promptLog.info(
         `${configKey} config already present in ${displayRelative(fullViteConfigPath)} — ${deferRemoval ? 'deferred removal of' : 'removed redundant'} ${displayRelative(fullJsonConfigPath)}`,
       );
     }
@@ -811,7 +826,7 @@ function mergeAndRemoveJsonConfig(
   }
 
   const originalViteConfig = fs.readFileSync(fullViteConfigPath, 'utf8');
-  const writtenModules: string[] = [];
+  const writtenModules: Array<string> = [];
   try {
     for (const [filename, module] of modulePlan?.modules ?? []) {
       const descriptor = fs.openSync(filename, 'wx');
@@ -861,7 +876,7 @@ function mergeAndRemoveJsonConfig(
     report.mergedConfigCount++;
   }
   if (!silent) {
-    prompts.log.success(
+    promptLog.success(
       `✔ Merged ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
     );
   }
@@ -874,7 +889,7 @@ function mergeAndRemoveJsonConfig(
  */
 export function mergeStagedConfigToViteConfig(
   projectPath: string,
-  stagedConfig: Record<string, string | string[]>,
+  stagedConfig: JsonObject,
   silent = false,
   report?: MigrationReport,
 ): boolean {
@@ -899,7 +914,7 @@ export function mergeStagedConfigToViteConfig(
       report.mergedStagedConfigCount++;
     }
     if (!silent) {
-      prompts.log.success(`✔ Merged staged config into ${displayRelative(fullViteConfigPath)}`);
+      promptLog.success(`✔ Merged staged config into ${displayRelative(fullViteConfigPath)}`);
     }
     return true;
   } else {
@@ -953,7 +968,7 @@ export function wrapLazyPluginsInViteConfig(
     report.wrappedPluginConfigCount++;
   }
   if (!silent) {
-    prompts.log.success(
+    promptLog.success(
       `✔ Wrapped inline Vite plugins with lazyPlugins in ${displayRelative(viteConfigPath)}`,
     );
   }
@@ -969,7 +984,7 @@ export function migrateTaskCacheConfigInViteConfig(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
-  manualWarnings?: string[],
+  manualWarnings?: Array<string>,
 ): boolean {
   const configs = detectConfigs(projectPath);
   if (!configs.viteConfig) {
@@ -998,7 +1013,7 @@ export function migrateTaskCacheConfigInViteConfig(
     report.migratedTaskCacheConfigCount++;
   }
   if (!silent) {
-    prompts.log.success(
+    promptLog.success(
       `✔ Moved task cache settings under \`cache\` in ${displayRelative(viteConfigPath)}`,
     );
   }
@@ -1042,8 +1057,11 @@ export function warnUnresolvedImportRuleConfig(report?: MigrationReport): void {
 export async function tryResolveImportRuleConfig(projectPath: string): Promise<string | null> {
   const extracted = readStaticLintConfig(projectPath);
   let lint: OxlintConfig | undefined;
-  if (extracted != null) {
-    lint = JSON.parse(extracted);
+  if (typeof extracted === 'string') {
+    const parsed = parseJsonValue(extracted);
+    if (isObjectValue(parsed)) {
+      lint = parsed;
+    }
   } else {
     try {
       lint = await readLintConfigInWorker(projectPath);
@@ -1104,7 +1122,7 @@ export function rewriteAllImports(
   options: {
     preserveNuxtVitestImports?: boolean;
     // Capture package owners before migration removes oxlint from their manifests.
-    oxlintOwnerDirs?: string[];
+    oxlintOwnerDirs?: Array<string>;
     importRuleConfig?: string;
   } = {},
 ): boolean {
@@ -1134,8 +1152,8 @@ export function rewriteAllImports(
   }
 
   if (!silent && modified > 0) {
-    prompts.log.success(`Rewrote imports in ${modified === 1 ? 'one file' : `${modified} files`}`);
-    prompts.log.info(result.modifiedFiles.map((file) => `  ${displayRelative(file)}`).join('\n'));
+    promptLog.success(`Rewrote imports in ${modified === 1 ? 'one file' : `${modified} files`}`);
+    promptLog.info(result.modifiedFiles.map((file) => `  ${displayRelative(file)}`).join('\n'));
   }
 
   if (errors > 0) {
@@ -1145,11 +1163,9 @@ export function rewriteAllImports(
         report,
       );
     } else {
-      prompts.log.warn(
-        `⚠ ${errors === 1 ? 'one file had an error' : `${errors} files had errors`}:`,
-      );
+      promptLog.warn(`⚠ ${errors === 1 ? 'one file had an error' : `${errors} files had errors`}:`);
       for (const error of result.errors) {
-        prompts.log.error(`  ${displayRelative(error.path)}: ${error.message}`);
+        promptLog.error(`  ${displayRelative(error.path)}: ${error.message}`);
       }
     }
   }

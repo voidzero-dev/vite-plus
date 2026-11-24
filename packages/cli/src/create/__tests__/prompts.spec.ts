@@ -4,9 +4,14 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { cancelAndExit as cancelAndExitImplementation } from '../../utils/prompts.ts';
+
 const { mockSelect, mockText } = vi.hoisted(() => ({
-  mockSelect: vi.fn(),
-  mockText: vi.fn(),
+  mockSelect: vi.fn<() => Promise<string>>(),
+  mockText:
+    vi.fn<
+      (options: { validate?: (value: string | undefined) => string | undefined }) => Promise<string>
+    >(),
 }));
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
@@ -16,7 +21,7 @@ vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
 }));
 
 vi.mock('../../utils/prompts.ts', () => ({
-  cancelAndExit: vi.fn(() => {
+  cancelAndExit: vi.fn<typeof cancelAndExitImplementation>(() => {
     throw new Error('Operation cancelled');
   }),
 }));
@@ -26,9 +31,9 @@ vi.mock('../../utils/terminal.ts', () => ({
 }));
 
 const { checkProjectDirExists, isTargetDirAvailable, promptTargetDir, suggestAvailableTargetDir } =
-  await import('../prompts.js');
+  await import('../prompts.ts');
 
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
@@ -81,7 +86,7 @@ describe('target directory helpers', () => {
   it('rejects ".." path segments but accepts directory names that contain two dots', async () => {
     const cwd = makeTempDir();
     let validate: ((value: string | undefined) => string | undefined) | undefined;
-    mockText.mockImplementation((options: { validate: typeof validate }) => {
+    mockText.mockImplementation((options) => {
       validate = options.validate;
       return Promise.resolve('my..lib');
     });
@@ -236,9 +241,10 @@ describe('target directory helpers', () => {
         }),
       );
       expect(fs.lstatSync(targetDir, { throwIfNoEntry: false })).toBeUndefined();
-      if (!dangling) {
-        expect(fs.readFileSync(path.join(linkedDir, 'keep.txt'), 'utf8')).toBe('keep');
-      }
+      const kept = path.join(linkedDir, 'keep.txt');
+      expect(fs.existsSync(kept) ? fs.readFileSync(kept, 'utf8') : undefined).toBe(
+        dangling ? undefined : 'keep',
+      );
     },
   );
 

@@ -3,53 +3,64 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  confirm as promptConfirm,
+  log as promptLog,
+  select as promptSelect,
+} from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HOOK_STUB_SCRIPT, hookScript } from '../../config/hooks.ts';
 import { PackageManager } from '../../types/index.ts';
+import type { JsonObject } from '../../utils/json.ts';
+import { readJsonFile } from '../../utils/json.ts';
 import { log } from '../../utils/terminal.ts';
 import { installGitHooks, isViteHooksSetupComplete } from '../migrator.ts';
-import { collectMigrationSetupPlan, type MigrationSetupPlan } from '../setup-plan.ts';
+import type { MigrationSetupPlan } from '../setup-plan.ts';
+import { collectMigrationSetupPlan } from '../setup-plan.ts';
 
 vi.mock('@voidzero-dev/vite-plus-prompts', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@voidzero-dev/vite-plus-prompts')>();
+  const mod = await importOriginal<{
+    select: typeof promptSelect;
+    confirm: typeof promptConfirm;
+    log: typeof promptLog;
+  }>();
   return {
     ...mod,
-    select: vi.fn(),
-    confirm: vi.fn(),
-    log: { ...mod.log, info: vi.fn(), warn: vi.fn() },
+    select: vi.fn<typeof mod.select>(),
+    confirm: vi.fn<typeof mod.confirm>(),
+    log: { ...mod.log, info: vi.fn<typeof mod.log.info>(), warn: vi.fn<typeof mod.log.warn>() },
   };
 });
 
-vi.mock('../../utils/terminal.ts', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('../../utils/terminal.ts')>();
-  return { ...mod, log: vi.fn() };
+vi.mock(import('../../utils/terminal.ts'), async (importOriginal) => {
+  const mod = await importOriginal();
+  return { ...mod, log: vi.fn<typeof mod.log>() };
 });
 
-const mockSelect = vi.mocked(prompts.select);
-const mockConfirm = vi.mocked(prompts.confirm);
+const mockSelect = vi.mocked(promptSelect);
+const mockConfirm = vi.mocked(promptConfirm);
 const mockLog = vi.mocked(log);
 
 const skipMessage = expect.stringContaining('Git hooks already configured, skipping');
 
-function git(cwd: string, ...args: string[]): void {
+function git(cwd: string, ...args: Array<string>): void {
   const result = spawnSync('git', args, { cwd, stdio: 'pipe' });
   if (result.status !== 0) {
     throw new Error(`git ${args.join(' ')} failed: ${result.stderr.toString()}`);
   }
 }
 
-function writePackageJson(dir: string, pkg: Record<string, unknown>): void {
+function writePackageJson(dir: string, pkg: JsonObject): void {
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg));
 }
 
 function readPackageJson(dir: string): { scripts?: Record<string, string> } {
-  return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+  return readJsonFile(path.join(dir, 'package.json'));
 }
 
 /** Simulate what `vp config` leaves behind: dispatcher files and core.hooksPath. */
-function installDispatcher(dir: string, hookNames: string[]): void {
+function installDispatcher(dir: string, hookNames: Array<string>): void {
   const dispatcherDir = path.join(dir, '.vite-hooks', '_');
   fs.mkdirSync(dispatcherDir, { recursive: true });
   function writeScript(name: string, content: string): void {
@@ -367,7 +378,7 @@ describe('collectMigrationSetupPlan existing Vite+ hooks', () => {
 
       expect(plan.shouldSetupHooks).toBe(false);
       expectNoHooksPrompt();
-      expect(prompts.log.warn).toHaveBeenCalledWith(
+      expect(promptLog.warn).toHaveBeenCalledWith(
         expect.stringContaining('core.hooksPath is already set to ".githooks"'),
       );
     });
@@ -383,7 +394,7 @@ describe('collectMigrationSetupPlan existing Vite+ hooks', () => {
 
       expect(plan.shouldSetupHooks).toBe(false);
       expectNoHooksPrompt();
-      expect(prompts.log.warn).toHaveBeenCalledWith(
+      expect(promptLog.warn).toHaveBeenCalledWith(
         expect.stringContaining(
           `Git hook dispatcher path "${path.join('.vite-hooks', '_')}" is unsafe`,
         ),

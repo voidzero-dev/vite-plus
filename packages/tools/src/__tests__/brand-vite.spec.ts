@@ -75,17 +75,12 @@ function write(file: string, source: string) {
   writeFileSync(file, source);
 }
 
-function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
-  root: string;
-  nodeDir: string;
-  manifest: string;
-  lockfile: string;
-  unrelatedSource: string;
-} {
+function createUpstreamFixture(configSource = upstreamSources['config.ts']) {
   const root = mkdtempSync(join(tmpdir(), 'vp-brand-vite-'));
   const viteDir = join(root, 'vite');
   const nodeDir = join(viteDir, 'packages/vite/src/node');
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: viteDir, stdio: 'pipe' });
+  const git = (...args: Array<string>) =>
+    execFileSync('git', args, { cwd: viteDir, stdio: 'pipe' });
   for (const [file, source] of Object.entries(upstreamSources)) {
     write(join(nodeDir, file), file === 'config.ts' ? configSource : source);
   }
@@ -124,7 +119,7 @@ test('branding preserves aligned dependencies and unrelated changes across repea
     write(lockfile, '# local lockfile change\n');
     write(unrelatedSource, '// unrelated local source change\n');
 
-    let brandedSources: string[] | undefined;
+    const runs: Array<Array<string>> = [];
     for (let run = 0; run < 2; run++) {
       brandVite(root);
 
@@ -149,11 +144,9 @@ test('branding preserves aligned dependencies and unrelated changes across repea
         return source;
       });
       sources.push(dtsConfig);
-      if (brandedSources) {
-        expect(sources).toEqual(brandedSources);
-      }
-      brandedSources = sources;
+      runs.push(sources);
     }
+    expect(runs[1]).toEqual(runs[0]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

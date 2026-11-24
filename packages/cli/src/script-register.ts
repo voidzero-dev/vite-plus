@@ -8,7 +8,7 @@
  * loader, where the hooks decide each file's module format.
  */
 
-import * as NodeModule from 'node:module';
+import NodeModule from 'node:module';
 
 import { canRegisterSyncHooks, createRelay, loadOxcNode, threadWatchSink } from './script-hooks.ts';
 
@@ -24,7 +24,10 @@ if (!canRegisterSyncHooks(process.versions.node)) {
   const watchPort = watch ? createRelay(watch, oxcNode.takeWatchDependencies) : undefined;
   // The native loader context is thread-local. Freeze both choices here so ESM
   // uses the same tsconfig and dependency policy as the CommonJS preload.
-  register!(new URL('./script-esm-hooks.js', import.meta.url), {
+  if (!register) {
+    throw new Error('This Node.js version does not support module.register().');
+  }
+  register(new URL('./script-esm-hooks.js', import.meta.url), {
     data: {
       tsconfig: oxcNode.freezeTsconfig(process.cwd()),
       transformDeps: oxcNode.freezeTransformDeps(),

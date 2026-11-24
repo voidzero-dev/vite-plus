@@ -2,12 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { findRetainedVitestPackages } from '../../../binding/index.js';
-import { type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME } from '../../utils/constants.ts';
+import { parseJsonObject } from '../../utils/json-value.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { hasVitestTypesInTsconfig } from '../../utils/tsconfig.ts';
 import { projectUsesVitestDirectly } from '../migrator.ts';
+import type { DependencyBag, RetainedImportDependencies } from './shared.ts';
 import {
   DISABLED_IMPORT_RULE_CONFIG,
   OPT_IN_BROWSER_PROVIDERS,
@@ -16,13 +18,11 @@ import {
   PLAYWRIGHT_PROVIDER,
   readPackageJsonIfExists,
   RETENTION_SCAN_SKIP_DIRS,
-  type DependencyBag,
-  type RetainedImportDependencies,
 } from './shared.ts';
 
-type WorkspaceProjects = { rootDir: string; packages?: readonly WorkspacePackage[] };
+type WorkspaceProjects = { rootDir: string; packages?: ReadonlyArray<WorkspacePackage> };
 
-export function getWorkspaceProjectPaths({ rootDir, packages }: WorkspaceProjects): string[] {
+export function getWorkspaceProjectPaths({ rootDir, packages }: WorkspaceProjects): Array<string> {
   return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
 }
 
@@ -88,7 +88,7 @@ export function collectRetainedImportDependencies(
 // `projectUsesVitestDirectly`.
 export function workspaceUsesVitestDirectly(
   rootDir: string,
-  packages: WorkspacePackage[] | undefined,
+  packages: Array<WorkspacePackage> | undefined,
   preserveNuxtVitestImports = true,
   protectedVitestImportOwners?: ReadonlySet<string>,
 ): boolean {
@@ -193,7 +193,7 @@ const PLAYWRIGHT_PROVIDER_SPECIFIER_HINTS = [
 
 // Per-provider source-scan hint lists, used to build the `providerSourceModes`
 // map passed to `rewritePackageJson`.
-const BROWSER_PROVIDER_SPECIFIER_HINTS: Record<string, readonly string[]> = {
+const BROWSER_PROVIDER_SPECIFIER_HINTS = {
   [PLAYWRIGHT_PROVIDER]: PLAYWRIGHT_PROVIDER_SPECIFIER_HINTS,
 };
 
@@ -269,7 +269,7 @@ export function sourceTreeMatches(
   const skipDirs = options.skipDirs ?? VITEST_SCAN_SKIP_DIRS;
   const extensions = options.extensions ?? VITEST_SCAN_EXTENSIONS;
   function scanDir(dir: string, isRoot: boolean): boolean {
-    let entries: fs.Dirent[];
+    let entries: Array<fs.Dirent>;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
@@ -306,10 +306,7 @@ export function sourceTreeMatches(
           if (entry.name === 'package.json') {
             // Check alias targets and inline scripts without counting dependency
             // declarations as uses. Serialization includes conditional targets.
-            const pkg = JSON.parse(content) as DependencyBag & {
-              imports?: unknown;
-              scripts?: unknown;
-            };
+            const pkg = parseJsonObject(content);
             if (options.matchesPackage?.(dir, pkg)) {
               return true;
             }
@@ -329,14 +326,14 @@ export function sourceTreeMatches(
   return scanDir(projectPath, true);
 }
 
-function sourceTreeReferencesAny(projectPath: string, hints: readonly string[]): boolean {
+function sourceTreeReferencesAny(projectPath: string, hints: ReadonlyArray<string>): boolean {
   return sourceTreeMatches(projectPath, (content) => hints.some((hint) => content.includes(hint)));
 }
 
-function findPackageTsconfigFiles(projectPath: string): string[] {
-  const files: string[] = [];
+function findPackageTsconfigFiles(projectPath: string): Array<string> {
+  const files: Array<string> = [];
   const scanDir = (dir: string, isRoot: boolean): void => {
-    let entries: fs.Dirent[];
+    let entries: Array<fs.Dirent>;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {
@@ -399,7 +396,7 @@ export function usesWebdriverioProvider(projectPath: string): boolean {
 // no-longer-bundled) provider + its framework peer even when no dep is declared
 // yet (e.g. a `vite.config.ts` importing the provider via a `vite-plus/test`
 // shim). Mirrors `usesWebdriverioProvider`'s scan for each provider.
-export function collectProviderSourceModes(projectPath: string): Record<string, boolean> {
+export function collectProviderSourceModes(projectPath: string) {
   const modes: Record<string, boolean> = {};
   for (const provider of OPT_IN_BROWSER_PROVIDERS) {
     modes[provider] = sourceTreeReferencesAny(
@@ -500,7 +497,7 @@ export function collectInstallDependencyNames(pkg?: DependencyBag): Set<string> 
 // newly injected packages are not installed until after source cleanup.
 export function collectOxlintDependencyNames(
   rootDir: string,
-  packages?: readonly { path: string }[],
+  packages?: ReadonlyArray<{ path: string }>,
 ): Map<string, ReadonlySet<string>> {
   const names = new Map<string, ReadonlySet<string>>();
   for (const dir of [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))]) {
@@ -519,7 +516,7 @@ export function collectOxlintDependencyNames(
  */
 export function dropDeadOxlintPluginsDependency(
   rootDir: string,
-  packages?: readonly { path: string }[],
+  packages?: ReadonlyArray<{ path: string }>,
   originalDependencies: ReadonlyMap<string, ReadonlySet<string>> = collectOxlintDependencyNames(
     rootDir,
     packages,

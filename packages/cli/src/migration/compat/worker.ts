@@ -21,7 +21,10 @@ function importRuleMetadata(lint: OxlintConfig): OxlintConfig {
   };
 }
 
-function writeWorkerResult(prefix: string, result: object): void {
+function writeWorkerResult(
+  prefix: string,
+  result: { lint: OxlintConfig | null } | { warnings: Array<string> },
+): void {
   writeSync(process.stdout.fd, `${prefix}${JSON.stringify(result)}\n`);
 }
 
@@ -55,4 +58,8 @@ async function main(): Promise<void> {
 
 // Exit even if project plugins left active handles. On failure, the parent
 // detects the missing result and applies the policy for the requested probe.
-void main().finally(() => process.exit(0));
+try {
+  await main();
+} finally {
+  process.exit(0);
+}

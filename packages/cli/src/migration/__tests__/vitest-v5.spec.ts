@@ -21,7 +21,7 @@ import { migrateVitestV5Config } from '../vitest-v5/config.ts';
 import { migrateVitestV5Source } from '../vitest-v5/source.ts';
 
 const v4 = { preserveV4: true, browser: true };
-const directories: string[] = [];
+const directories: Array<string> = [];
 afterEach(() => {
   for (const directory of directories.splice(0)) {
     fs.rmSync(directory, { recursive: true, force: true });
@@ -83,14 +83,11 @@ test('clock', () => { vi.setSystemTime(0); });`,
       });
       const plan = planProject(root);
       expect(plan.projects[0].options.temporalPolyfill).toBe(true);
-      const expected = vitest.startsWith('4')
-        ? [
-            expect.objectContaining({
-              code: 'temporal-system-time',
-              file: path.join(root, 'clock.test.ts'),
-            }),
-          ]
-        : [];
+      const temporalFinding = expect.objectContaining({
+        code: 'temporal-system-time',
+        file: path.join(root, 'clock.test.ts'),
+      });
+      const expected = vitest.startsWith('4') ? [temporalFinding] : [];
       expect(plan.findings.filter(({ code }) => code === 'temporal-system-time')).toEqual(expected);
       applyVitestV5Migration(plan);
       expect(
@@ -503,7 +500,7 @@ test('async', () => { expect(Promise.resolve(1)).resolves.toBe(1); });`,
     expect(plan.changes.find(({ file }) => file.endsWith('example.test.ts'))?.after).toContain(
       'await expect(',
     );
-    expect(() => applyVitestV5Migration(plan)).toThrow();
+    expect(() => applyVitestV5Migration(plan)).toThrow(/Vitest/i);
   });
 });
 
@@ -1629,12 +1626,12 @@ describe('Vitest v5 source migration', () => {
       );
       expect(result.findings).toEqual([]);
       expect(source(result.content).content).toBe(result.content);
-      const calls: unknown[][] = [];
+      const calls: Array<Array<unknown>> = [];
       runInNewContext(result.content.replace(/^import[^;]+;/, ''), {
-        [api]: (...args: unknown[]) => calls.push(args),
+        [api]: (...args: Array<unknown>) => calls.push(args),
       });
       expect(calls[0]).toHaveLength(3);
-      expect(calls[0][1]).toEqual({ concurrent: false, timeout: 15000 });
+      expect(calls[0][1]).toEqual({ concurrent: false, timeout: 15_000 });
     }
   });
 
@@ -3267,16 +3264,17 @@ export default defineConfig(CONFIG);`,
       '.git': 'gitdir: external',
       '.gitignore': '.vitest/\n',
       'packages/unit/package.json': JSON.stringify({ devDependencies: { vitest: '4.1.11' } }),
-      ...(nested ? { 'packages/unit/.git': 'gitdir: nested' } : {}),
+      ...(nested ? { 'packages/unit/.git': 'gitdir: nested' } : undefined),
     });
     const directory = path.join(root, 'packages/unit');
     const plan = planProject(directory);
     applyVitestV5Migration(plan);
     expect(finishVitestV5Migration(plan)).toEqual([]);
     expect(fs.existsSync(path.join(directory, '.gitignore'))).toBe(nested);
-    if (nested) {
-      expect(fs.readFileSync(path.join(directory, '.gitignore'), 'utf8')).toBe('.vitest/\n');
-    }
+    const ignored = nested
+      ? fs.readFileSync(path.join(directory, '.gitignore'), 'utf8')
+      : undefined;
+    expect(ignored).toBe(nested ? '.vitest/\n' : undefined);
   });
 
   it('preserves defaults in a config created by another migration step', () => {

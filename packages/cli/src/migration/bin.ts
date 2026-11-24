@@ -2,16 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual, styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  confirm as promptConfirm,
+  isCancel,
+  log as promptLog,
+  outro as promptOutro,
+  spinner as promptSpinner,
+} from '@voidzero-dev/vite-plus-prompts';
 import { satisfies } from 'verkit';
 
 import { parseMigrateArgs } from '../../binding/index.js';
-import {
-  PackageManager,
-  type WorkspaceInfo,
-  type WorkspaceInfoOptional,
-  type WorkspacePackage,
-} from '../types/index.ts';
+import type { WorkspaceInfo, WorkspaceInfoOptional, WorkspacePackage } from '../types/index.ts';
+import { PackageManager } from '../types/index.ts';
 import { writeAgentInstructions } from '../utils/agent.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
 import { isForceOverrideMode, SETUP_VP_VERSION, VITE_PLUS_VERSION } from '../utils/constants.ts';
@@ -42,6 +44,12 @@ import { checkRolldownCompatibility } from './compat/runner.ts';
 import { detectMigrationWarnings } from './detector.ts';
 import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
 import { handleInstallResult } from './install-result.ts';
+import type {
+  Framework,
+  NodeVersionManagerDetection,
+  VitestV5MigrationPlan,
+  RetainedImportDependencies,
+} from './migrator.ts';
 import {
   addFrameworkShim,
   applyVitestV5Migration,
@@ -101,20 +109,14 @@ import {
   warnPackageLevelPrettier,
   warnUnresolvedImportRuleConfig,
   vitestV5NeedsMigration,
-  type Framework,
-  type NodeVersionManagerDetection,
-  type VitestV5MigrationPlan,
-  type RetainedImportDependencies,
 } from './migrator.ts';
 import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
 import { addVitePlusRenovatePreset, findRenovateConfigToUpdate } from './renovate.ts';
-import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
-import {
-  collectMigrationSetupPlan,
-  collectTsupMigrationDecision,
-  type MigrationSetupPlan,
-} from './setup-plan.ts';
+import type { MigrationReport } from './report.ts';
+import { addMigrationWarning, createMigrationReport } from './report.ts';
+import type { MigrationSetupPlan } from './setup-plan.ts';
+import { collectMigrationSetupPlan, collectTsupMigrationDecision } from './setup-plan.ts';
 
 async function confirmNodeVersionFileMigration(
   interactive: boolean,
@@ -126,11 +128,11 @@ async function confirmNodeVersionFileMigration(
 
   const message = confirmMessageByFile[detection.file];
   if (interactive) {
-    const confirmed = await prompts.confirm({
+    const confirmed = await promptConfirm({
       message,
       initialValue: true,
     });
-    if (prompts.isCancel(confirmed)) {
+    if (isCancel(confirmed)) {
       cancelAndExit();
     }
     return confirmed;
@@ -142,7 +144,7 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
   const frameworkNames: Record<Framework, string> = { vue: 'Vue', astro: 'Astro' };
   const name = frameworkNames[framework];
   if (interactive) {
-    const confirmed = await prompts.confirm({
+    const confirmed = await promptConfirm({
       message:
         `Add TypeScript shim for ${name} component files (*.${framework})?\n  ` +
         styleText(
@@ -151,7 +153,7 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
         ),
       initialValue: true,
     });
-    if (prompts.isCancel(confirmed)) {
+    if (isCancel(confirmed)) {
       cancelAndExit();
     }
     return confirmed;
@@ -167,14 +169,14 @@ async function confirmRenovatePreset(
   if (!configPath || !interactive) {
     return configPath;
   }
-  const confirmed = await prompts.confirm({
+  const confirmed = await promptConfirm({
     message:
       'Group Vite+ and Vitest updates in Renovate?\n  ' +
       muted(`Adds group:vitePlus to ${displayRelative(configPath, rootDir)}.`),
     initialValue: true,
     testId: 'renovate',
   });
-  if (prompts.isCancel(confirmed)) {
+  if (isCancel(confirmed)) {
     cancelAndExit();
   }
   return confirmed ? configPath : undefined;
@@ -195,7 +197,7 @@ async function confirmYarnNodeModulesMode(
     return false;
   }
 
-  prompts.log.warn(`⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).`);
+  promptLog.warn(`⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).`);
   if (pnp.source === 'environment') {
     cancelAndExit(
       'YARN_NODE_LINKER=pnp overrides project configuration. Set it to node-modules or unset it, then re-run `vp migrate`.',
@@ -204,11 +206,11 @@ async function confirmYarnNodeModulesMode(
   }
 
   if (interactive) {
-    const confirmed = await prompts.confirm({
+    const confirmed = await promptConfirm({
       message: 'Switch this project to Yarn node-modules mode and continue?',
       initialValue: true,
     });
-    if (prompts.isCancel(confirmed)) {
+    if (isCancel(confirmed)) {
       cancelAndExit();
     }
     if (!confirmed) {
@@ -220,16 +222,16 @@ async function confirmYarnNodeModulesMode(
 }
 
 async function fixBaseUrlForWorkspace(
-  workspaceInfo: { rootDir: string; packages?: WorkspacePackage[] },
+  workspaceInfo: { rootDir: string; packages?: Array<WorkspacePackage> },
   fixBaseUrl: boolean,
   updateProgress?: (message: string) => void,
   report?: MigrationReport,
-): Promise<string[]> {
+): Promise<Array<string>> {
   if (!fixBaseUrl) {
     return [];
   }
 
-  const fixedProjectPaths: string[] = [];
+  const fixedProjectPaths: Array<string> = [];
   for (const projectPath of getWorkspaceProjectPaths(workspaceInfo)) {
     if (!hasBaseUrlInTsconfig(projectPath)) {
       continue;
@@ -262,7 +264,7 @@ async function fixBaseUrlForWorkspace(
 
 function hasBaseUrlInWorkspace(workspaceInfo: {
   rootDir: string;
-  packages?: WorkspacePackage[];
+  packages?: Array<WorkspacePackage>;
 }): boolean {
   return getWorkspaceProjectPaths(workspaceInfo).some(hasBaseUrlInTsconfig);
 }
@@ -273,7 +275,7 @@ function hasBaseUrlInWorkspace(workspaceInfo: {
 // the running counter + package path keeps the spinner moving instead of
 // stalling on a stale message.
 async function checkWorkspaceRolldownCompatibility(
-  workspaceInfo: { rootDir: string; packages?: WorkspacePackage[] },
+  workspaceInfo: { rootDir: string; packages?: Array<WorkspacePackage> },
   report: MigrationReport,
   updateProgress?: (message: string) => void,
 ): Promise<void> {
@@ -319,10 +321,13 @@ interface MigrationPlan extends MigrationSetupPlan {
   fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
-  frameworkShimFrameworks?: Framework[];
+  frameworkShimFrameworks?: Array<Framework>;
 }
 
-function getFrameworkShimCandidates(rootDir: string, packages?: WorkspacePackage[]): Framework[] {
+function getFrameworkShimCandidates(
+  rootDir: string,
+  packages?: Array<WorkspacePackage>,
+): Array<Framework> {
   const allDetectedFrameworks = new Set<Framework>(detectFramework(rootDir));
   for (const pkg of packages ?? []) {
     for (const framework of detectFramework(path.join(rootDir, pkg.path))) {
@@ -344,9 +349,9 @@ function getFrameworkShimCandidates(rootDir: string, packages?: WorkspacePackage
 async function collectFrameworkShimFrameworks(
   rootDir: string,
   options: MigrationOptions,
-  packages?: WorkspacePackage[],
-): Promise<Framework[] | undefined> {
-  const frameworkShimFrameworks: Framework[] = [];
+  packages?: Array<WorkspacePackage>,
+): Promise<Array<Framework> | undefined> {
+  const frameworkShimFrameworks: Array<Framework> = [];
   for (const framework of getFrameworkShimCandidates(rootDir, packages)) {
     const addShim = await confirmFrameworkShim(framework, options.interactive);
     if (addShim) {
@@ -358,8 +363,8 @@ async function collectFrameworkShimFrameworks(
 
 function addFrameworkShimsForWorkspace(
   rootDir: string,
-  frameworks: Framework[] | undefined,
-  packages: WorkspacePackage[] | undefined,
+  frameworks: Array<Framework> | undefined,
+  packages: Array<WorkspacePackage> | undefined,
   report: MigrationReport,
   updateMigrationProgress: (message: string) => void,
 ): boolean {
@@ -385,9 +390,9 @@ function addFrameworkShimsForWorkspace(
   return changed;
 }
 
-function hasEnabledOption(value: string | string[] | false | undefined): boolean {
+function hasEnabledOption(value: string | Array<string> | false | undefined): boolean {
   if (Array.isArray(value)) {
-    return value.some((item) => Boolean(item));
+    return value.some(Boolean);
   }
   return value !== undefined && value !== false && value !== '';
 }
@@ -590,7 +595,7 @@ function showMigrationSummary(options: {
     );
   }
   if (configUpdates > 0 || report.rewrittenImportFileCount > 0) {
-    const parts: string[] = [];
+    const parts: Array<string> = [];
     if (configUpdates > 0) {
       parts.push(
         `${configUpdates} ${configUpdates === 1 ? 'config update' : 'config updates'} applied`,
@@ -674,7 +679,7 @@ function showMigrationSummary(options: {
   }
 }
 
-function showMigrationWarnings(warnings: readonly string[]): void {
+function showMigrationWarnings(warnings: ReadonlyArray<string>): void {
   if (warnings.length === 0) {
     return;
   }
@@ -721,7 +726,7 @@ async function downloadSupportedPackageManager(options: {
     satisfies(downloadResult.version, '< 9.5.0')
   ) {
     failMigrationProgress('Migration failed');
-    prompts.log.error(
+    promptLog.error(
       `✘ pnpm@${downloadResult.version} is not supported by auto migration, please upgrade pnpm to >=9.5.0 first`,
     );
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
@@ -730,7 +735,7 @@ async function downloadSupportedPackageManager(options: {
     satisfies(downloadResult.version, '< 8.3.0')
   ) {
     failMigrationProgress('Migration failed');
-    prompts.log.error(
+    promptLog.error(
       `✘ npm@${downloadResult.version} is not supported by auto migration, please upgrade npm to >=8.3.0 first`,
     );
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
@@ -751,7 +756,7 @@ function completeVitestV5Migration(plan: VitestV5MigrationPlan, report: Migratio
 function applyRefreshedVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5MigrationPlan {
   const refreshed = refreshVitestV5Migration(plan);
   if (refreshed.findings.some((finding) => finding.severity === 'block')) {
-    prompts.log.warn(formatVitestV5Findings(refreshed));
+    promptLog.warn(formatVitestV5Findings(refreshed));
     cancelAndExit(
       'Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. Earlier setup steps may have changed project files; Vitest v5 edits were not applied.',
       1,
@@ -777,7 +782,7 @@ async function executeMigrationPlan(
   report.warnings.push(
     ...detectMigrationWarnings(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages),
   );
-  const migrationProgress = interactive ? prompts.spinner({ indicator: 'timer' }) : undefined;
+  const migrationProgress = interactive ? promptSpinner({ indicator: 'timer' }) : undefined;
   let migrationProgressStarted = false;
   const updateMigrationProgress = (message: string) => {
     if (!migrationProgress) {
@@ -825,7 +830,7 @@ async function executeMigrationPlan(
     updateMigrationProgress('Configuring Yarn node-modules mode');
     report.packageManagerBootstrapConfigured = configureYarnNodeModulesMode(workspaceInfo.rootDir);
     if (report.packageManagerBootstrapConfigured) {
-      prompts.log.success('✔ Switched Yarn to node-modules mode');
+      promptLog.success('✔ Switched Yarn to node-modules mode');
     }
   }
 
@@ -1102,7 +1107,7 @@ async function main() {
   let vitestV5Plan = planVitestV5Migration(workspaceInfoOptional);
   const vitestV5Preflight = formatVitestV5Findings(vitestV5Plan);
   if (vitestV5Plan.findings.some((finding) => finding.severity === 'block')) {
-    prompts.log.warn(vitestV5Preflight);
+    promptLog.warn(vitestV5Preflight);
     cancelAndExit(
       'Resolve the blocking Vitest v5 findings, then re-run `vp migrate`. No project files were changed.',
       1,
@@ -1115,7 +1120,7 @@ async function main() {
     | (PackageDependencies & { packageManager?: unknown; devEngines?: unknown })
     | null;
   if (workspaceInfoOptional.packageManager && !hasPackageManagerDeclaration(rootPkg)) {
-    prompts.log.warn(
+    promptLog.warn(
       `No package manager is declared in package.json; using ${workspaceInfoOptional.packageManager} for this migration without adding a pin. Run \`vp env pin\` to declare it explicitly.`,
     );
   }
@@ -1146,7 +1151,7 @@ async function main() {
     // report until then so review-only items do not force an up-to-date project
     // through dependency reconciliation on every run.
     const migrationProgress = options.interactive
-      ? prompts.spinner({ indicator: 'timer' })
+      ? promptSpinner({ indicator: 'timer' })
       : undefined;
     let migrationProgressStarted = false;
     const updateMigrationProgress = (message: string) => {
@@ -1326,15 +1331,15 @@ async function main() {
     ) {
       showMigrationWarnings(migrationWarnings);
       if (vitestV5Preflight) {
-        prompts.log.warn(vitestV5Preflight);
+        promptLog.warn(vitestV5Preflight);
       }
       for (const warning of coreMigrationResult.taskCacheWarnings) {
-        prompts.log.warn(warning);
+        promptLog.warn(warning);
       }
       if (skippedSetupCandidates) {
         log(FULL_MIGRATION_HINT);
       }
-      prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
+      promptOutro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
     }
     report.warnings.push(...migrationWarnings);
@@ -1573,7 +1578,7 @@ async function main() {
       updateMigrationProgress('Configuring Yarn node-modules mode');
       const yarnPnpConverted = configureYarnNodeModulesMode(workspaceInfoOptional.rootDir);
       if (yarnPnpConverted) {
-        prompts.log.success('✔ Switched Yarn to node-modules mode');
+        promptLog.success('✔ Switched Yarn to node-modules mode');
         report.packageManagerBootstrapConfigured = true;
         didMigrate = true;
         needsInstall = true;
@@ -1803,7 +1808,7 @@ async function main() {
       if (skippedSetupCandidates) {
         log(FULL_MIGRATION_HINT);
       }
-      prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
+      promptOutro(`This project is already using Vite+! ${accent('Happy coding!')}`);
     }
     return;
   }
@@ -1829,8 +1834,10 @@ async function main() {
   });
 }
 
-main().catch((err) => {
-  prompts.log.error(err.message);
-  console.error(err);
+try {
+  await main();
+} catch (error) {
+  promptLog.error(error instanceof Error ? error.message : String(error));
+  console.error(error);
   process.exit(1);
-});
+}

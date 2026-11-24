@@ -34,9 +34,9 @@ export interface MigrationReport {
   frameworkShimAdded: boolean;
   packageManagerBootstrapConfigured: boolean;
   vitePeerDependencyRuleRemoved: boolean;
-  dependencyUpgrades: DependencyVersionChange[];
-  warnings: string[];
-  manualSteps: string[];
+  dependencyUpgrades: Array<DependencyVersionChange>;
+  warnings: Array<string>;
+  manualSteps: Array<string>;
 }
 
 export function createMigrationReport(): MigrationReport {

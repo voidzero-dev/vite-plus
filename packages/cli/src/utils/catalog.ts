@@ -3,6 +3,7 @@ import { coerce, isGreaterThanOrEqual } from 'verkit';
 import { PackageManager } from '../types/index.ts';
 import { VITE_PLUS_NAME } from './constants.ts';
 import type { NpmWorkspaces } from './workspace.ts';
+import type { YamlMapping } from './yaml-value.ts';
 import type { YamlDocument } from './yaml.ts';
 
 export type CatalogDependencyResolver = ((
@@ -15,7 +16,7 @@ export type CatalogDependencyResolver = ((
 // Whether `version` is at least `minVersion`. A non-coercible version passes
 // only when it is one of the given dist-tags, which always point at a current
 // (feature-capable) release.
-export function versionAtLeast(version: string, minVersion: string, tags: string[]): boolean {
+export function versionAtLeast(version: string, minVersion: string, tags: Array<string>): boolean {
   const coerced = coerce(version);
   if (coerced) {
     return isGreaterThanOrEqual(coerced, minVersion);
@@ -70,12 +71,12 @@ export function createCatalogDependencyResolverFromCatalogs(
 }
 
 export function selectPreferredCatalogSpec(
-  catalog: Record<string, string> | undefined,
-  catalogs: Record<string, Record<string, string>> | undefined,
+  catalog: YamlMapping | undefined,
+  catalogs: Record<string, YamlMapping> | undefined,
   packageManager: PackageManager,
   version = 'latest',
 ): string {
-  const candidates: Array<{ spec: string; values: Record<string, string> }> = [];
+  const candidates: Array<{ spec: string; values: YamlMapping }> = [];
   if (catalog) {
     candidates.push({ spec: 'catalog:', values: catalog });
   }
@@ -108,7 +109,7 @@ export function getYamlCatalogPath(
   doc: YamlDocument,
   catalogSpec: string,
   packageManager: PackageManager,
-): string[] {
+): Array<string> {
   const catalogName = catalogSpec.slice('catalog:'.length);
   if (isNamedCatalog(catalogName, packageManager)) {
     return ['catalogs', catalogName];
@@ -127,9 +128,15 @@ export function getBunCatalogConfig(pkg: {
   catalog?: Record<string, string>;
   catalogs?: Record<string, Record<string, string>>;
 }) {
-  const nested = pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
-  // Bun uses the nested catalog configuration as a whole, without falling back to root entries.
-  return nested?.catalog != null || nested?.catalogs != null ? nested : pkg;
+  const { workspaces } = pkg;
+  if (workspaces && !Array.isArray(workspaces)) {
+    // Bun uses the nested catalog configuration as a whole, without falling back to root entries.
+    const catalog = workspaces.catalog ?? workspaces.catalogs;
+    if (catalog !== undefined && catalog !== null) {
+      return workspaces;
+    }
+  }
+  return pkg;
 }
 
 export function readBunCatalogDependencyResolver(

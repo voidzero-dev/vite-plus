@@ -30,8 +30,14 @@ it('refreshes selected versions, removes obsolete tarballs, and preserves other 
       { recursive: true },
     );
     const script = path.join(root, 'packages/tools/src/record-snapshot-registry.ts');
-    mkdirSync(path.dirname(script), { recursive: true });
-    cpSync(fileURLToPath(new URL('../record-snapshot-registry.ts', import.meta.url)), script);
+    for (const file of [
+      'packages/tools/src/record-snapshot-registry.ts',
+      'packages/cli/src/utils/json-value.ts',
+    ]) {
+      const target = path.join(root, file);
+      mkdirSync(path.dirname(target), { recursive: true });
+      cpSync(fileURLToPath(new URL(`../../../../${file}`, import.meta.url)), target);
+    }
 
     const manifestPath = path.join(directory, 'manifest.json');
     const original = JSON.parse(readFileSync(manifestPath, 'utf8'));

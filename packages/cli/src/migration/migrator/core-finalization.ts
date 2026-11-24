@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { rewriteScripts } from '../../../binding/index.js';
-import { type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
 import {
@@ -14,7 +14,8 @@ import {
   rewriteAllImports,
   rewriteTsconfigTypes,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
+import { rewriteScriptMap } from './shared.ts';
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
 
@@ -33,9 +34,9 @@ export function readRulesYaml(): string {
 // Each rule is one YAML document introduced by a `---` separator line. Split on the
 // separators instead of on blank lines, which a formatter is free to collapse. Comment
 // lines directly above a separator describe the rule below it, so they move with it.
-function splitRuleDocuments(yaml: string): string[] {
+function splitRuleDocuments(yaml: string): Array<string> {
   const lines = yaml.split('\n');
-  const documents: string[] = [];
+  const documents: Array<string> = [];
   let start = 0;
   for (const [index, line] of lines.entries()) {
     if (line.trimEnd() !== '---') {
@@ -72,7 +73,7 @@ export function readPrepareRulesYaml(): string {
 
 type CoreMigrationWorkspace = {
   rootDir: string;
-  packages?: WorkspacePackage[];
+  packages?: Array<WorkspacePackage>;
 };
 
 export type PendingCoreMigration = {
@@ -89,7 +90,7 @@ export type CoreMigrationFinalizationResult = {
   taskCacheConfig: boolean;
   // Kept out of the report so that review items alone do not make an
   // up-to-date project run the rest of the migration.
-  taskCacheWarnings: string[];
+  taskCacheWarnings: Array<string>;
 };
 
 function hasCorePackageScriptRewrites(projectPath: string): boolean {
@@ -115,11 +116,13 @@ function rewriteCorePackageScripts(projectPath: string): boolean {
     if (!pkg.scripts) {
       return undefined;
     }
-    const updated = rewriteScripts(JSON.stringify(pkg.scripts), getScriptRulesYaml(true));
+    const updated = rewriteScriptMap(pkg.scripts, (serialized) =>
+      rewriteScripts(serialized, getScriptRulesYaml(true)),
+    );
     if (!updated) {
       return undefined;
     }
-    pkg.scripts = JSON.parse(updated);
+    pkg.scripts = updated;
     changed = true;
     return pkg;
   });

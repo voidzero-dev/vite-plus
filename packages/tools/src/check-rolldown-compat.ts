@@ -1,20 +1,12 @@
-import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 import { findMinimumForRange, satisfies, tryParse, tryParseRange } from 'verkit';
 
-type PackageJson = {
-  version?: unknown;
-  dependencies?: Record<string, unknown>;
-};
-
-function readPackage(file: string): PackageJson {
-  return JSON.parse(readFileSync(file, 'utf8'));
-}
+import { readPackageManifest } from './package-manifest.ts';
 
 export function checkRolldownCompatibility(root: string): void {
-  const rolldown = readPackage(join(root, 'rolldown/packages/rolldown/package.json'));
+  const rolldown = readPackageManifest(join(root, 'rolldown/packages/rolldown/package.json'));
   const versionString = typeof rolldown.version === 'string' ? rolldown.version : '';
   const version = tryParse(versionString);
   if (!version) {
@@ -30,7 +22,7 @@ export function checkRolldownCompatibility(root: string): void {
   for (const [name, file] of consumers) {
     // Read upstream declarations: the workspace override can make incompatible
     // requirements resolve to the same installed Rolldown package.
-    const pkg = readPackage(file);
+    const pkg = readPackageManifest(file);
     const declaredRange =
       typeof pkg.dependencies?.rolldown === 'string' ? pkg.dependencies.rolldown : '';
     const range = declaredRange.trim() !== '' ? tryParseRange(declaredRange) : null;

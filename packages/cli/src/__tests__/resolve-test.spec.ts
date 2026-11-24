@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { test } from '../resolve-test.js';
-import { resolve, resolveBundled } from '../utils/constants.js';
+import { test } from '../resolve-test.ts';
+import { resolve, resolveBundled } from '../utils/constants.ts';
 
 describe('resolve-test', () => {
   it('resolves a vitest binary that exists', async () => {

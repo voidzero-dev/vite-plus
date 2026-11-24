@@ -8,12 +8,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import corePkg from '../../../core/package.json' with { type: 'json' };
 import cliPkg from '../../package.json' with { type: 'json' };
 import { resolveCore } from '../resolve-core.ts';
+import type { JsonObject } from '../utils/json-value.ts';
 
 // The core version encodes the bundled Vite version, so it differs from the
 // CLI version (rfcs/core-version-alignment.md).
 const CORE_VERSION = corePkg.version;
 
-function writePackageJson(directory: string, manifest: Record<string, unknown>): void {
+function writePackageJson(directory: string, manifest: JsonObject): void {
   mkdirSync(directory, { recursive: true });
   writeFileSync(join(directory, 'package.json'), JSON.stringify(manifest));
 }
@@ -159,17 +160,19 @@ describe('resolveCore', () => {
     rmSync(bundled, { recursive: true });
     // pnpm injects NODE_PATH, which can supply an unrelated Vite package.
     // Check the missing dependency in a process without global search paths.
-    execFileSync(process.execPath, [
-      '--no-global-search-paths',
-      '--input-type=module',
-      '--eval',
-      `import { strict as assert } from 'node:assert';
+    expect(() =>
+      execFileSync(process.execPath, [
+        '--no-global-search-paths',
+        '--input-type=module',
+        '--eval',
+        `import { strict as assert } from 'node:assert';
        import { resolveCore } from ${JSON.stringify(new URL('../resolve-core.ts', import.meta.url).href)};
        assert.throws(
          () => resolveCore('', ${JSON.stringify(project)}, ${JSON.stringify(cliModule)}),
          /Could not resolve the bundled Vite/,
        );`,
-    ]);
+      ]),
+    ).not.toThrow();
   });
 
   it.each(['project', 'bundled'])('rejects upstream Vite in the %s dependency', (location) => {
@@ -191,6 +194,6 @@ describe('resolveCore', () => {
   it('reports a missing core subpath instead of selecting a project copy', () => {
     writeCore(projectCore);
     rmSync(join(bundled, 'pack.js'));
-    expect(() => resolveCore('/pack', project, cliModule)).toThrow();
+    expect(() => resolveCore('/pack', project, cliModule)).toThrow(/pack/);
   });
 });

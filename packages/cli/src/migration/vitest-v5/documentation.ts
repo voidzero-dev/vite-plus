@@ -1,9 +1,10 @@
 import { documentationUrl } from '../../utils/documentation.ts';
+import { lookupSetting } from '../migrator/shared.ts';
 
 const guide = documentationUrl('/guide/vitest-v5');
 const upstream = 'https://vitest.dev/guide/migration/';
 
-const sections: Record<string, string> = {
+const sections = {
   'api-conflict': 'browser-api-is-replaced-by-the-top-level-api',
   'assertion-types': 'assertion-types-expose-return-and-received-types',
   'async-render': 'render-is-async-in-vitest-browser-vue-and-vitest-browser-svelte',
@@ -33,7 +34,7 @@ const sections: Record<string, string> = {
   'worker-id': 'worker-and-concurrency-ids-are-1-based',
 };
 
-export const localSections: Record<string, string> = {
+export const localSections = {
   'browser-provider': 'community-webdriverio-provider',
   'dynamic-config': 'resolve-migration-findings',
   'dynamic-project': 'resolve-migration-findings',
@@ -51,8 +52,8 @@ export const localSections: Record<string, string> = {
 
 /** Give future/unknown findings a useful fallback rather than omitting help. */
 export function vitestV5Documentation(code: string): string {
-  if (sections[code]) {
-    return `${upstream}#${sections[code]}`;
+  if (lookupSetting(sections, code)) {
+    return `${upstream}#${lookupSetting(sections, code)}`;
   }
-  return `${guide}#${localSections[code] ?? 'resolve-migration-findings'}`;
+  return `${guide}#${lookupSetting(localSections, code) ?? 'resolve-migration-findings'}`;
 }

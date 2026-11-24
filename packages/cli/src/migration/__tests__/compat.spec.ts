@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkManualChunksCompat } from '../compat/manual-chunks.js';
-import { createMigrationReport } from '../report.js';
+import { checkManualChunksCompat } from '../compat/manual-chunks.ts';
+import { createMigrationReport } from '../report.ts';
 
 describe('checkManualChunksCompat', () => {
   it('should warn when manualChunks is an object', () => {

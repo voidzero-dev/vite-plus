@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import url from 'node:url';
 
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { VITE_PLUS_VERSION, VITEST_VERSION } from '../../utils/constants.js';
+import { VITE_PLUS_VERSION, VITEST_VERSION } from '../../utils/constants.ts';
 
 // `collectToolchainVersionChanges` reads the bundled raw Vite version via
 // `await import('../versions.js')`. In the built CLI that resolves to
@@ -13,7 +12,7 @@ import { VITE_PLUS_VERSION, VITEST_VERSION } from '../../utils/constants.js';
 // source-mode tests the file does not exist, so create a stub at the resolved
 // source path (src/migration/versions.ts) for the duration of this spec.
 const STUB_BUNDLED_VITE = '8.1.0';
-const here = path.dirname(url.fileURLToPath(import.meta.url));
+const here = import.meta.dirname;
 const versionsSourcePath = path.resolve(here, '../versions.ts');
 const createdVersionsStub = !fs.existsSync(versionsSourcePath);
 if (createdVersionsStub) {
@@ -23,7 +22,7 @@ if (createdVersionsStub) {
   );
 }
 
-const { collectToolchainVersionChanges } = await import('../migrator.js');
+const { collectToolchainVersionChanges } = await import('../migrator.ts');
 
 afterAll(() => {
   if (createdVersionsStub && fs.existsSync(versionsSourcePath)) {

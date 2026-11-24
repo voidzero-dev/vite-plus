@@ -1,5 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises';
-import { createServer, type Server, type RequestListener } from 'node:http';
+import type { Server, RequestListener } from 'node:http';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -8,13 +9,15 @@ import { afterEach, expect, it } from 'vitest';
 
 import { RegistryCache, rewriteTarballs, upstreamUrl } from '../registry-cache.ts';
 
-const directories: string[] = [];
-const servers: Server[] = [];
+const directories: Array<string> = [];
+const servers: Array<Server> = [];
 
 afterEach(async () => {
   for (const server of servers.splice(0)) {
     server.closeAllConnections();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
   }
   await Promise.all(directories.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -28,7 +31,9 @@ async function directory() {
 async function upstream(handler: RequestListener) {
   const server = createServer(handler);
   servers.push(server);
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
   const address = server.address();
   if (!address || typeof address === 'string') {
     throw new Error('Missing test server address');
@@ -89,7 +94,7 @@ it('does not retain failed responses or partial downloads', async () => {
   });
   const cache = new RegistryCache(await directory());
   expect((await cache.get(url, 'application/json')).status).toBe(503);
-  await expect(cache.get(url, 'application/json')).rejects.toThrow();
+  await expect(cache.get(url, 'application/json')).rejects.toThrow(/aborted|socket|reset/i);
   expect((await cache.get(url, 'application/json')).body.toString()).toBe('complete');
   await cache.get(url, 'application/json');
   expect(requests).toBe(3);
@@ -201,10 +206,7 @@ it('routes tarballs through the case registry without changing unrelated metadat
       },
     },
     registry,
-  ) as {
-    homepage: string;
-    versions: Record<string, { dist: { tarball: string; integrity?: string } }>;
-  };
+  );
   expect(result.homepage).toBe(cdn);
   expect(result.versions['1.0.0'].dist).toEqual({
     tarball: `${registry}/example/-/example-1.0.0.tgz`,

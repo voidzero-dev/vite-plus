@@ -70,7 +70,9 @@ oxcNode.initializeLoader(tsconfig.path, tsconfig.source);
 oxcNode.setTransformDeps('typescript');
 
 setSourceMapsSupport(true, { nodeModules: true, generatedCode: true });
-routeHelperRequires(Module as never);
+// Node exposes this resolver on Module at runtime, but omits it from its public declarations.
+// @ts-expect-error _resolveFilename is Node's internal CommonJS resolver.
+routeHelperRequires(Module);
 
 const EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.cjs', '.cts', '.es6', '.es'];
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
@@ -112,25 +114,20 @@ const load: LoadHookSync = (url, context, nextLoad) => {
   if (isCommonJsRequire(context)) {
     return nextLoad(url, context);
   }
-  const result = oxcNode.load(
-    url,
-    context as never,
-    nextLoad as never,
-    HELPER_MODULE_NAME,
-  ) as LoadFnOutput & {
-    responseURL?: string;
-  };
+  const result = oxcNode.load(url, context, nextLoad, HELPER_MODULE_NAME);
   // oxc-node returns no source for a CommonJS file it leaves to the CommonJS loader,
   // which compiles it through `pirates` with an accurate source map; source that
   // another hook supplied is transformed and kept. A null source keeps `require()`
   // inside such a module working on every runtime (nodejs/node#62920).
-  if (result.format === 'commonjs' && result.source == null) {
+  if (result.format === 'commonjs' && (result.source === null || result.source === undefined)) {
     // `@types/node` does not model the null source Node.js accepts for CommonJS.
-    return {
+    const commonJs: LoadFnOutput & { responseURL: string } = {
       format: 'commonjs',
+      // @ts-expect-error Node accepts null to delegate CommonJS loading to its native loader.
       source: null,
       responseURL: result.responseURL ?? url,
-    } as unknown as LoadFnOutput;
+    };
+    return commonJs;
   }
   return result;
 };

@@ -32,7 +32,9 @@ describe('Vitest v5 benchmark migration', () => {
       };
       const script = result.content.replaceAll('import.meta.vitest', '__vitest');
       // Production evaluation must not import or register any test APIs.
-      expect(() => runInNewContext(script, { __vitest: undefined, work })).not.toThrow();
+      expect(() => {
+        runInNewContext(script, { __vitest: undefined, work });
+      }).not.toThrow();
       runInNewContext(script, {
         work,
         __vitest: {
@@ -195,7 +197,7 @@ measure('plain', () => results.push('plain'));`);
       expect(result.content).toContain(`import { test as _test } from 'vitest';`);
       expect(result.content).toContain(`_test('scope', async ({ bench: _bench })`);
       expect(result.content).toContain(`_test('plain', async ({ bench })`);
-      const results: unknown[] = [];
+      const results: Array<unknown> = [];
       const tests: Array<(context: unknown) => Promise<void>> = [];
       runInNewContext(result.content.replace(/^import[^\n]+\n/, ''), {
         results,
@@ -300,7 +302,7 @@ bench('comments', /* workload */ () => { /* inside */ work(); }, /* trailing */)
         true,
       );
       expect(result.findings).toEqual([]);
-      const events: string[] = [];
+      const events: Array<string> = [];
       const tests: Array<{ name: string; fn: (context: unknown) => Promise<void> }> = [];
       const context = {
         events,
@@ -334,8 +336,8 @@ bench('comments', /* workload */ () => { /* inside */ work(); }, /* trailing */)
   it('retains argument evaluation order and temporal dead zones', () => {
     const result = migrate(`bench(getName(), workload); const workload = () => {};`, true);
     expect(result.findings).toEqual([]);
-    const events: string[] = [];
-    expect(() =>
+    const events: Array<string> = [];
+    expect(() => {
       runInNewContext(result.content, {
         getName: () => {
           events.push('name');
@@ -344,8 +346,8 @@ bench('comments', /* workload */ () => { /* inside */ work(); }, /* trailing */)
         test: () => {
           events.push('test');
         },
-      }),
-    ).toThrow(/before initialization/);
+      });
+    }).toThrow(/before initialization/);
     expect(events).toEqual(['name']);
   });
 
@@ -415,7 +417,7 @@ function helper(bench) { bench('local', () => work()); }`;
 });`;
     const result = migrate(input, true);
     expect(result.findings).toEqual([]);
-    const results: number[] = [];
+    const results: Array<number> = [];
     const tests: Array<{ name: string; fn: (context: unknown) => Promise<void> }> = [];
     runInNewContext(result.content, {
       results,

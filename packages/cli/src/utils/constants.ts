@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 
 import corePkg from '../../../core/package.json' with { type: 'json' };
 import cliPkg from '../../package.json' with { type: 'json' };
+import { parseJsonValue, isStringRecord } from './json-value.ts';
 
 export const VITE_PLUS_NAME = 'vite-plus';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || cliPkg.version;
@@ -40,8 +41,16 @@ export const SETUP_VP_VERSION = 'v1.21.2';
 export const TSDOWN_MIGRATION_SKILL_URL =
   'https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md';
 
+function parseOverridePackages(text: string): Record<string, string> {
+  const value = parseJsonValue(text);
+  if (!isStringRecord(value)) {
+    throw new TypeError('VP_OVERRIDE_PACKAGES must map package names to version strings');
+  }
+  return value;
+}
+
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
-  ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
+  ? parseOverridePackages(process.env.VP_OVERRIDE_PACKAGES)
   : {
       vite: `${VITE_PLUS_CORE_ALIAS_PREFIX}${VITE_PLUS_CORE_VERSION}`,
       // The runner inlines its assertion and runner state. Its remaining

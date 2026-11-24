@@ -11,13 +11,12 @@
  */
 
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Upstream's declaration of `@oxc-node/cli/watch`; tsdown bundles the vendored sources
 // in its place (see `vendoredWatcherPlugin` in tsdown.config.ts).
 import { runWatch } from '../../../oxc-node/packages/cli/watch.js';
 
-const dist = path.dirname(fileURLToPath(import.meta.url));
+const dist = import.meta.dirname;
 
 process.exitCode = await runWatch(process.argv.slice(2), {
   name: 'vpx --watch',

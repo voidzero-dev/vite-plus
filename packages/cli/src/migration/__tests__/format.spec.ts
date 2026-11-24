@@ -6,18 +6,21 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import type { FormatRunner } from '../format.ts';
 import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from '../format.ts';
 import { createMigrationReport } from '../report.ts';
 
 describe('formatMigratedProject', () => {
   it('formats the project root', async () => {
-    const format = vi.fn().mockResolvedValue({
+    const format = vi.fn<FormatRunner>().mockResolvedValue({
       durationMs: 1,
       exitCode: 0,
       status: 'formatted',
     });
     const report = createMigrationReport();
-    const collectPaths = vi.fn().mockResolvedValue(['package.json', 'vite.config.ts']);
+    const collectPaths = vi
+      .fn<typeof collectChangedFormatPaths>()
+      .mockResolvedValue(['package.json', 'vite.config.ts']);
     const excludedPaths = new Set(['notes.md']);
 
     await expect(
@@ -40,7 +43,7 @@ describe('formatMigratedProject', () => {
     const originalCliEntry = process.argv[1];
     process.argv[1] = './packages/cli/src/migration/bin.ts';
     try {
-      const format = vi.fn().mockResolvedValue({
+      const format = vi.fn<FormatRunner>().mockResolvedValue({
         durationMs: 1,
         exitCode: 0,
         status: 'formatted',
@@ -50,7 +53,9 @@ describe('formatMigratedProject', () => {
       await expect(
         formatMigratedProject('/different/project', false, report, {
           format,
-          collectPaths: vi.fn().mockResolvedValue(['package.json']),
+          collectPaths: vi
+            .fn<typeof collectChangedFormatPaths>()
+            .mockResolvedValue(['package.json']),
         }),
       ).resolves.toBe(true);
       expect(format).toHaveBeenCalledWith('/different/project', false, ['package.json'], {
@@ -67,13 +72,15 @@ describe('formatMigratedProject', () => {
   });
 
   it('splits a very large changed-file set across multiple format invocations', async () => {
-    const format = vi.fn().mockResolvedValue({ durationMs: 1, exitCode: 0, status: 'formatted' });
+    const format = vi
+      .fn<FormatRunner>()
+      .mockResolvedValue({ durationMs: 1, exitCode: 0, status: 'formatted' });
     const report = createMigrationReport();
     const paths = Array.from(
       { length: 5000 },
       (_, index) => `packages/app/src/very/deeply/nested/module-${index}.ts`,
     );
-    const collectPaths = vi.fn().mockResolvedValue(paths);
+    const collectPaths = vi.fn<typeof collectChangedFormatPaths>().mockResolvedValue(paths);
 
     await expect(
       formatMigratedProject('/project', false, report, { format, collectPaths }),
@@ -86,9 +93,9 @@ describe('formatMigratedProject', () => {
   });
 
   it('skips formatting when migration changed no supported files', async () => {
-    const format = vi.fn();
+    const format = vi.fn<FormatRunner>();
     const report = createMigrationReport();
-    const collectPaths = vi.fn().mockResolvedValue([]);
+    const collectPaths = vi.fn<typeof collectChangedFormatPaths>().mockResolvedValue([]);
 
     await expect(
       formatMigratedProject('/project', false, report, { format, collectPaths }),
@@ -133,14 +140,14 @@ describe('formatMigratedProject', () => {
   });
 
   it('reports a formatter nonzero exit without throwing', async () => {
-    const format = vi.fn().mockResolvedValue({
+    const format = vi.fn<FormatRunner>().mockResolvedValue({
       durationMs: 1,
       exitCode: 1,
       status: 'failed',
     });
     const report = createMigrationReport();
     // Non-git project: whole-project formatting.
-    const collectPaths = vi.fn().mockResolvedValue(undefined);
+    const collectPaths = vi.fn<typeof collectChangedFormatPaths>().mockResolvedValue(undefined);
 
     await expect(
       formatMigratedProject('/project', false, report, { format, collectPaths }),
@@ -151,9 +158,9 @@ describe('formatMigratedProject', () => {
   });
 
   it('reports a formatter exception without throwing', async () => {
-    const format = vi.fn().mockRejectedValue(new Error('could not load config'));
+    const format = vi.fn<FormatRunner>().mockRejectedValue(new Error('could not load config'));
     const report = createMigrationReport();
-    const collectPaths = vi.fn().mockResolvedValue(undefined);
+    const collectPaths = vi.fn<typeof collectChangedFormatPaths>().mockResolvedValue(undefined);
 
     await expect(
       formatMigratedProject('/project', false, report, { format, collectPaths }),
