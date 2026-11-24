@@ -196,7 +196,7 @@ export async function waitForNpmPackagesFromEnv(
     registry: process.env.PUBLISH_REGISTRY ?? DEFAULT_NPM_REGISTRY,
     fetchImpl: fetch,
     minSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_MIN_SECONDS', 60),
-    timeoutSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_TIMEOUT_SECONDS', 600),
+    timeoutSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_TIMEOUT_SECONDS', 2400),
     pollSeconds: readNonNegativeInteger('PUBLISH_PROPAGATION_POLL_SECONDS', 5),
     sleep,
     now: Date.now,
