@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'node:child_process';
+import { execFileSync, execSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -121,6 +121,12 @@ if (project === 'rollipop') {
 }
 
 if (project === 'vinext') {
+  // Vite 8.4 checks file access per environment. Stack frames returned over
+  // HTTP must use the client environment's file access rules.
+  execFileSync('git', ['apply', join(import.meta.dirname, 'vinext-vite-8.4.patch')], {
+    cwd: repoRoot,
+  });
+
   // vinext sets `minimumReleaseAge` (24h) which blocks fresh upstream upgrades
   // (e.g. oxc 0.129.0 published <24h ago). Disable it for the ecosystem run so
   // upgrade-deps PRs can install transitive deps that were just published.

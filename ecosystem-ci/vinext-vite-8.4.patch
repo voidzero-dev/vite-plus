@@ -1,0 +1,17 @@
+--- a/packages/vinext/src/server/dev-stack-sourcemap.ts
++++ b/packages/vinext/src/server/dev-stack-sourcemap.ts
+@@ -604,5 +604,5 @@
+       const resolved = await environment.pluginContainer.resolveId(localPath);
+       if (!resolved || resolved.external || resolved.id.startsWith("\0")) continue;
+-      if (!isFileLoadingAllowed(server.config, stripQuery(resolved.id))) continue;
++      if (!isFileLoadingAllowed(server.environments.client.config, stripQuery(resolved.id))) continue;
+       // transformRequest resolves its argument itself, so pass the same id that
+       // was just resolved and checked. Passing the resolved id would resolve it
+--- a/tests/dev-stack-sourcemap.test.ts
++++ b/tests/dev-stack-sourcemap.test.ts
+@@ -60,4 +60,5 @@
+     environments: {
+       client: {
++        config: { server: { fs: { strict: false } } },
+         async transformRequest(viteUrl: string) {
+           transformRequests.push(`client:${viteUrl}`);
