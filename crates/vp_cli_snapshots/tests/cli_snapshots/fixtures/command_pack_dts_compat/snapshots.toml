@@ -20,3 +20,28 @@ steps = [
   ["vp", "pack"],
   ["vpt", "print-file", "dist/index.d.mts"],
 ]
+
+[[case]]
+name = "command_pack_dts_tsrs"
+vp = "global"
+local-registry = true
+comment = "Without typescript, the packed CLI generates inferred declarations with the bundled tsrs. The experimental tsrs notice does not fail --fail-on-warn. pnpm hoist:false keeps undeclared compilers out of reach."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite-plus\":\"latest\"}"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "pack", "--fail-on-warn"],
+  ["vpt", "print-file", "dist/index.d.mts"],
+]
+
+[[case]]
+name = "command_pack_dts_tsrs_hoisted"
+vp = "global"
+local-registry = true
+comment = "With pnpm's default hoisting and no typescript, no transitive typescript reaches the declaration plugin, so the bundled tsrs generates the declarations."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite-plus\":\"latest\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "minimumReleaseAge: 0"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "pack"],
+  ["vpt", "print-file", "dist/index.d.mts"],
+]
