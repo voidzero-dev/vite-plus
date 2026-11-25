@@ -68,6 +68,7 @@ function fixture() {
     VP_HOME: path.join(home, '.vite-plus'),
     PATH: canary + path.delimiter + (process.env.PATH ?? ''),
     CI: 'true',
+    VP_SELF_SETUP_NO_MODIFY_PATH: '1',
     VP_SKIP_DEPS_INSTALL: '1',
     VP_NODE_MANAGER: 'no',
   };

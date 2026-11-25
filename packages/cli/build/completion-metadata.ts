@@ -5,6 +5,13 @@ import { pathToFileURL } from 'node:url';
 
 type CLI = ReturnType<(typeof import('vitest/node'))['createCLI']>;
 
+// Spellings accepted by Vitest but omitted from its option declarations.
+const completionAliases = new Map([
+  ['--isolate', '--no-isolate'],
+  ['--fileParallelism', '--no-file-parallelism'],
+  ['--maxWorkers', '--max-workers'],
+]);
+
 export interface OptionMetadata {
   flags: string[];
   description: string;
@@ -39,8 +46,13 @@ export function extractCompletionMetadata(
       value.rawName.matchAll(/(?:^|,\s*)(--?[^\s,]+)/g),
       (match) => match[1],
     );
+    const primary = flags.find((flag) => flag.startsWith('--'));
+    const alias = primary && completionAliases.get(primary);
+    if (alias && !flags.includes(alias)) {
+      flags.push(alias);
+    }
     if (
-      !flags.some((flag) => flag.startsWith('--')) ||
+      !primary ||
       flags.length > 16 ||
       flags.some((flag) =>
         flag.startsWith('--')
@@ -51,10 +63,12 @@ export function extractCompletionMetadata(
     ) {
       throw new Error(`Unsupported Vitest option declaration: ${value.rawName}`);
     }
+    // Vitest also accepts a bare --browser to enable browser mode.
+    const requiresValue = value.required && !flags.includes('--browser');
     return {
       flags,
       description: value.description ?? '',
-      valueMode: value.isBoolean ? 'none' : value.required ? 'required' : 'optional',
+      valueMode: value.isBoolean ? 'none' : requiresValue ? 'required' : 'optional',
     };
   }
 

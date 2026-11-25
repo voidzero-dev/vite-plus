@@ -72,16 +72,7 @@ describe('generated metadata through native Rust', () => {
           options: [...data.globalOptions, ...command.options],
         })),
     ];
-    for (const scope of scopes) {
-      const flags = [...new Set(scope.options.flatMap((option) => option.flags))];
-      const flag = flags.find(
-        (candidate) =>
-          candidate.startsWith('--') &&
-          candidate.length >= 8 &&
-          flags.filter((value) => value.startsWith(candidate.slice(0, -1))).length === 1,
-      );
-      expect(flag, `Need a usable dynamic probe for ${scope.name || 'implicit run'}`).toBeDefined();
-      const words = ['vp', 'test', ...(scope.name ? [scope.name] : []), flag!.slice(0, -1)];
+    function complete(words: string[]) {
       const result = spawnSync(consumer, ['--', ...words], {
         cwd: project,
         encoding: 'utf8',
@@ -101,7 +92,29 @@ describe('generated metadata through native Rust', () => {
       expect(result.error).toBeUndefined();
       expect(result.status, result.stderr).toBe(0);
       expect(result.stderr).toBe('');
-      expect(result.stdout.split('\n').map((line) => line.split('\t')[0])).toContain(flag);
+      return result.stdout
+        .split('\n')
+        .map((line) => line.split('\t')[0])
+        .filter(Boolean);
+    }
+    expect(complete(['vp', 'test', '--no-i'])).toContain('--no-isolate');
+    expect(complete(['vp', 'test', '--no-file-p'])).toContain('--no-file-parallelism');
+    for (const flag of ['--maxWorkers', '--max-workers']) {
+      expect(complete(['vp', 'test', flag, ''])).toEqual([]);
+    }
+    expect(complete(['vp', 'test', '--browser', '--proje'])).toContain('--project');
+    expect(complete(['vp', 'test', '--browser', 'chromium', '--proje'])).toContain('--project');
+    for (const scope of scopes) {
+      const flags = [...new Set(scope.options.flatMap((option) => option.flags))];
+      const flag = flags.find(
+        (candidate) =>
+          candidate.startsWith('--') &&
+          candidate.length >= 8 &&
+          flags.filter((value) => value.startsWith(candidate.slice(0, -1))).length === 1,
+      );
+      expect(flag, `Need a usable dynamic probe for ${scope.name || 'implicit run'}`).toBeDefined();
+      const words = ['vp', 'test', ...(scope.name ? [scope.name] : []), flag!.slice(0, -1)];
+      expect(complete(words)).toContain(flag);
     }
   });
 
@@ -142,6 +155,7 @@ describe('generated metadata through native Rust', () => {
             _CLAP_IFS: '\n',
             // If setup accidentally runs, keep the regression probe offline, then fail on its writes.
             VP_SKIP_DEPS_INSTALL: '1',
+            VP_SELF_SETUP_NO_MODIFY_PATH: '1',
             VP_NODE_MANAGER: 'yes',
             CI: 'true',
           },
