@@ -227,6 +227,19 @@ describe('Renovate configuration', () => {
     },
   );
 
+  // Creating a file symlink on Windows needs extra privileges.
+  it.skipIf(process.platform === 'win32')('skips a linked config file', async () => {
+    const target = await config('shared/renovate.json', '{}');
+    await fs.symlink(target, path.join(root, 'renovate.json'));
+    expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
+  });
+
+  it('skips a config in a linked directory', async () => {
+    const target = await config('shared/renovate.json', '{}');
+    await fs.symlink(path.dirname(target), path.join(root, '.github'), 'junction');
+    expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
+  });
+
   it('ignores projects without Renovate and does not recreate a config removed after detection', async () => {
     await config('package.json', '{"name":"demo"}');
     expect(await findRenovateConfigToUpdate(root)).toBeUndefined();

@@ -99,6 +99,11 @@ export async function findRenovateConfigToUpdate(rootDir: string): Promise<strin
     const file = path.join(rootDir, name);
     try {
       const source = await fs.readFile(file, 'utf8');
+      // A linked config can be shared with other projects, so edit only a file in this workspace.
+      const [realRoot, realFile] = await Promise.all([fs.realpath(rootDir), fs.realpath(file)]);
+      if (realFile !== path.join(realRoot, name)) {
+        return undefined;
+      }
       const updated = await withVitePlusPreset(file, source);
       return updated === undefined ? undefined : file;
     } catch (error) {
