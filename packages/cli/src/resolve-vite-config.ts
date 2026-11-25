@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { findMonorepoRoot } from '../binding/index.js';
-import { withConfigMetadataResolution } from './define-config.ts';
+import { withConfigMetadataResolution } from './config-metadata.ts';
 import { VITE_CONFIG_FILES } from './utils/constants.ts';
 
 /**
