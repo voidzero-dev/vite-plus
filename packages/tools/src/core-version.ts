@@ -85,8 +85,8 @@ export function encodeCoreVersion(vite: string, n: number): string {
 }
 
 function developmentCoreVersion(vite: string, counter: number): string {
-  // Temporarily use stable core versions to test Vite 8.4 beta.1 with stable peer ranges.
-  if (vite === '8.4.0-beta.1') {
+  // Temporarily use stable core versions to test Vite 8.4 beta.2 with stable peer ranges.
+  if (vite === '8.4.0-beta.2') {
     return encodeCoreVersion('8.4.0', counter);
   }
   return isPrereleaseVersion(vite)

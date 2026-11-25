@@ -7,7 +7,7 @@
   "vite": {
     "repo": "https://github.com/vitejs/vite.git",
     "branch": "main",
-    "hash": "9a8d1a98922c5e445e8a618b8c27f84c63b9fbff"
+    "hash": "86bf3067e8fcaea2ad6226bb77adc72fbb2ab95a"
   },
   "oxc-node": {
     "repo": "https://github.com/oxc-project/oxc-node.git",
