@@ -37,6 +37,8 @@ pub use http::{
     HttpClientError, download_timeout, request_timeout, set_user_agent_version, shared_http_client,
     shared_http_client_without_redirects,
 };
+#[cfg(unix)]
+pub use interactivity::is_background_job;
 pub use interactivity::{
     is_ci_environment, is_interactive_terminal, is_stderr_terminal, is_stdin_terminal,
     is_stdout_terminal,

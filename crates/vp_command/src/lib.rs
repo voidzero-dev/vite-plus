@@ -400,8 +400,11 @@ impl Drop for TerminalStateGuard {
         // SAFETY: fd comes from stdin/stdout/stderr and the guard does not outlive the process
         let borrowed_fd = unsafe { BorrowedFd::borrow_raw(self.fd) };
 
-        // Best effort: ignore errors during cleanup
-        let _ = tcsetattr(borrowed_fd, SetArg::TCSANOW, &self.original);
+        // Best effort: ignore errors during cleanup. A background job would be stopped by
+        // SIGTTOU, and the shell restored its own modes when it moved this job there.
+        if !vp_shared::is_background_job(self.fd) {
+            let _ = tcsetattr(borrowed_fd, SetArg::TCSANOW, &self.original);
+        }
 
         // SAFETY: restores the signal disposition captured by save().
         if let Some(original_sigint) = self.original_sigint.take() {
@@ -744,5 +747,56 @@ mod tests {
                     .contains("could not resolve the full path of program 'npm-not-exists'")
             );
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn terminal_guard_leaves_a_background_terminal_alone() {
+        use std::os::fd::AsRawFd;
+
+        use nix::{libc, pty::openpty};
+
+        let pty = openpty(None, None).unwrap();
+        let slave = pty.slave.as_raw_fd();
+
+        // Only a new session can make the pty its controlling terminal, so fork.
+        // SAFETY: the children neither allocate nor take locks before `_exit`.
+        let status = unsafe {
+            let session = libc::fork();
+            assert!(session >= 0, "fork failed");
+            if session == 0 {
+                // A new session on the pty as stdin, whose group is the foreground job.
+                if libc::login_tty(slave) == -1 {
+                    libc::_exit(3);
+                }
+                let job = libc::fork();
+                if job == 0 {
+                    // Another group in the session is a background job.
+                    libc::setpgid(0, 0);
+                    let guard = TerminalStateGuard::save(libc::STDIN_FILENO);
+                    let saved = guard.is_some();
+                    drop(guard);
+                    libc::_exit(i32::from(!saved));
+                }
+                let mut status = 0;
+                libc::waitpid(job, &raw mut status, libc::WUNTRACED);
+                if libc::WIFSTOPPED(status) {
+                    libc::kill(job, libc::SIGKILL);
+                    libc::_exit(2);
+                }
+                libc::_exit(if libc::WIFEXITED(status) { libc::WEXITSTATUS(status) } else { 4 });
+            }
+            let mut status = 0;
+            libc::waitpid(session, &raw mut status, 0);
+            status
+        };
+
+        // A session that died from a signal also reports exit status 0.
+        assert!(libc::WIFEXITED(status), "session ended abnormally: {status:#x}");
+        assert_eq!(
+            libc::WEXITSTATUS(status),
+            0,
+            "1: guard not saved, 2: stopped by SIGTTOU, 3: no session, 4: job ended abnormally"
+        );
     }
 }
