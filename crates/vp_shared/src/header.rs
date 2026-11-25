@@ -314,6 +314,9 @@ fn query_terminal_colors(palette_indices: &[u8]) -> (Option<Rgb>, Vec<(u8, Rgb)>
         Ok(file) => file,
         Err(_) => return (None, vec![]),
     };
+    if crate::is_background_job(tty.as_raw_fd()) {
+        return (None, vec![]);
+    }
 
     struct RawGuard {
         fd: RawFd,
