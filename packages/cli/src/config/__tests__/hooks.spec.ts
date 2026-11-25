@@ -17,6 +17,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { describe, expect, it } from 'vitest';
 
@@ -191,7 +192,7 @@ describe('install', () => {
         waitForHook = closed;
         const deadline = Date.now() + 10_000;
         while (!existsSync(join(tmp, '.git', 'hook-started')) && Date.now() < deadline) {
-          await new Promise((resolve) => setTimeout(resolve, 20));
+          await delay(20);
         }
         expect(existsSync(join(tmp, '.git', 'hook-started'))).toBe(true);
 
