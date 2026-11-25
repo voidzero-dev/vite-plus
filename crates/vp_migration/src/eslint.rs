@@ -8,7 +8,6 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--no-eslintrc",
         "--debug",
         "--no-inline-config",
-        "--no-config-lookup",
         "--color",
         "--no-color",
         "--no-warn-ignored",
@@ -29,12 +28,8 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--cache-location",
         "--cache-file",
         "--cache-strategy",
-        "--global",
-        "--report-unused-inline-configs",
         "--flag",
         "--concurrency",
-        "--suppress-rule",
-        "--suppressions-location",
     ],
     flag_conversions: &[],
 };
@@ -150,13 +145,8 @@ mod tests {
             "--cache-location .eslintcache",
             "--cache-file .eslintcache",
             "--cache-strategy content",
-            "--global foo",
-            "--report-unused-inline-configs warn",
             "--flag unstable_config_lookup_from_file",
             "--concurrency 2",
-            "--suppress-rule no-console",
-            "--suppressions-location suppressions.json",
-            "--no-config-lookup",
             "--color",
             "--no-color",
             "--stats",
@@ -180,6 +170,18 @@ mod tests {
             rewrite_eslint_script("eslint --rule 'no-console: error' src"),
             "vp lint --rule 'no-console: error' src"
         );
+        for flags in [
+            "--no-config-lookup",
+            "--global appRuntime",
+            "--report-unused-inline-configs error",
+            "--suppress-rule no-console",
+            "--suppressions-location suppressions.json",
+        ] {
+            assert_eq!(
+                rewrite_eslint_script(&format!("eslint {flags} --fix src")),
+                format!("vp lint {flags} --fix src"),
+            );
+        }
         assert_eq!(
             rewrite_eslint_script("eslint --fix --pass-on-no-patterns $FILES"),
             "vp lint --fix --pass-on-no-patterns $FILES"
