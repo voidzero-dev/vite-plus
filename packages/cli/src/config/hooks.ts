@@ -52,9 +52,13 @@ function nestedDirname(depth: number): string {
 
 // The shell script that dispatches to user-defined hooks in <dir>/
 // `depth` = number of path segments in `dir` + 2 (for `_` subdir + hook filename)
-// The script must end with a newline: shells (dash) re-read the sourced file
-// past its old EOF when the final line is unterminated, so an in-flight rewrite
-// that appends bytes corrupts a running hook (see #3567).
+//
+// A hook can run `vp config` (for example `pnpm install` with `prepare: vp config`
+// in post-checkout), and vite-plus 1.8.0 and earlier rewrite this file in place.
+// dash and BusyBox ash read a sourced file in blocks of 1–8 KiB and read the next
+// block only when they need it, so they can parse bytes of the new file after the
+// hook (#3567). The brace group makes the shell parse the whole script before the
+// hook runs.
 export function hookScript(dir: string): string {
   // Count segments: ".vite-hooks" → 1, ".config/husky" → 2
   // Git accepts forward slashes on every platform; Windows also accepts its
@@ -64,6 +68,8 @@ export function hookScript(dir: string): string {
   const depth = segments + 2; // +2 for _ subdir and hook filename
   const rootExpr = nestedDirname(depth);
   return `#!/usr/bin/env sh
+# Read the whole file before the hook runs. A hook that runs vp config can rewrite it.
+{
 { [ "$HUSKY" = "2" ] || [ "$VP_GIT_HOOKS" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
 n=$(basename "$0")
 s=$(dirname "$(dirname "$0")")/$n
@@ -96,7 +102,9 @@ c=$?
 
 [ $c != 0 ] && echo "VITE+ - $n script failed (code $c)"
 [ $c = 127 ] && echo "VITE+ - command not found in PATH=$PATH"
-exit $c\n`;
+exit $c
+}
+`;
 }
 
 /** The per-hook stub written to `<dir>/_/<hook>`; it sources the `h` dispatcher. */
@@ -217,22 +225,30 @@ function describeUnsafeHookInstallPath(unsafePath: UnsafeHookInstallPath): strin
 }
 
 /**
- * Write a generated hook file without disturbing a shell that still has the
- * old file open: `writeFileSync` truncates in place, so a hook shell that
- * sourced the dispatcher and re-reads past the old EOF sees the new bytes
- * (see #3567). Renaming a fully written temp file over the target replaces
- * the inode on POSIX instead. Fall back to an in-place write when the rename
- * cannot replace the target (e.g. a locked destination on Windows).
+ * Replace a generated hook file with a new file. A hook shell that sourced an
+ * older dispatcher keeps that file open and can read more of it after the hook
+ * runs `vp config` (#3567). An in-place write would give that shell bytes of the
+ * new file. A rename leaves the shell on the old file. Fall back to an in-place
+ * write when the temp file or the rename fails, for example when Windows locks
+ * the target.
  */
 function writeGeneratedHookFile(filePath: string, content: string): void {
   const tempPath = `${filePath}.${process.pid}.tmp`;
-  writeFileSync(tempPath, content, { mode: 0o755 });
+  let tempCreated = false;
   try {
+    // `wx` refuses an existing path, so the write never follows a link at the
+    // temp path. `findUnsafeHookInstallPath` checks only the final names.
+    writeFileSync(tempPath, content, { flag: 'wx', mode: 0o755 });
+    tempCreated = true;
+    chmodSync(tempPath, 0o755);
     renameSync(tempPath, filePath);
+    return;
   } catch {
-    rmSync(tempPath, { force: true });
-    writeFileSync(filePath, content, { mode: 0o755 });
+    if (tempCreated) {
+      rmSync(tempPath, { force: true });
+    }
   }
+  writeFileSync(filePath, content, { mode: 0o755 });
   chmodSync(filePath, 0o755);
 }
 
