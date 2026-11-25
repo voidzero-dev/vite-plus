@@ -156,6 +156,41 @@ mod tests {
     }
 
     #[test]
+    fn test_rewrite_eslint_strips_flags_oxlint_rejects() {
+        // Each value flag must also drop its value; a boolean flag must keep the next token.
+        for flags in [
+            "-c eslint.config.mjs",
+            "--config eslint.config.mjs",
+            "-o report.txt",
+            "--cache-location .eslintcache",
+            "--cache-file .eslintcache",
+            "--cache-strategy content",
+            "--global foo",
+            "--rule 'no-console: error'",
+            "--report-unused-inline-configs warn",
+            "--flag unstable_config_lookup_from_file",
+            "--concurrency 2",
+            "--fix-type problem",
+            "--suppress-rule no-console",
+            "--suppressions-location suppressions.json",
+            "--no-config-lookup",
+            "--color",
+            "--no-color",
+            "--stats",
+            "--no-warn-ignored",
+            "--pass-on-no-patterns",
+            "--exit-on-fatal-error",
+            "--pass-on-unpruned-suppressions",
+        ] {
+            assert_eq!(
+                rewrite_eslint_script(&format!("eslint {flags} --fix .")),
+                "vp lint --fix .",
+                "{flags}"
+            );
+        }
+    }
+
+    #[test]
     fn test_rewrite_eslint_compound_commands() {
         // subshell (brush-parser adds spaces inside parentheses)
         assert_eq!(rewrite_eslint_script("(eslint --cache .)"), "( vp lint . )");
