@@ -113,6 +113,25 @@ pub enum SynthesizableSubcommand {
     },
 }
 
+impl SynthesizableSubcommand {
+    /// The bare app command that may select a target directory. Explicit `-C`,
+    /// including a directory that the global CLI already selected, and any
+    /// argument skip selection.
+    pub(super) fn bare_app_command(&self, explicit_chdir: bool) -> Option<&'static str> {
+        if explicit_chdir {
+            return None;
+        }
+        let (command, args) = match self {
+            Self::Dev { args } => ("dev", args),
+            Self::Build { args } => ("build", args),
+            Self::Preview { args } => ("preview", args),
+            Self::Pack { args } => ("pack", args),
+            _ => return None,
+        };
+        args.is_empty().then_some(command)
+    }
+}
+
 #[derive(Debug, clap::Args)]
 pub struct ToolchainArgs {
     /// Tool or package names to show
@@ -237,4 +256,37 @@ pub(crate) struct CapturedCommandOutput {
 /// both types are foreign here.
 pub(crate) fn exit_status_from(status: std::process::ExitStatus) -> ExitStatus {
     ExitStatus(vp_shared::exit_code_from_status(status) as u8)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SynthesizableSubcommand as Subcommand;
+
+    #[test]
+    fn only_bare_app_commands_select_a_target() {
+        for (subcommand, expected) in [
+            (Subcommand::Dev { args: vec![] }, Some("dev")),
+            (Subcommand::Build { args: vec![] }, Some("build")),
+            (Subcommand::Preview { args: vec![] }, Some("preview")),
+            (Subcommand::Pack { args: vec![] }, Some("pack")),
+            (Subcommand::Lint { args: vec![] }, None),
+            (Subcommand::Test { args: vec![] }, None),
+            (Subcommand::Build { args: vec!["--watch".into()] }, None),
+            (Subcommand::Build { args: vec!["--ssr".into()] }, None),
+            (Subcommand::Build { args: vec!["apps/web".into()] }, None),
+            (Subcommand::Dev { args: vec!["--host".into()] }, None),
+            (Subcommand::Preview { args: vec!["--help".into()] }, None),
+            (Subcommand::Pack { args: vec!["--root".into(), "src".into()] }, None),
+        ] {
+            assert_eq!(subcommand.bare_app_command(false), expected);
+            assert_eq!(subcommand.bare_app_command(true), None);
+        }
+    }
+
+    /// The script note in `vp_cli_help` cannot depend on Vite Task, so it
+    /// keeps its own copy of the task marker name.
+    #[test]
+    fn script_note_uses_the_vite_task_marker() {
+        assert_eq!(vp_shared::env_vars::VP_RUN, vt::MARKER_ENV_NAME);
+    }
 }

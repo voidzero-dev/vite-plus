@@ -3,13 +3,11 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
-mod app_target;
 mod execution;
 mod handler;
 mod help;
 mod lifecycle_env;
 mod resolver;
-mod script_note;
 mod types;
 
 use std::{borrow::Cow, env, ffi::OsStr, sync::Arc};
@@ -24,6 +22,8 @@ pub use types::{
     SynthesizableSubcommand, ToolchainArgs, ViteConfigResolverFn,
 };
 pub(crate) use types::{CapturedCommandOutput, EnvMap};
+use vp_app_target::AppTarget;
+use vp_cli_help::script_note;
 use vp_error::Error;
 pub use vp_shared::init_tracing;
 use vp_shared::{PrependOptions, env_vars, prepend_tools_to_path_env};
@@ -54,13 +54,15 @@ async fn execute_direct_subcommand(
     // A bare app command at a workspace root resolves its target first
     // (defaultPackage, package listing); the command then runs as if invoked
     // in the resolved directory (rfcs/cwd-flag.md).
-    let (target, workspace_root_hint) =
-        app_target::resolve_app_target(&subcommand, cwd, explicit_chdir)?;
-    let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
+    let (target, workspace_root_hint) = match subcommand.bare_app_command(explicit_chdir) {
+        Some(command) => vp_app_target::resolve_app_target(command, cwd)?,
+        None => (AppTarget::CurrentDir, None),
+    };
+    let retargeted = matches!(&target, AppTarget::Dir(_));
     let cwd = match &target {
-        app_target::AppTarget::Exit(status) => return Ok(Outcome::Exit(*status)),
-        app_target::AppTarget::Dir(dir) => dir,
-        app_target::AppTarget::CurrentDir => cwd,
+        AppTarget::Exit(code) => return Ok(Outcome::Exit(ExitStatus(*code))),
+        AppTarget::Dir(dir) => dir,
+        AppTarget::CurrentDir => cwd,
     };
 
     // A lone `--` uses bare-command target selection. Restore the separator

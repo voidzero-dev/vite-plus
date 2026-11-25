@@ -84,7 +84,7 @@ pub struct CliOptions {
     pub pack: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     pub doc: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
-    /// Whether the user supplied the global `-C` option.
+    /// Whether `-C` or the global CLI's app target selection fixed the working directory.
     pub explicit_chdir: Option<bool>,
     /// Return the `vp dev` command in `RunResult.devCommand` instead of
     /// starting it, so that the launcher runs Vite in its own process.
