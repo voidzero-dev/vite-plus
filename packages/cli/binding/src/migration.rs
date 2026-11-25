@@ -4,6 +4,17 @@ use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 use vp_migration::ImportRuleConfig;
 
+/// Classify the declaration compiler used by a Vite or standalone tsdown config.
+#[napi(ts_return_type = "'tsgo' | 'standalone' | 'manual' | 'none'")]
+pub fn classify_native_preview_pack_config(
+    source: String,
+    standalone: bool,
+    tsdown_config: Option<String>,
+) -> String {
+    vp_migration::classify_native_preview_pack_config(&source, standalone, tsdown_config.as_deref())
+        .to_owned()
+}
+
 /// JSON for a static lint block; undefined requests normal config resolution.
 #[napi]
 pub fn read_static_lint_config(root: String) -> Result<Option<String>> {

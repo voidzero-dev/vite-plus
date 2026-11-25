@@ -11,6 +11,11 @@ pn = "pn" # pnpm short alias
 Jod = "Jod" # Node.js v22 LTS codename
 flate = "flate" # flate2 crate name (gzip/deflate compression)
 
+[type.patch]
+extend-glob = ["*.patch"]
+# Git writes object IDs on patch index lines.
+extend-ignore-re = ['(?m)^index [0-9a-f]+\.\.[0-9a-f]+(?: [0-7]+)?$']
+
 [files]
 extend-exclude = [
   # Vendored PGP key/signature blobs: base64 armor trips the spell checker.

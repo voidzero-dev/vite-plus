@@ -27,6 +27,8 @@ describe('resolveViteRoot', () => {
       ['-m=production', 'packages/app'],
       ['--outDir=dist', 'packages/app'],
       ['--emptyOutDir', 'packages/app'],
+      ['packages/app', '--bypass-lock'],
+      ['--bypassLock', 'packages/app'],
       ['--no-clearScreen', 'packages/app'],
       ['-w', 'packages/app'],
       ['--strictPort', 'packages/app'],

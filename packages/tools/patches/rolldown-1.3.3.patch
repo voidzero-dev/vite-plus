@@ -1,0 +1,110 @@
+diff --git a/crates/rolldown_common/src/ecmascript/json_to_program.rs b/crates/rolldown_common/src/ecmascript/json_to_program.rs
+index bc4b147f9..68277b40c 100644
+--- a/crates/rolldown_common/src/ecmascript/json_to_program.rs
++++ b/crates/rolldown_common/src/ecmascript/json_to_program.rs
+@@ -266,7 +266,7 @@ mod tests {
+     let ast::Expression::NumericLiteral(number) = &properties[0].value else {
+       panic!("the last duplicate value must survive");
+     };
+-    assert_eq!(number.value, 2.0);
++    assert_eq!(number.value.to_bits(), 2.0_f64.to_bits());
+     assert!(properties[1].key.is_specific_static_name("kept"));
+     assert!(properties[2].key.is_specific_static_name("__proto__"));
+     assert!(properties[2].computed);
+diff --git a/crates/rolldown_sourcemap/src/resolve_sources.rs b/crates/rolldown_sourcemap/src/resolve_sources.rs
+index dc898d6c3..173126b14 100644
+--- a/crates/rolldown_sourcemap/src/resolve_sources.rs
++++ b/crates/rolldown_sourcemap/src/resolve_sources.rs
+@@ -78,6 +78,7 @@ mod tests {
+     )
+   }
+
++  #[cfg(not(windows))]
+   fn sources(map: &SourceMap) -> Vec<&str> {
+     map.get_sources().flatten().collect()
+   }
+diff --git a/packages/rolldown/src/plugin/bindingify-build-hooks.ts b/packages/rolldown/src/plugin/bindingify-build-hooks.ts
+index 4c285b7cd..65ecf8772 100644
+--- a/packages/rolldown/src/plugin/bindingify-build-hooks.ts
++++ b/packages/rolldown/src/plugin/bindingify-build-hooks.ts
+@@ -16,7 +16,6 @@ import { discardResult, isPromiseLike } from '../utils/misc';
+ import { transformModuleInfo } from '../utils/transform-module-info';
+ import {
+   copySourcemapObject,
+-  isEmptySourcemapFiled,
+   normalizeTransformHookSourcemap,
+ } from '../utils/transform-sourcemap';
+ import {
+@@ -426,13 +425,13 @@ function preProcessSourceMap(
+     typeof ret.map === 'object'
+       ? copySourcemapObject(ret.map)
+       : (JSON.parse(ret.map) as ExistingRawSourceMap);
+-  if (!isEmptySourcemapFiled(map.sources) || map.sources?.[0] === null) {
++  if (map.sources?.length && map.sources[0] !== '') {
+     // normalize original sourcemap sources
+     // Port form https://github.com/rollup/rollup/blob/master/src/utils/collapseSourcemaps.ts#L180-L188.
+     const directory = path.dirname(id) || '.';
+     const sourceRoot = map.sourceRoot || '.';
+-    map.sources = map.sources!.map((source) =>
+-      source === null ? null : path.resolve(directory, sourceRoot, source),
++    map.sources = map.sources.map((source) =>
++      source == null ? null : path.resolve(directory, sourceRoot, source),
+     );
+   }
+   return map;
+diff --git a/packages/rolldown/src/types/sourcemap.ts b/packages/rolldown/src/types/sourcemap.ts
+index 74529a768..82208de3a 100644
+--- a/packages/rolldown/src/types/sourcemap.ts
++++ b/packages/rolldown/src/types/sourcemap.ts
+@@ -6,7 +6,7 @@ export interface ExistingRawSourceMap {
+   file?: string | null | undefined;
+   mappings: string;
+   names?: string[] | undefined;
+-  sources?: (string | null)[] | undefined;
++  sources?: (string | null | undefined)[] | undefined;
+   sourcesContent?: (string | null | undefined)[] | undefined;
+   sourceRoot?: string | undefined;
+   version?: number | undefined; // make it optional to compat { mappings: '' }
+diff --git a/packages/rolldown/src/utils/transform-sourcemap.ts b/packages/rolldown/src/utils/transform-sourcemap.ts
+index 63b138488..33e9d5daa 100644
+--- a/packages/rolldown/src/utils/transform-sourcemap.ts
++++ b/packages/rolldown/src/utils/transform-sourcemap.ts
+@@ -50,10 +50,10 @@ export function normalizeTransformHookSourcemap(
+       ? copySourcemapObject(rawMap)
+       : (JSON.parse(rawMap) as ExistingRawSourceMap);
+   const source = map.sources?.[0];
+-  if (source === undefined || source === '' || (map.sources?.length === 1 && source !== id)) {
++  if (!map.sources?.length || source === '' || (map.sources.length === 1 && source !== id)) {
+     map.sources = [id];
+   }
+-  if (map.sources?.[0] !== null && isEmptySourcemapFiled(map.sourcesContent)) {
++  if (map.sources?.[0] != null && isEmptySourcemapFiled(map.sourcesContent)) {
+     map.sourcesContent = [originalCode];
+   }
+   return map;
+diff --git a/packages/rolldown/tests/behaviors/nullable-sourcemap-sources.test.ts b/packages/rolldown/tests/behaviors/nullable-sourcemap-sources.test.ts
+index 2bc6e5dfb..11fb6eb07 100644
+--- a/packages/rolldown/tests/behaviors/nullable-sourcemap-sources.test.ts
++++ b/packages/rolldown/tests/behaviors/nullable-sourcemap-sources.test.ts
+@@ -3,13 +3,18 @@ import { build } from 'rolldown';
+ import type { ExistingRawSourceMap } from 'rolldown';
+ import { expect, test } from 'vitest';
+
+-test.each(['load', 'transform'] as const)('%s maps preserve null source slots', async (hook) => {
++test.each([
++  { hook: 'load', missing: null },
++  { hook: 'load', missing: undefined },
++  { hook: 'transform', missing: null },
++  { hook: 'transform', missing: undefined },
++])('$hook maps preserve $missing source slots', async ({ hook, missing }) => {
+   const entry = path.join(import.meta.dirname, 'entry.js');
+   const code = 'export const first = 1;\nexport const answer = 42;';
+   const map: ExistingRawSourceMap = {
+     version: 3,
+-    sources: [null, 'original.js'],
+-    sourcesContent: [null, code],
++    sources: [missing, 'original.js'],
++    sourcesContent: [missing, code],
+     sourceRoot: 'src',
+     names: [],
+     mappings: 'AAAA;ACAA',

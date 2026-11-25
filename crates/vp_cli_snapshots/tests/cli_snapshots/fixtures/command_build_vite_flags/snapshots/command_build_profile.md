@@ -10,13 +10,13 @@ computing gzip size...
 dist/index.html  <size> kB │ gzip: <size> kB
 
 ✓ built in <duration>
-CPU profile written to <workspace>/vite-profile-0.cpuprofile
+CPU profile written to <workspace>/vite-profile.cpuprofile
 ```
 
-## `vpt stat-file vite-profile-0.cpuprofile --assert file`
+## `vpt stat-file vite-profile.cpuprofile --assert file`
 
 the profile is written to the project root
 
 ```
-vite-profile-0.cpuprofile: file
+vite-profile.cpuprofile: file
 ```

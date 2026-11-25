@@ -164,6 +164,23 @@ describe('assertCoreVersionMatchesVite', () => {
     ).not.toThrow();
   });
 
+  test('accepts the temporary Vite 8.4 beta versions only for development', () => {
+    const vite = '8.4.0-beta.2';
+    expect(initialCoreVersion(vite)).toBe('8.4.0');
+    expect(localCoreVersion(vite)).toBe('8.4.999');
+    for (const version of ['8.4.0', '8.4.999']) {
+      const core = manifest(version, vite, '1.7.0');
+      expect(() => assertCoreVersionMatchesVite(core, '1.7.0')).not.toThrow();
+      expect(() => assertCoreVersionMatchesVite(core, '1.7.0', { release: true })).toThrow(
+        'encodes Vite 8.4.0, but it bundles Vite 8.4.0-beta.2',
+      );
+    }
+    // The trial covers only the bundled beta, so the previous beta needs a prerelease core.
+    expect(() => assertCoreVersionMatchesVite(manifest('8.4.0', '8.4.0-beta.1'), '1.7.0')).toThrow(
+      'Set its version to 8.4.0-beta.1.vp.0',
+    );
+  });
+
   test('rejects a core version that encodes another Vite version', () => {
     expect(() => assertCoreVersionMatchesVite(manifest('8.3.4000'), '1.5.0')).toThrow(
       'Set its version to 8.3.5000',

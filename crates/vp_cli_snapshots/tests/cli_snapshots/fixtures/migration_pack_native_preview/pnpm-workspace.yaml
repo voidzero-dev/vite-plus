@@ -1,0 +1,4 @@
+packages:
+  - packages/*
+hoist: false
+minimumReleaseAge: 0

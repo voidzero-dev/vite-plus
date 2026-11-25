@@ -100,15 +100,15 @@
         "vite",
         "vitest",
         "vitest-dev",
-        "yuku-parser"
+        "yuku"
       ],
       "enabled": false
     },
     {
-      "description": "Core's postcss and fsevents ranges follow the bundled Vite version through upgrade-deps.ts --sync-bundled-deps.",
+      "description": "Core's postcss and optional native dependency ranges follow the bundled Vite version through upgrade-deps.ts --sync-bundled-deps.",
       "matchManagers": ["npm"],
       "matchFileNames": ["packages/core/package.json"],
-      "matchPackageNames": ["postcss", "fsevents"],
+      "matchPackageNames": ["postcss", "fsevents", "napi-windows-process-start-time"],
       "matchDepTypes": ["dependencies", "optionalDependencies"],
       "enabled": false
     },
@@ -164,7 +164,6 @@
         "append-only-vec",
         "arcstr",
         "async-channel",
-        "async-scoped",
         "base-encode",
         "base64-simd",
         "bitflags",
@@ -212,6 +211,7 @@
         "rolldown-ariadne",
         "rolldown-notify",
         "rolldown-notify-debouncer-full",
+        "rolldown-notify-napi",
         "rustc-hash",
         "schemars",
         "self_cell",
@@ -222,6 +222,7 @@
         "smallvec",
         "sugar_path",
         "supports-color",
+        "tempfile",
         "terminal_size",
         "tokio",
         "tracing",

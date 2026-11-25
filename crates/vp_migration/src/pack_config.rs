@@ -1,7 +1,9 @@
+mod native_preview;
 use std::{ops::Range, path::Path};
 
 use ast_grep_core::{Doc, Node, tree_sitter::StrDoc};
 use ast_grep_language::{LanguageExt, SupportLang};
+pub use native_preview::classify_native_preview_pack_config;
 
 use crate::vite_config::{
     is_direct_recognized_config_object, pair_key_matches, rewrite_pack_dts_generators,

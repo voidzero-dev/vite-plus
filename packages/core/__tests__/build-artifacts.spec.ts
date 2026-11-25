@@ -5,9 +5,15 @@ import url from 'node:url';
 
 import type { SgNode } from '@ast-grep/napi';
 import { Lang, parse as parseAst } from '@ast-grep/napi';
+import type { Plugin } from '@voidzero-dev/vite-plus-core';
+import { transformWithOxc } from '@voidzero-dev/vite-plus-core';
+import { build } from '@voidzero-dev/vite-plus-core/rolldown';
 import { init, parse } from 'es-module-lexer';
 import { glob } from 'tinyglobby';
+import { satisfies } from 'verkit';
 import { describe, expect, it } from 'vite-plus/test';
+
+import corePkg from '../package.json' with { type: 'json' };
 
 const coreDir = path.resolve(import.meta.dirname, '..');
 const distDir = path.join(coreDir, 'dist');
@@ -103,6 +109,30 @@ describe('build artifacts', () => {
     expect(references).toMatchSnapshot();
   });
 
+  it('accepts the bundled Oxc source map as a Vite plugin transform result', async () => {
+    const plugin = {
+      name: 'oxc-transform',
+      resolveId(id) {
+        return id;
+      },
+      load() {
+        return 'export const answer: number = 42';
+      },
+      async transform(code, id) {
+        const result = await transformWithOxc(code, id, { sourcemap: true });
+        return { code: result.code, map: result.map };
+      },
+    } satisfies Plugin;
+
+    const { output } = await build({
+      input: 'entry.ts',
+      plugins: [plugin],
+      output: { dir: '.', sourcemap: true },
+      write: false,
+    });
+    expect(output[0].map?.sources).toEqual(['entry.ts']);
+  });
+
   it('should include esm-shims.js in dist for tsdown shims support', async () => {
     const shimsPath = path.join(distDir, 'esm-shims.js');
     expect(fs.existsSync(shimsPath), `${shimsPath} should exist`).toBe(true);
@@ -133,7 +163,7 @@ describe('build artifacts', () => {
     expect(fs.existsSync(path.resolve(path.dirname(binPath), '../node/cli.js'))).toBe(true);
   });
 
-  it('bundles JavaScript Yuku packages and keeps the native parser external', async () => {
+  it('keeps the native Yuku package and its utilities external', async () => {
     await init();
     const tsdownDir = path.join(distDir, 'tsdown');
     const imports = fs.readdirSync(tsdownDir).flatMap((file) => {
@@ -143,27 +173,23 @@ describe('build artifacts', () => {
       const [imports] = parse(fs.readFileSync(path.join(tsdownDir, file), 'utf8'));
       return imports.map((entry) => entry.specifier);
     });
-    expect(imports).toContain('yuku-parser');
-    expect(imports).not.toContain('yuku-ast');
-    expect(imports).not.toContain('yuku-codegen');
+    expect(imports).toContain('yuku');
+    expect(imports).toContain('yuku/utils');
   });
 
-  it('pins the external parser to the Yuku versions used by the bundled dts plugin', () => {
+  it('pins Yuku to the version used by the bundled dts plugin', () => {
     const coreRequire = createRequire(path.join(coreDir, 'package.json'));
     const pkg = coreRequire('./package.json');
     const tsdownRequire = createRequire(coreRequire.resolve('tsdown/package.json'));
     const pluginRequire = createRequire(tsdownRequire.resolve('rolldown-plugin-dts/package.json'));
-    const parserVersion = pluginRequire('yuku-parser/package.json').version;
+    const yukuVersion = pluginRequire('yuku/package.json').version;
 
-    expect(pkg.dependencies['yuku-parser']).toBe(parserVersion);
-    expect(coreRequire('yuku-parser/package.json').version).toBe(parserVersion);
-    for (const name of ['yuku-ast', 'yuku-codegen']) {
-      expect(pluginRequire(`${name}/package.json`).version).toBe(parserVersion);
-    }
+    expect(pkg.dependencies.yuku).toBe(yukuVersion);
+    expect(coreRequire('yuku/package.json').version).toBe(yukuVersion);
   });
 
   // The bundled dts plugin resolves `vue-tsc`, `@volar/typescript`,
-  // `@vue/language-core` and `@typescript/native-preview` from core at runtime,
+  // `@vue/language-core` and `tsrs` from core at runtime,
   // so isolated installs such as pnpm's global virtual store need core to
   // declare them.
   it('should declare the peers of the bundled rolldown-plugin-dts as optional', () => {
@@ -180,5 +206,13 @@ describe('build artifacts', () => {
       expect(pkg.peerDependencies).toHaveProperty([name]);
       expect(pkg.peerDependenciesMeta).toHaveProperty([name], { optional: true });
     }
+  });
+
+  it('accepts the native TypeScript beta and existing stable compilers as peers', () => {
+    const range = corePkg.peerDependencies.typescript;
+    for (const version of ['5.9.3', '6.0.3', '7.0.2', '7.1.0-beta']) {
+      expect(satisfies(version, range)).toBe(true);
+    }
+    expect(satisfies('7.2.0-beta', range)).toBe(false);
   });
 });
