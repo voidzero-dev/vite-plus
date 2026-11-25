@@ -304,6 +304,7 @@ typedmap = "0.6.0"
 url = "2.5.9"
 uuid = "1.27.0"
 vfs = "0.13.0"
+vp_app_target = { path = "crates/vp_app_target" }
 vp_command = { path = "crates/vp_command" }
 vp_cli_help = { path = "crates/vp_cli_help" }
 vp_error = { path = "crates/vp_error" }
@@ -349,7 +350,9 @@ oxc = { version = "0.156.0", features = [
 oxc_allocator = { version = "0.156.0", features = ["pool"] }
 oxc_ast = "0.156.0"
 oxc_ecmascript = "0.156.0"
-oxc_parser = "0.156.0"
+# Only `vp_static_config` uses the parser directly. It reads plain config values, so the
+# global `vp` skips the regular expression parser. The `oxc` crate enables it for the binding.
+oxc_parser = { version = "0.156.0", default-features = false }
 oxc_span = "0.156.0"
 oxc_napi = "0.156.0"
 oxc_str = "0.156.0"

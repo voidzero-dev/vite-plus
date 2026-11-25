@@ -113,6 +113,21 @@ pub enum SynthesizableSubcommand {
     },
 }
 
+impl SynthesizableSubcommand {
+    /// The app command that may select a target directory, when its arguments
+    /// leave the selection to the CLI.
+    pub(super) fn bare_app_command(&self) -> Option<&'static str> {
+        let (command, args) = match self {
+            Self::Dev { args } => ("dev", args),
+            Self::Build { args } => ("build", args),
+            Self::Preview { args } => ("preview", args),
+            Self::Pack { args } => ("pack", args),
+            _ => return None,
+        };
+        vp_app_target::is_bare_app_command(args).then_some(command)
+    }
+}
+
 #[derive(Debug, clap::Args)]
 pub struct ToolchainArgs {
     /// Tool or package names to show
@@ -237,4 +252,31 @@ pub(crate) struct CapturedCommandOutput {
 /// both types are foreign here.
 pub(crate) fn exit_status_from(status: std::process::ExitStatus) -> ExitStatus {
     ExitStatus(vp_shared::exit_code_from_status(status) as u8)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SynthesizableSubcommand as Subcommand;
+
+    #[test]
+    fn only_app_commands_select_a_target() {
+        for (subcommand, expected) in [
+            (Subcommand::Dev { args: vec![] }, Some("dev")),
+            (Subcommand::Build { args: vec!["--".into()] }, Some("build")),
+            (Subcommand::Preview { args: vec![] }, Some("preview")),
+            (Subcommand::Pack { args: vec![] }, Some("pack")),
+            (Subcommand::Build { args: vec!["--watch".into()] }, None),
+            (Subcommand::Lint { args: vec![] }, None),
+            (Subcommand::Test { args: vec![] }, None),
+        ] {
+            assert_eq!(subcommand.bare_app_command(), expected);
+        }
+    }
+
+    /// The script note in `vp_cli_help` cannot depend on Vite Task, so it
+    /// keeps its own copy of the task marker name.
+    #[test]
+    fn script_note_uses_the_vite_task_marker() {
+        assert_eq!(vp_shared::env_vars::VP_RUN, vt::MARKER_ENV_NAME);
+    }
 }

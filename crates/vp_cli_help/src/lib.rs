@@ -7,6 +7,7 @@
 //! Shared help documents and diagnostics for Vite+ command-line interfaces.
 
 pub mod error;
+pub mod script_note;
 
 use std::{borrow::Cow, fmt::Write as _, io::Write as _};
 
