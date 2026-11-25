@@ -54,7 +54,6 @@ async function main() {
 try {
   process.exitCode = await main();
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`${message}\n`);
+  console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 }

@@ -50,6 +50,7 @@ export default defineConfig({
     options: { typeCheck: true },
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {
+      "no-console": ["error", { allow: ["error"] }],
       "typescript/no-non-null-assertion": "off",
       "vite-plus/prefer-vite-plus-imports": "error",
     },
