@@ -393,6 +393,16 @@ mod tests {
     }
 
     #[test]
+    fn test_npm_clears_inherited_package_config() {
+        for version in ["6.14.18", "11.0.0"] {
+            let command =
+                expect_run(resolve(&npm(version), dlx_args("vp-test-echo@1.0.0", &[])).outcome);
+
+            assert_eq!(command.env.get("npm_config_package").map(String::as_str), Some(""));
+        }
+    }
+
+    #[test]
     fn test_yarn_v1_fallback_to_npx() {
         let resolution = resolve(&yarn("1.22.19"), dlx_args("create-vue", &["my-app"]));
         let command = expect_run(resolution.outcome);
