@@ -22,6 +22,9 @@ impl ResolvedCommand {
         if matches!(program.as_str(), "npm" | "npx") {
             // Include npm/npx fallbacks: Vite+ manages their versions too.
             env.insert("npm_config_update_notifier".to_string(), "false".to_string());
+            // `npx --package=vite-plus vp ...` exports `npm_config_package`. If inherited,
+            // `npm exec -- <spec>` runs `<spec>` as a bin of that package instead.
+            env.insert("npm_config_package".to_string(), String::new());
         }
         Self { program, args: Vec::new(), env, pre_run: Vec::new() }
     }

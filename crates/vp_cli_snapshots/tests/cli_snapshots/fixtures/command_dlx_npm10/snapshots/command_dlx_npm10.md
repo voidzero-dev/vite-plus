@@ -39,6 +39,14 @@ should run specific version
 hello
 ```
 
+## `npm_config_package=vp-test-upper vp dlx -s vp-test-echo@1.0.0 hello`
+
+should ignore `npm_config_package` from an outer `npx --package`
+
+```
+hello
+```
+
 ## `vp dlx -s @vp-test/cli@npm:vp-test-echo@1.0.0 hello`
 
 npm selects the binary rather than using the scoped alias name
