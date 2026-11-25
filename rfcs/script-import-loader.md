@@ -88,6 +88,12 @@ CommonJS resolution, JSX defaults, or supported decorator syntax. The acceptance
 claim is complete replacement of the **preload integration surface**, not identical
 output for every program accepted by tsx.
 
+[Glob imports](./vpx-script-execution.md#glob-imports) are a proposal for the shared
+loader. With them, the public entry expands `import.meta.glob` as `vpx` does.
+Node.js' own watch mode does not read the glob report of the loader. It restarts
+only for files that the script loaded. `vpx --watch` also restarts when a matching
+file is created or deleted.
+
 The first nonempty environment variable in this order selects one tsconfig for
 resolution and transforms:
 
