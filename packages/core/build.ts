@@ -71,6 +71,7 @@ await bundleRolldown();
 await buildVite();
 await bundleTsdown();
 await brandTsdown();
+await patchTsdownNativePreview();
 await wireBundledTsdownExtensions();
 generateLicenseFile({
   title: 'Vite-Plus core license',
@@ -485,16 +486,15 @@ async function bundleTsdown() {
   // in and they cannot be bundled. Both are core `dependencies`, so they resolve
   // at runtime and CSS bundling works without users installing anything.
   //
-  // `yuku-parser` (used by `rolldown-plugin-dts`) loads native bindings through
-  // `yuku-core`. Keep it external and declare it as a core dependency so the
-  // native loader resolves its platform package at runtime. Pin its version
-  // to the one resolved by the bundled plugin. `yuku-ast` and
-  // `yuku-codegen` are pure JavaScript in Yuku 0.19 and are bundled into core.
+  // `yuku` (used by `rolldown-plugin-dts`) loads native bindings through its
+  // optional platform packages. Keep it external and declare it as a core
+  // dependency so the native loader resolves its platform package at runtime.
+  // Pin its version to the one resolved by the bundled plugin.
   const tsdownExternal = [
     ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
     'lightningcss',
     'postcss',
-    'yuku-parser',
+    'yuku',
   ];
   const isExternal = (id: string) => tsdownExternal.some((e) => id === e || id.startsWith(`${e}/`));
 
@@ -669,6 +669,57 @@ async function brandTsdown() {
   }
 }
 
+// dts 0.29 selects the legacy tsgo CLI only for typescript@7.0. Preserve the
+// previous @typescript/native-preview fallback for consumers pairing it with
+// TypeScript 5.x, including isolated installs that resolve core's optional peer.
+async function patchTsdownNativePreview() {
+  const chunkFiles = await glob(toPosixPath(join(projectDir, 'dist/tsdown/*.js')), {
+    absolute: true,
+  });
+  const patches = [
+    {
+      name: 'legacy detection',
+      search:
+        'return moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && !!getPackageInfo("typescript")?.version.startsWith("7.0.") && !tryLoadTsgoApi(moduleUrl);',
+      replacement:
+        'return moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && !tryLoadTsgoApi(moduleUrl) && (getPackageInfo("typescript")?.version.startsWith("7.0.") || !!getPackageInfo("@typescript/native-preview"));',
+    },
+    {
+      name: 'executable resolution',
+      search: 'const pkgJsonPath = tryResolve("typescript/package.json");',
+      replacement:
+        'const pkgName = getPackageInfo("typescript")?.version.startsWith("7.0.") ? "typescript" : "@typescript/native-preview";\n\tconst pkgJsonPath = tryResolve(`${pkgName}/package.json`);',
+    },
+    {
+      name: 'compiler logging',
+      search: 'logger.info(`Emit types with ${styleText("underline", `typescript@${version}`)}`);',
+      replacement:
+        'logger.info(`Emit types with ${styleText("underline", `${pkgName}@${version}`)}`);',
+    },
+  ];
+  const patched = new Set<string>();
+  for (const chunkFile of chunkFiles) {
+    let content = await readFile(chunkFile, 'utf8');
+    let changed = false;
+    for (const { name, search, replacement } of patches) {
+      if (!content.includes(search)) {
+        continue;
+      }
+      content = content.replaceAll(search, replacement);
+      patched.add(name);
+      changed = true;
+    }
+    if (changed) {
+      await writeFile(chunkFile, content, 'utf8');
+    }
+  }
+  for (const { name } of patches) {
+    if (!patched.has(name)) {
+      throw new Error(`patchTsdownNativePreview: ${name} pattern not found`);
+    }
+  }
+}
+
 // Wire the bundled `@tsdown/exe` and `@tsdown/css` extensions into the bundled
 // tsdown so they load from the local chunks instead of resolving external
 // top-level packages. See https://github.com/voidzero-dev/vite-plus/issues/1586
@@ -768,10 +819,10 @@ async function mergePackageJson() {
   );
 
   // Merge peerDependencies from rolldown-plugin-dts, tsdown and vite. The bundled
-  // dts plugin still resolves `vue-tsc`, `@volar/typescript`,
-  // `@vue/language-core` and `@typescript/native-preview` from core at runtime,
-  // and its declarations import their types, so isolated installs need them
-  // declared here.
+  // dts plugin resolves `vue-tsc`, `@volar/typescript` and
+  // `@vue/language-core` from core at runtime, and its declarations import their
+  // types, so isolated installs need them declared here. The native-preview peer
+  // used by Vite+'s legacy tsgo fallback is restored explicitly below.
   destPkg.peerDependencies = {
     ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
@@ -788,6 +839,10 @@ async function mergePackageJson() {
   // `rolldown` is bundled into core (see bundleRolldown).
   delete destPkg.peerDependencies.rolldown;
   delete destPkg.peerDependenciesMeta.rolldown;
+
+  // Keep the legacy tsgo fallback available to consumers using native-preview.
+  destPkg.peerDependencies['@typescript/native-preview'] = '*';
+  destPkg.peerDependenciesMeta['@typescript/native-preview'] = { optional: true };
 
   // `@tsdown/exe` and `@tsdown/css` are bundled into core (see bundleTsdown), so
   // they must not be advertised as peers anymore. `lightningcss` (which the

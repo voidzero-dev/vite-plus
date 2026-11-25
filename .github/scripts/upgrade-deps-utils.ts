@@ -14,11 +14,16 @@ export function getBundledDependencyRanges(
   const coreRequire = createRequire(join(root, 'packages/core/package.json'));
   const tsdownRequire = createRequire(coreRequire.resolve('tsdown/package.json'));
   const pluginPath = tsdownRequire.resolve('rolldown-plugin-dts/package.json');
+  const pluginDependencies = readJsonObject(pluginPath).dependencies;
+  const yukuPackage =
+    isObjectValue(pluginDependencies) && typeof pluginDependencies.yuku === 'string'
+      ? 'yuku'
+      : 'yuku-parser';
   const vitePath = join(root, 'vite/packages/vite/package.json');
   // These packages stay external in packages/core/build.ts. Follow their
   // bundled consumers rather than independently selecting the latest releases.
   const sources: Array<{ path: string; field: DependencyField; name: string }> = [
-    { path: pluginPath, field: 'dependencies', name: 'yuku-parser' },
+    { path: pluginPath, field: 'dependencies', name: yukuPackage },
     { path: vitePath, field: 'dependencies', name: 'postcss' },
     { path: vitePath, field: 'optionalDependencies', name: 'fsevents' },
   ];
@@ -28,12 +33,12 @@ export function getBundledDependencyRanges(
     if (typeof range !== 'string' || range.trim() === '') {
       throw new Error(`Missing ${field}.${name} in ${path}; review core's externals`);
     }
-    if (name === 'yuku-parser') {
-      // Pin the runtime parser to the exact version resolved by the bundled plugin.
-      const parserPath = createRequire(path).resolve('yuku-parser/package.json');
-      const { version } = readJsonObject(parserPath);
+    if (name === 'yuku' || name === 'yuku-parser') {
+      // Pin the native Yuku runtime to the exact version resolved by the bundled plugin.
+      const yukuPath = createRequire(path).resolve(`${name}/package.json`);
+      const { version } = readJsonObject(yukuPath);
       if (typeof version !== 'string' || version.trim() === '') {
-        throw new Error(`Missing version in ${parserPath}; review core's externals`);
+        throw new Error(`Missing version in ${yukuPath}; review core's externals`);
       }
       range = version;
     }

@@ -207,11 +207,11 @@ catalogs:
       specifier: ^1.0.0
       version: 1.0.1
     '@tsdown/css':
-      specifier: '=0.23.4'
-      version: 0.23.4
+      specifier: '=0.23.5'
+      version: 0.23.5
     '@tsdown/exe':
-      specifier: '=0.23.4'
-      version: 0.23.4
+      specifier: '=0.23.5'
+      version: 0.23.5
     '@types/cross-spawn':
       specifier: ^6.0.6
       version: 6.0.6
@@ -324,8 +324,8 @@ catalogs:
       specifier: ^2.53.0
       version: 2.62.0
     rolldown-plugin-dts:
-      specifier: ^0.28.0
-      version: 0.28.8
+      specifier: ^0.29.0
+      version: 0.29.0
     rollup:
       specifier: ^4.63.0
       version: 4.63.1
@@ -342,8 +342,8 @@ catalogs:
       specifier: ^0.2.15
       version: 0.2.17
     tsdown:
-      specifier: '=0.23.4'
-      version: 0.23.4
+      specifier: '=0.23.5'
+      version: 0.23.5
     tsrs:
       specifier: '=7.1.0-beta.tsrs5'
       version: 7.1.0-beta.tsrs5
@@ -551,7 +551,7 @@ importers:
         version: 0.2.17
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs5)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       validate-npm-package-name:
         specifier: 'catalog:'
         version: 8.0.0
@@ -618,6 +618,9 @@ importers:
       terser:
         specifier: ^5.16.0
         version: 5.51.2
+      tsrs:
+        specifier: '*'
+        version: 0.0.0
       tsx:
         specifier: ^4.8.1
         version: 4.23.15
@@ -633,9 +636,9 @@ importers:
       yaml:
         specifier: ^2.4.2
         version: 2.9.1
-      yuku-parser:
-        specifier: 0.19.0
-        version: 0.19.0
+      yuku:
+        specifier: 0.25.0
+        version: 0.25.0
     devDependencies:
       '@ast-grep/napi':
         specifier: ^0.51.0
@@ -654,10 +657,10 @@ importers:
         version: 1.0.2
       '@tsdown/css':
         specifier: 'catalog:'
-        version: 0.23.4(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.4)(tsx@4.23.15)(yaml@2.9.1)
+        version: 0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)(yaml@2.9.1)
       '@tsdown/exe':
         specifier: 'catalog:'
-        version: 0.23.4(tsdown@0.23.4)
+        version: 0.23.5(tsdown@0.23.5)
       '@typescript/native-preview':
         specifier: 'catalog:'
         version: 7.0.0-dev.20260707.2
@@ -690,7 +693,7 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.28.8(@typescript/native-preview@7.0.0-dev.20260707.2)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
       rollup:
         specifier: 'catalog:'
         version: 4.63.1
@@ -708,7 +711,7 @@ importers:
         version: 1.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -752,7 +755,7 @@ importers:
         version: 4.1.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
 
   packages/tools:
     devDependencies:
@@ -861,7 +864,7 @@ importers:
         version: 'link:'
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.28.8(@typescript/native-preview@7.0.0-dev.20260707.2)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(typescript@6.0.3)(vue-tsc@3.3.12(typescript@6.0.3))
+        version: 0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@6.0.3)(vue-tsc@3.3.12(typescript@6.0.3))
       rollup:
         specifier: 'catalog:'
         version: 4.63.1
@@ -3573,8 +3576,8 @@ packages:
   '@tootallnate/quickjs-emscripten@0.23.0':
     resolution: {integrity: sha512-C5Mc6rdnsaJDjO3UpGW/CQTHtCKaYlScZTly4JIu97Jxo/odCiH0ITnDXSJPTOrEKk/ycSZ0AOgTmkDtkOsvIA==}
 
-  '@tsdown/css@0.23.4':
-    resolution: {integrity: sha512-lkEj33E0r7KhmiTQC+UYkOUoe5W50eHsDXoloDkj52OMFxAUfRieF1k4QcOIqMFKd7s0BjFHD8PFElnThVLHGA==}
+  '@tsdown/css@0.23.5':
+    resolution: {integrity: sha512-Zcobb3e4RTXcB3WijguGEXEfLJbhDxXq8Vce2PT1MR7E1JwMwwOevSXXAHFWTam5lJRBLyxrImcSQTqeZ2KCvA==}
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:
       postcss: ^8.4.0
@@ -3582,7 +3585,7 @@ packages:
       postcss-modules: ^6.0.0 || ^7.0.0 || ^8.0.0 || ^9.0.0
       sass: '*'
       sass-embedded: '*'
-      tsdown: 0.23.4
+      tsdown: 0.23.5
     peerDependenciesMeta:
       postcss:
         optional: true
@@ -3595,11 +3598,11 @@ packages:
       sass-embedded:
         optional: true
 
-  '@tsdown/exe@0.23.4':
-    resolution: {integrity: sha512-rU76qeRlEmDAD3wj03BIfN83GKCpqabe4IOuG09XLopngbwHUsxw14fSJYZqMliep6b/r8zm+tH3hP5361GUNw==}
+  '@tsdown/exe@0.23.5':
+    resolution: {integrity: sha512-10u+GOgcfenv4ZJ+2269W+RePRzRfWqi0fIjNd8nSzOhX9bcaSXXlU2q8brjsN5SCAARi7iq0t4vZTZ3V5rDiw==}
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:
-      tsdown: 0.23.4
+      tsdown: 0.23.5
 
   '@tsrs/darwin-arm64@7.1.0-beta.tsrs5':
     resolution: {integrity: sha512-wRLJq3IDZjdLrh+lsipipCfYPpFjNW/0zjeM9azNLjA33OWjOIxT2THiKExf7bjkbr6SGCrrjDR+ZZyXYz4Rjg==}
@@ -4052,72 +4055,6 @@ packages:
     resolution: {integrity: sha512-C/Gsy5NAatsGUF1eT9Ks/ErR52/X4YI7MSm7BtwNOw8v2Ko+SiCA5qXts61J0A7QYwOn4gfXfBZZnzSAng6G/w==}
     engines: {node: '>=18.20.0'}
 
-  '@yuku-core/binding-android-arm64@0.19.0':
-    resolution: {integrity: sha512-wdL2XmTiZixAOaHk9Z0JJZ8u9Qm8d333Zjpc6gaxXFX+UR5BlsfxZ7a2+2Rm71pamppsPYGUGFq2oVLbh6DISw==}
-    cpu: [arm64]
-    os: [android]
-
-  '@yuku-core/binding-darwin-arm64@0.19.0':
-    resolution: {integrity: sha512-7sNJa6XJhyetnTy64jw3NEi4YgUcezHk1G5GH9FSvXAuC8wIlbaOwT9lgq5qo5sspjrZJQlBR1TWflP49uRpMw==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@yuku-core/binding-darwin-x64@0.19.0':
-    resolution: {integrity: sha512-pTC7dYEc59isdyizc3nsuyFNBu2LU5wMYZ1be6UMr59PY/AJNtO1aBLWV0MgL/z7C1nv/2sX4TNjGgKLoeevJw==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@yuku-core/binding-freebsd-x64@0.19.0':
-    resolution: {integrity: sha512-xrZjF6XOEwyLOiDIfrwDdRCS6ghxcJeirNC1KivQhVcUwlRonaU79S3/Uiyx3lBylPnT8qKJ3/aMT+H52nGTJQ==}
-    cpu: [x64]
-    os: [freebsd]
-
-  '@yuku-core/binding-linux-arm-gnu@0.19.0':
-    resolution: {integrity: sha512-0OyIH53C0I1CbADHn9FSdCfX5qbpeLwJhmOVhonFJNYheybOnkSJ50qGMfTJIb8y5zrwqvLs7FVBvz6Fk8maZg==}
-    cpu: [arm]
-    os: [linux]
-    libc: [glibc]
-
-  '@yuku-core/binding-linux-arm-musl@0.19.0':
-    resolution: {integrity: sha512-z/iPfkCOCSXE34VXNt0uP1ORSW+4mEa9b5CiJcWZeqZH08g49bFU/jRM2T04f+Wpw5mJ6HIzNBiojxeAbrHjeg==}
-    cpu: [arm]
-    os: [linux]
-    libc: [musl]
-
-  '@yuku-core/binding-linux-arm64-gnu@0.19.0':
-    resolution: {integrity: sha512-jLNTi+gzaRwBJ+gwhCJ+rDb5dmx/8hEBx93UWd7hjMSqPTL1D1wvVSvXVAldV5kALvju7b0/m51EHEhs4+I1fA==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@yuku-core/binding-linux-arm64-musl@0.19.0':
-    resolution: {integrity: sha512-YwyPIdW/rN2Fmv0MTFWi47FaB3F9g+2b+sJISyAw83Yd60RWH4T3Nx6XkAHHVN+uKJNBAd6So7/BVihSiFYvuQ==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@yuku-core/binding-linux-x64-gnu@0.19.0':
-    resolution: {integrity: sha512-/vskaAXVX3ESR43FiTdfiYS7z1b9uoQJwVQ/0RgUHgN2sWoAyCZs+aX4CgU7eKGIHTVfp9VFwv+c+2XchYiEtQ==}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@yuku-core/binding-linux-x64-musl@0.19.0':
-    resolution: {integrity: sha512-FuXL5igeSKib9Rye02TdH+D6SQezTyGxIATMu1Qsn/QywrzwpGl35OLpS2C1x5vpGLeVE2XgiLd5mVPFHmIglQ==}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@yuku-core/binding-win32-arm64@0.19.0':
-    resolution: {integrity: sha512-YuJAe7zEKT1Xa7LuHlhGJpPnYQeVtvo0rZvNjJRqkH0hQGOw4C8QeP30Tg5VKGzZfo2x8CjhjEhKt4TmLwfmdg==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@yuku-core/binding-win32-x64@0.19.0':
-    resolution: {integrity: sha512-o8iY/mXwlRkedp0LNTr4+TEfXTPQwoNZmv6k+1WIAd1ZXEn8xJJTBCtB0osaVvdZo/x/cNmV16UrWrrGpM5Mvw==}
-    cpu: [x64]
-    os: [win32]
-
   '@yuku-toolchain/darwin-arm64@0.25.0':
     resolution: {integrity: sha512-21QMCgP74cgSrgxIgw/SS5uMnn7cFHwgjNEBZYgO1HxpdjG4ULenXyUY92xRReuAJZdbRyz6OGwtYi6lDKumSw==}
     cpu: [arm64]
@@ -4137,9 +4074,6 @@ packages:
     resolution: {integrity: sha512-uwroa8GsFLJLarEphscB0UCqrx3jdDNqhwVZC2Tv2QDN4i4Eo87NmJaTFpOlNF4+CNVsiN+P0BnriySTidc3xQ==}
     cpu: [x64]
     os: [linux]
-
-  '@yuku-toolchain/types@0.19.0':
-    resolution: {integrity: sha512-tFkNbsP4WXX9UMUC5syJGdK9dPMLK0PPaIuXCcCYH75sZ8MrebfBZ2XvCILRTw8AgLivSSCfDa4R67iYBDa4Kg==}
 
   '@yuku-toolchain/win32-arm64@0.25.0':
     resolution: {integrity: sha512-VssXbUjyRj1egmSSNwo2NEayMTth0mHBPit9WiYGEnvQyTQSUM0TLix0sJn/mVjJBrwqEKyGYg7dkdWFafNYFw==}
@@ -6195,28 +6129,6 @@ packages:
   rgb2hex@0.2.5:
     resolution: {integrity: sha512-22MOP1Rh7sAo1BZpDG6R5RFYzR2lYEgwq7HEmyW2qcsOqR2lQKmn+O//xV3YG/0rrhMC6KVX2hU+ZXuaw9a5bw==}
 
-  rolldown-plugin-dts@0.28.8:
-    resolution: {integrity: sha512-FVhfqxorCWcc20BVT5eVRfRjzLLl6mgzjcMR4gSBf0K4oQMXT0qoHhhzfXy0L7y83fQy7Ug5ZDNk90xM3/LiCQ==}
-    engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
-    peerDependencies:
-      '@typescript/native-preview': '*'
-      '@volar/typescript': ~2.4.0
-      '@vue/language-core': ~3.2.0 || ~3.3.0
-      rolldown: workspace:rolldown@*
-      typescript: ^5.0.0 || ^6.0.0 || ~7.0.0
-      vue-tsc: ~3.2.0 || ~3.3.0
-    peerDependenciesMeta:
-      '@typescript/native-preview':
-        optional: true
-      '@volar/typescript':
-        optional: true
-      '@vue/language-core':
-        optional: true
-      typescript:
-        optional: true
-      vue-tsc:
-        optional: true
-
   rolldown-plugin-dts@0.29.0:
     resolution: {integrity: sha512-PvsbRXQR5tHGnjLyxj2peRMwv3pfRfStiIqhbag3J/I2fFaYdfEQ1AaFwXfZlK8qKBkgQUNnCZdrUcaTPPq05Q==}
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
@@ -6717,14 +6629,14 @@ packages:
     peerDependencies:
       typescript: '>=4.0.0'
 
-  tsdown@0.23.4:
-    resolution: {integrity: sha512-AQQ/2Y7KBnf15GL4Ynjdltc94PkbKRI+arStyrp7inSQkRmTWNiXgfv50ESsjhBEsoVtiSloCAO2VyrqojWIOQ==}
+  tsdown@0.23.5:
+    resolution: {integrity: sha512-nD6Dvg2oEPBaU1T/78TkAelU9ycYT7QosVOjDxpKI9I3LSnu7saBvL3u+urLSb4cwioqzqxeqGEjtKwc9TnOpQ==}
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
-      '@tsdown/css': 0.23.4
-      '@tsdown/exe': 0.23.4
+      '@tsdown/css': 0.23.5
+      '@tsdown/exe': 0.23.5
       '@vitejs/devtools': '*'
       publint: ^0.3.8
       tsx: '*'
@@ -7127,26 +7039,6 @@ packages:
   yoctocolors@2.2.0:
     resolution: {integrity: sha512-xYqdZFUK/VYazNl/oCDYN+3WloWQwMfZxBoiNt6qNyk+xfOdi598muWE42rNZFp1kNOiqW936q5RhUdnpqElSg==}
     engines: {node: '>=18'}
-
-  yuku-ast@0.19.0:
-    resolution: {integrity: sha512-PyCsiScaelhxBGzL8dyeJkLqvRZycoh78R31Vrt/WqYrm0hMFoKwIw/X7Dx5mBKLWAMlV9I9HEyBOHnj2gZVyw==}
-    engines: {node: '>=14.18.0'}
-    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
-
-  yuku-codegen@0.19.0:
-    resolution: {integrity: sha512-uymAKHjDuaP4BEpkXC/BSLz4DUEF5oArZ5AuD3888nb2miChjWSgpPdojEJxm3pjpXkgUaCRJQyNAbnMN33wHg==}
-    engines: {node: '>=14.18.0'}
-    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
-
-  yuku-core@0.19.0:
-    resolution: {integrity: sha512-kYK9e1XdfirNhkipzW0wmMcSWcVF/CWnuugodfVYRCUwvoBefweL9HzB96OiKEhsx78V5WbUxbJqlizMX869Qg==}
-    engines: {node: '>=14.18.0'}
-    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
-
-  yuku-parser@0.19.0:
-    resolution: {integrity: sha512-XrBh9ZiQK5mJVRxZBAvD6LwRyAYrK3MFtH3+onyuxFL5hFD44EC3QOmIC1FjTj6H2MMwq46/NAI+NZxLZPZgxg==}
-    engines: {node: '>=14.18.0'}
-    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
 
   yuku@0.25.0:
     resolution: {integrity: sha512-iAlHlpPmcjRqUauDkW9xF33b+jsUzTrrv49FfPLBNxEAUWuU7XN8tBUGjBHYPCEF/d3632MhG6GjCZutecA8Ng==}
@@ -9062,12 +8954,12 @@ snapshots:
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
-  '@tsdown/css@0.23.4(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.4)(tsx@4.23.15)(yaml@2.9.1)':
+  '@tsdown/css@0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)':
     dependencies:
       lightningcss: 1.33.0
       postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(yaml@2.9.1)
       rolldown: link:rolldown/packages/rolldown
-      tsdown: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+      tsdown: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
     optionalDependencies:
       postcss: 8.5.32
       postcss-import: 16.2.0(postcss@8.5.32)
@@ -9079,11 +8971,28 @@ snapshots:
       - tsx
       - yaml
 
-  '@tsdown/exe@0.23.4(tsdown@0.23.4)':
+  '@tsdown/css@0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)(yaml@2.9.1)':
+    dependencies:
+      lightningcss: 1.33.0
+      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(yaml@2.9.1)
+      rolldown: link:rolldown/packages/rolldown
+      tsdown: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs5)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+    optionalDependencies:
+      postcss: 8.5.32
+      postcss-import: 16.2.0(postcss@8.5.32)
+      postcss-modules: 9.0.1(postcss@8.5.32)
+      sass: 1.108.1
+      sass-embedded: 1.108.1(source-map-js@1.2.2)
+    transitivePeerDependencies:
+      - jiti
+      - tsx
+      - yaml
+
+  '@tsdown/exe@0.23.5(tsdown@0.23.5)':
     dependencies:
       obug: 3.0.0
       tinyexec: 1.3.1
-      tsdown: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+      tsdown: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs5)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       verkit: 0.5.0
 
   '@tsrs/darwin-arm64@7.1.0-beta.tsrs5':
@@ -9573,42 +9482,6 @@ snapshots:
       - react-native-b4a
       - supports-color
 
-  '@yuku-core/binding-android-arm64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-darwin-arm64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-darwin-x64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-freebsd-x64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-arm-gnu@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-arm-musl@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-arm64-gnu@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-arm64-musl@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-x64-gnu@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-linux-x64-musl@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-win32-arm64@0.19.0':
-    optional: true
-
-  '@yuku-core/binding-win32-x64@0.19.0':
-    optional: true
-
   '@yuku-toolchain/darwin-arm64@0.25.0':
     optional: true
 
@@ -9620,8 +9493,6 @@ snapshots:
 
   '@yuku-toolchain/linux-x64@0.25.0':
     optional: true
-
-  '@yuku-toolchain/types@0.19.0': {}
 
   '@yuku-toolchain/win32-arm64@0.25.0':
     optional: true
@@ -11743,40 +11614,21 @@ snapshots:
 
   rgb2hex@0.2.5: {}
 
-  rolldown-plugin-dts@0.28.8(@typescript/native-preview@7.0.0-dev.20260707.2)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(typescript@6.0.3)(vue-tsc@3.3.12(typescript@6.0.3)):
+  rolldown-plugin-dts@0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@6.0.3)(vue-tsc@3.3.12(typescript@6.0.3)):
     dependencies:
       dts-resolver: 3.0.0(oxc-resolver@11.24.2)
       get-tsconfig: 5.0.0-beta.6
       obug: 3.0.0
       rolldown: link:rolldown/packages/rolldown
-      yuku-ast: 0.19.0
-      yuku-codegen: 0.19.0
-      yuku-parser: 0.19.0
+      yuku: 0.25.0
     optionalDependencies:
-      '@typescript/native-preview': 7.0.0-dev.20260707.2
       '@volar/typescript': 2.4.28
       '@vue/language-core': 3.3.12
+      tsrs: 0.0.0
       typescript: 6.0.3
       vue-tsc: 3.3.12(typescript@6.0.3)
     transitivePeerDependencies:
-      - oxc-resolver
-
-  rolldown-plugin-dts@0.28.8(@typescript/native-preview@7.0.0-dev.20260707.2)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2)):
-    dependencies:
-      dts-resolver: 3.0.0(oxc-resolver@11.24.2)
-      get-tsconfig: 5.0.0-beta.6
-      obug: 3.0.0
-      rolldown: link:rolldown/packages/rolldown
-      yuku-ast: 0.19.0
-      yuku-codegen: 0.19.0
-      yuku-parser: 0.19.0
-    optionalDependencies:
-      '@typescript/native-preview': 7.0.0-dev.20260707.2
-      '@volar/typescript': 2.4.28
-      '@vue/language-core': 3.3.12
-      typescript: 7.0.2
-      vue-tsc: 3.3.12(typescript@7.0.2)
-    transitivePeerDependencies:
+      - '@yuku-toolchain/wasm'
       - oxc-resolver
 
   rolldown-plugin-dts@0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2)):
@@ -11790,6 +11642,23 @@ snapshots:
       '@volar/typescript': 2.4.28
       '@vue/language-core': 3.3.12
       tsrs: 0.0.0
+      typescript: 7.0.2
+      vue-tsc: 3.3.12(typescript@7.0.2)
+    transitivePeerDependencies:
+      - '@yuku-toolchain/wasm'
+      - oxc-resolver
+
+  rolldown-plugin-dts@0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs5)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2)):
+    dependencies:
+      dts-resolver: 3.0.0(oxc-resolver@11.24.2)
+      get-tsconfig: 5.0.0-beta.6
+      obug: 3.0.0
+      rolldown: link:rolldown/packages/rolldown
+      yuku: 0.25.0
+    optionalDependencies:
+      '@volar/typescript': 2.4.28
+      '@vue/language-core': 3.3.12
+      tsrs: 7.1.0-beta.tsrs5
       typescript: 7.0.2
       vue-tsc: 3.3.12(typescript@7.0.2)
     transitivePeerDependencies:
@@ -12259,7 +12128,7 @@ snapshots:
       typescript: 7.0.2
     optional: true
 
-  tsdown@0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2)):
+  tsdown@0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2)):
     dependencies:
       cac: 7.1.0
       defu: 6.1.7
@@ -12269,7 +12138,7 @@ snapshots:
       obug: 3.0.0
       picomatch: 4.0.7
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.28.8(@typescript/native-preview@7.0.0-dev.20260707.2)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+      rolldown-plugin-dts: 0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
       tinyps: 0.5.1
@@ -12277,8 +12146,8 @@ snapshots:
       verkit: 0.5.0
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
-      '@tsdown/css': 0.23.4(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.4)(tsx@4.23.15)(yaml@2.9.1)
-      '@tsdown/exe': 0.23.4(tsdown@0.23.4)
+      '@tsdown/css': 0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)(yaml@2.9.1)
+      '@tsdown/exe': 0.23.5(tsdown@0.23.5)
       '@vitejs/devtools': 0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core)
       publint: 0.3.24
       tsx: 4.23.15
@@ -12286,16 +12155,50 @@ snapshots:
       unplugin-unused: 0.5.6
       unrun: 0.3.1
     transitivePeerDependencies:
-      - '@typescript/native-preview'
       - '@volar/typescript'
       - '@vue/language-core'
+      - '@yuku-toolchain/wasm'
       - oxc-resolver
+      - tsrs
+      - vue-tsc
+
+  tsdown@0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs5)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2)):
+    dependencies:
+      cac: 7.1.0
+      defu: 6.1.7
+      empathic: 2.1.0
+      hookable: 6.1.2
+      import-without-cache: 0.4.1
+      obug: 3.0.0
+      picomatch: 4.0.7
+      rolldown: link:rolldown/packages/rolldown
+      rolldown-plugin-dts: 0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs5)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+      tinyexec: 1.3.1
+      tinyglobby: 0.2.17
+      tinyps: 0.5.1
+      unconfig-core: 7.5.0
+      verkit: 0.5.0
+    optionalDependencies:
+      '@arethetypeswrong/core': 0.18.2
+      '@tsdown/css': 0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)(yaml@2.9.1)
+      '@tsdown/exe': 0.23.5(tsdown@0.23.5)
+      '@vitejs/devtools': 0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core)
+      publint: 0.3.24
+      tsx: 4.23.15
+      typescript: 7.0.2
+      unplugin-unused: 0.5.6
+      unrun: 0.3.1
+    transitivePeerDependencies:
+      - '@volar/typescript'
+      - '@vue/language-core'
+      - '@yuku-toolchain/wasm'
+      - oxc-resolver
+      - tsrs
       - vue-tsc
 
   tslib@2.8.1: {}
 
-  tsrs@0.0.0:
-    optional: true
+  tsrs@0.0.0: {}
 
   tsrs@7.1.0-beta.tsrs5:
     optionalDependencies:
@@ -12682,36 +12585,6 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   yoctocolors@2.2.0: {}
-
-  yuku-ast@0.19.0:
-    dependencies:
-      '@yuku-toolchain/types': 0.19.0
-
-  yuku-codegen@0.19.0:
-    dependencies:
-      '@yuku-toolchain/types': 0.19.0
-
-  yuku-core@0.19.0:
-    dependencies:
-      '@yuku-toolchain/types': 0.19.0
-    optionalDependencies:
-      '@yuku-core/binding-android-arm64': 0.19.0
-      '@yuku-core/binding-darwin-arm64': 0.19.0
-      '@yuku-core/binding-darwin-x64': 0.19.0
-      '@yuku-core/binding-freebsd-x64': 0.19.0
-      '@yuku-core/binding-linux-arm-gnu': 0.19.0
-      '@yuku-core/binding-linux-arm-musl': 0.19.0
-      '@yuku-core/binding-linux-arm64-gnu': 0.19.0
-      '@yuku-core/binding-linux-arm64-musl': 0.19.0
-      '@yuku-core/binding-linux-x64-gnu': 0.19.0
-      '@yuku-core/binding-linux-x64-musl': 0.19.0
-      '@yuku-core/binding-win32-arm64': 0.19.0
-      '@yuku-core/binding-win32-x64': 0.19.0
-
-  yuku-parser@0.19.0:
-    dependencies:
-      '@yuku-toolchain/types': 0.19.0
-      yuku-core: 0.19.0
 
   yuku@0.25.0:
     optionalDependencies:
