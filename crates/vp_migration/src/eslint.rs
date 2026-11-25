@@ -27,7 +27,6 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--cache-location",
         "--cache-file",
         "--cache-strategy",
-        "--flag",
         "--concurrency",
     ],
     // ESLint only warns about ignored files, but Oxlint fails when they leave nothing to lint.
@@ -160,7 +159,6 @@ mod tests {
             "--cache-location .eslintcache",
             "--cache-file .eslintcache",
             "--cache-strategy content",
-            "--flag unstable_config_lookup_from_file",
             "--concurrency 2",
             "--color",
             "--no-color",
@@ -190,6 +188,7 @@ mod tests {
             "--report-unused-inline-configs error",
             "--suppress-rule no-console",
             "--suppressions-location suppressions.json",
+            "--flag v10_config_lookup_from_file",
         ] {
             assert_eq!(
                 rewrite_eslint_script(&format!("eslint {flags} --fix src")),
