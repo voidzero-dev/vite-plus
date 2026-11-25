@@ -14,7 +14,7 @@ import {
   getProjectDirFromPackageName,
   renameFiles,
   shouldConfigureEditorsForCreate,
-} from '../utils.js';
+} from '../utils.ts';
 
 describe('getProjectDirFromPackageName', () => {
   it('should get project dir from package name', () => {
@@ -78,6 +78,23 @@ describe('formatTargetDir', () => {
     expect(formatTargetDir('/foo/bar')).matchSnapshot();
     expect(formatTargetDir('@scope/')).matchSnapshot();
     expect(formatTargetDir('../../foo/bar')).matchSnapshot();
+  });
+
+  it('rejects ".." path segments but accepts names that contain two dots', () => {
+    const parentError = 'Relative path contains ".." which is not allowed';
+    expect(formatTargetDir('..').error).toBe(parentError);
+    expect(formatTargetDir('../my-package').error).toBe(parentError);
+    expect(formatTargetDir('foo/../../my-package').error).toBe(parentError);
+
+    expect(formatTargetDir('my..lib')).toEqual({ directory: 'my..lib', packageName: 'my..lib' });
+    expect(formatTargetDir('./foo/my..lib')).toEqual({
+      directory: 'foo/my..lib',
+      packageName: 'my..lib',
+    });
+    expect(formatTargetDir('foo/@my-scope/my..lib')).toEqual({
+      directory: 'foo/my..lib',
+      packageName: '@my-scope/my..lib',
+    });
   });
 
   // Regression test for https://github.com/voidzero-dev/vite-plus/issues/938
@@ -148,7 +165,7 @@ describe('ensureDefaultGitignoreEntries', () => {
   });
 
   function gitignore(): string {
-    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf-8');
+    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf8');
   }
 
   const dotenvBlock = '# dotenv environment variable files\n.env\n.env.*\n!.env.example\n';
@@ -227,7 +244,7 @@ describe('ensureGitignoreVsCodeEditorConfigs', () => {
   });
 
   function gitignore(): string {
-    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf-8');
+    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf8');
   }
 
   function writeGitignore(content: string): void {
@@ -361,7 +378,7 @@ describe('renameFiles', () => {
   }
 
   function read(name: string): string {
-    return fs.readFileSync(path.join(projectDir, name), 'utf-8');
+    return fs.readFileSync(path.join(projectDir, name), 'utf8');
   }
 
   function exists(name: string): boolean {

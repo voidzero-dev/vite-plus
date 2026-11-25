@@ -1,14 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { definePlugin, defineRule } from '@oxlint/plugins';
 import type { Context, ESTree } from '@oxlint/plugins';
+import { definePlugin, defineRule } from '@oxlint/plugins';
 
 import cliPackage from '../package.json' with { type: 'json' };
 import {
   PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
+import type { JsonObject } from './utils/json-value.ts';
+import { isObjectValue, parseJsonObject } from './utils/json-value.ts';
+import { hasOwnKey } from './utils/object.ts';
 import viteConfigEntryBasenames from './vite-config-entry-basenames.json' with { type: 'json' };
 import vitestV5EntryPoints from './vitest-v5-entry-points.json' with { type: 'json' };
 
@@ -111,8 +114,8 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     return null;
   }
 
-  if (specifier in vitestV5EntryPoints) {
-    return vitestV5EntryPoints[specifier as keyof typeof vitestV5EntryPoints];
+  if (hasOwnKey(vitestV5EntryPoints, specifier)) {
+    return vitestV5EntryPoints[specifier];
   }
 
   if (specifier.startsWith('vitest/')) {
@@ -127,14 +130,14 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   // `@vitest/browser/context` keeps the nested path (vite-plus exports
   // `./test/browser/context`); the remaining subpaths are exposed only at the
   // bare `./test/<name>` surface, so the `/browser/` segment is dropped.
-  const browserSubpathRewrites: Record<string, string> = {
+  const browserSubpathRewrites = {
     '@vitest/browser/context': 'vite-plus/test/browser/context',
     '@vitest/browser/client': 'vite-plus/test/client',
     '@vitest/browser/locators': 'vite-plus/test/locators',
     '@vitest/browser/matchers': 'vite-plus/test/matchers',
     '@vitest/browser/utils': 'vite-plus/test/utils',
   };
-  if (specifier in browserSubpathRewrites) {
+  if (hasOwnKey(browserSubpathRewrites, specifier)) {
     return browserSubpathRewrites[specifier];
   }
 
@@ -190,14 +193,6 @@ function quoteSpecifier(literal: ESTree.StringLiteral, replacement: string): str
   return `${quote}${replacement}${quote}`;
 }
 
-type PackageDependencies = {
-  name?: string;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  optionalDependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-};
-
 type PackageMatchCache = Map<string, { mtimeMs: number; matches: boolean }>;
 
 // Separate decisions share the same mtime-based invalidation in editor sessions.
@@ -216,14 +211,14 @@ function isVitestFamilySpecifier(specifier: string): boolean {
   return (
     isUpstreamVitestSpecifier(specifier) ||
     specifier.startsWith('@vitest/') ||
-    specifier in vitestV5EntryPoints
+    hasOwnKey(vitestV5EntryPoints, specifier)
   );
 }
 
 function nearestPackageMatches(
   filename: string,
   cache: PackageMatchCache,
-  matchesPackage: (pkg: PackageDependencies) => boolean,
+  matchesPackage: (pkg: JsonObject) => boolean,
 ): boolean {
   if (!path.isAbsolute(filename)) {
     return false;
@@ -244,7 +239,7 @@ function nearestPackageMatches(
       }
       let matches = false;
       try {
-        const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as PackageDependencies;
+        const pkg = parseJsonObject(fs.readFileSync(packageJsonPath, 'utf8'));
         matches = matchesPackage(pkg);
       } catch {
         // Invalid or unreadable package metadata cannot opt into the exception.
@@ -265,7 +260,8 @@ function nearestPackageMatches(
 function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
   return nearestPackageMatches(filename, nuxtTestUtilsPackageCache, (pkg) =>
     [pkg.dependencies, pkg.devDependencies, pkg.optionalDependencies].some(
-      (dependencies) => dependencies?.['@nuxt/test-utils'] !== undefined,
+      (dependencies) =>
+        isObjectValue(dependencies) && dependencies['@nuxt/test-utils'] !== undefined,
     ),
   );
 }
@@ -275,9 +271,9 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
 // or as a peer, or a published Vite plugin, runs in projects that may not use
 // Vite+, so its imports of that tool are kept. A devDependency alone does not
 // keep them.
-function dependsOnAtRuntime(pkg: PackageDependencies, name: string): boolean {
+function dependsOnAtRuntime(pkg: JsonObject, name: string): boolean {
   return [pkg.dependencies, pkg.peerDependencies].some(
-    (dependencies) => dependencies?.[name] !== undefined,
+    (dependencies) => isObjectValue(dependencies) && dependencies[name] !== undefined,
   );
 }
 
@@ -295,7 +291,9 @@ function nearestPackageKeepsVite(filename: string): boolean {
   return nearestPackageMatches(
     filename,
     viteKeeperPackageCache,
-    (pkg) => dependsOnAtRuntime(pkg, 'vite') || isPublishedVitePluginName(pkg.name),
+    (pkg) =>
+      dependsOnAtRuntime(pkg, 'vite') ||
+      (typeof pkg.name === 'string' && isPublishedVitePluginName(pkg.name)),
   );
 }
 
@@ -312,11 +310,13 @@ function nearestPackageOwnsOxlintApi(filename: string): boolean {
     filename,
     oxlintOwnerPackageCache,
     (pkg) =>
-      pkg.optionalDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined ||
+      (isObjectValue(pkg.optionalDependencies) &&
+        pkg.optionalDependencies[OXLINT_PLUGINS_PACKAGE] !== undefined) ||
       [pkg.dependencies, pkg.peerDependencies].some(
         (dependencies) =>
-          dependencies?.[OXLINT_PACKAGE] !== undefined ||
-          dependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined,
+          isObjectValue(dependencies) &&
+          (dependencies[OXLINT_PACKAGE] !== undefined ||
+            dependencies[OXLINT_PLUGINS_PACKAGE] !== undefined),
       ),
   );
 }

@@ -1,6 +1,6 @@
 import { assertType, describe, it } from 'vitest';
 
-import type { StagedConfig } from '../../staged-config.js';
+import type { StagedConfig } from '../../staged-config.ts';
 
 describe('StagedConfig type', () => {
   it('accepts string commands', () => {
@@ -17,13 +17,13 @@ describe('StagedConfig type', () => {
 
   it('accepts sync generate task functions', () => {
     assertType<StagedConfig>({
-      '*.ts': (files: readonly string[]) => `eslint ${files.join(' ')}`,
+      '*.ts': (files: ReadonlyArray<string>) => `eslint ${files.join(' ')}`,
     });
   });
 
   it('accepts async generate task functions', () => {
     assertType<StagedConfig>({
-      '*.ts': async (files: readonly string[]) => `eslint ${files.join(' ')}`,
+      '*.ts': async (files: ReadonlyArray<string>) => `eslint ${files.join(' ')}`,
     });
   });
 
@@ -42,14 +42,14 @@ describe('StagedConfig type', () => {
     assertType<StagedConfig>({
       '*.ts': {
         title: 'Run eslint',
-        task: (files: readonly string[]) => {
-          void files;
+        task: (files: ReadonlyArray<string>) => {
+          assertType<ReadonlyArray<string>>(files);
         },
       },
     });
   });
 
   it('accepts a top-level generate task function', () => {
-    assertType<StagedConfig>((files: readonly string[]) => [`eslint ${files.join(' ')}`]);
+    assertType<StagedConfig>((files: ReadonlyArray<string>) => [`eslint ${files.join(' ')}`]);
   });
 });

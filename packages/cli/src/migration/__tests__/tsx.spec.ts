@@ -3,10 +3,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { log as promptLog } from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { JsonObject } from '../../utils/json.ts';
+import { readJsonFile } from '../../utils/json.ts';
+
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
-  log: { info: vi.fn(), success: vi.fn(), warn: vi.fn() },
+  log: {
+    info: vi.fn<typeof promptLog.info>(),
+    success: vi.fn<typeof promptLog.success>(),
+    warn: vi.fn<typeof promptLog.warn>(),
+  },
 }));
 
 import { detectTsxProject, migrateTsxToVpx, rewriteTsxCommand } from '../migrator/tsx.ts';
@@ -175,7 +183,7 @@ describe('rewriteTsxCommand', () => {
     ['tsx ./a.ts | tee log', 'shell syntax'],
     ['tsx $ENTRY', 'shell syntax'],
     ['tsx %ENTRY%.ts', 'shell syntax'],
-    ['.\\node_modules\\.bin\\tsx.cmd scripts/a.ts', 'shell syntax'],
+    [String.raw`.\node_modules\.bin\tsx.cmd scripts/a.ts`, 'shell syntax'],
     // A quoted argument of a program that does not run commands is data.
     ['echo "tsx scripts/build.ts"', 'does not rewrite this use of tsx'],
     // Only the value of `-c` is a command; the next argument is the shell's `$0`.
@@ -497,7 +505,7 @@ describe('rewriteTsxCommand', () => {
 describe('migrateTsxToVpx', () => {
   let root: string;
 
-  const write = (file: string, content: string | object) => {
+  const write = (file: string, content: string | JsonObject) => {
     const target = path.join(root, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(
@@ -506,7 +514,7 @@ describe('migrateTsxToVpx', () => {
     );
   };
   const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
-  const readJson = (file: string) => JSON.parse(read(file));
+  const readJson = (file: string) => readJsonFile(path.join(root, file));
 
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-tsx-'));
@@ -619,7 +627,8 @@ describe('migrateTsxToVpx', () => {
       changed: true,
       dependencyRemoved: false,
     });
-    expect(readJson('package.json').scripts.seed).toBe(
+    expect(readJson('package.json')).toHaveProperty(
+      ['scripts', 'seed'],
       'node --import=vite-plus/register scripts/seed.ts',
     );
     expect(readJson('package.json').ava).toEqual({ nodeArguments: ['--import=tsx'] });
@@ -671,7 +680,7 @@ describe('migrateTsxToVpx', () => {
       });
 
       expect(migrateTsxToVpx(root).dependencyRemoved).toBe(false);
-      expect(readJson('package.json').scripts.build).toBe(build);
+      expect(readJson('package.json')).toHaveProperty(['scripts', 'build'], build);
     },
   );
 
@@ -711,7 +720,7 @@ describe('migrateTsxToVpx', () => {
       });
 
       expect(migrateTsxToVpx(root).dependencyRemoved).toBe(false);
-      expect(readJson('package.json').scripts.build).toBe(build);
+      expect(readJson('package.json')).toHaveProperty(['scripts', 'build'], build);
     },
   );
 
@@ -733,7 +742,7 @@ describe('migrateTsxToVpx', () => {
     const report = createMigrationReport();
 
     expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(false);
-    expect(readJson('package.json').scripts.build).toBe(build);
+    expect(readJson('package.json')).toHaveProperty(['scripts', 'build'], build);
     expect(report.warnings).toContainEqual(
       expect.stringContaining('child command that vp migrate cannot check'),
     );
@@ -781,7 +790,7 @@ describe('migrateTsxToVpx', () => {
       changed: false,
       dependencyRemoved: false,
     });
-    expect(readJson('package.json').scripts.build).toBe(build);
+    expect(readJson('package.json')).toHaveProperty(['scripts', 'build'], build);
     expect(report.warnings).toContainEqual(expect.stringContaining('Kept tsx in'));
   });
 
@@ -793,7 +802,8 @@ describe('migrateTsxToVpx', () => {
     });
 
     expect(migrateTsxToVpx(root).dependencyRemoved).toBe(true);
-    expect(readJson('package.json').scripts.build).toBe(
+    expect(readJson('package.json')).toHaveProperty(
+      ['scripts', 'build'],
       'NODE_OPTIONS=--import=vite-plus/register env MODE=test node scripts/seed.ts',
     );
   });
@@ -816,10 +826,11 @@ describe('migrateTsxToVpx', () => {
     expect(migrateTsxToVpx(root, [{ name: 'a', path: 'packages/a' }]).dependencyRemoved).toBe(
       false,
     );
-    expect(readJson('package.json').scripts.build).toBe(
+    expect(readJson('package.json')).toHaveProperty(
+      ['scripts', 'build'],
       'NODE_OPTIONS=--import=vite-plus/register node --run generate',
     );
-    expect(readJson('packages/a/package.json').scripts.build).toBe(build);
+    expect(readJson('packages/a/package.json')).toHaveProperty(['scripts', 'build'], build);
   });
 
   it.each([
@@ -1044,7 +1055,7 @@ describe('migrateTsxToVpx', () => {
     write('package.json', {
       scripts: {
         dev: 'tsx watch src/server.ts',
-        ...(content === undefined ? { repl: 'tsx' } : {}),
+        ...(content === undefined ? { repl: 'tsx' } : undefined),
       },
       devDependencies: { tsx: '^4.20.0' },
     });
@@ -1054,7 +1065,10 @@ describe('migrateTsxToVpx', () => {
     const report = createMigrationReport();
 
     expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(false);
-    expect(readJson('package.json').scripts.dev).toBe('vpx --watch src/server.ts');
+    expect(readJson('package.json')).toHaveProperty(
+      ['scripts', 'dev'],
+      'vpx --watch src/server.ts',
+    );
     expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
     expect(report.warnings).toContain(`Kept the tsx devDependency in package.json: ${user}.`);
   });
@@ -1107,7 +1121,7 @@ describe('migrateTsxToVpx', () => {
     const report = createMigrationReport();
 
     expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(false);
-    expect(readJson('package.json').scripts.start).toBe('vpx src/server.ts');
+    expect(readJson('package.json')).toHaveProperty(['scripts', 'start'], 'vpx src/server.ts');
     expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
     expect(report.warnings).toEqual([
       `Kept the tsx devDependency in package.json: src/options.${extension} still uses tsx.`,
@@ -1125,7 +1139,7 @@ describe('migrateTsxToVpx', () => {
 
       expect(detectTsxProject(root)).toBe(false);
       expect(migrateTsxToVpx(root, undefined, report).changed).toBe(false);
-      expect(readJson('package.json').scripts.start).toBe('tsx src/server.ts');
+      expect(readJson('package.json')).toHaveProperty(['scripts', 'start'], 'tsx src/server.ts');
       expect(report.warnings).toEqual([expect.stringContaining('Kept tsx in package.json')]);
     },
   );
@@ -1164,7 +1178,10 @@ describe('migrateTsxToVpx', () => {
     const report = createMigrationReport();
 
     expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(false);
-    expect(readJson('package.json').scripts.dev).toBe('vpx --watch src/server.ts');
+    expect(readJson('package.json')).toHaveProperty(
+      ['scripts', 'dev'],
+      'vpx --watch src/server.ts',
+    );
     expect(report.warnings).toEqual([
       `Kept the tsx devDependency in package.json: \`${field}\` in package.json still uses tsx.`,
     ]);
@@ -1192,6 +1209,16 @@ describe('migrateTsxToVpx', () => {
     migrateTsxToVpx(root);
     expect(readJson('.lintstagedrc.json')).toEqual({ '*.ts': 'vpx scripts/check.ts' });
     expect(detectTsxProject(root)).toBe(false);
+  });
+
+  it('leaves a non-object lint-staged config alone when rewriting scripts', () => {
+    write('package.json', { scripts: { build: 'tsx scripts/check.ts' } });
+    write('.lintstagedrc.json', 'null');
+
+    expect(detectTsxProject(root)).toBe(true);
+    migrateTsxToVpx(root);
+    expect(readJson('package.json')).toHaveProperty('scripts.build', 'vpx scripts/check.ts');
+    expect(read('.lintstagedrc.json')).toBe('null');
   });
 
   it('rewrites shebang options as it rewrites commands', () => {
@@ -1244,7 +1271,7 @@ describe('migrateTsxToVpx', () => {
     expect(detectTsxProject(root)).toBe(false);
     migrateTsxToVpx(root, undefined, report);
 
-    expect(readJson('package.json').scripts.build).toBe('tsx scripts/build.ts');
+    expect(readJson('package.json')).toHaveProperty(['scripts', 'build'], 'tsx scripts/build.ts');
     expect(read('scripts/release.ts')).toMatch(/^#!\/usr\/bin\/env tsx\n/);
     expect(report.warnings).toEqual([
       expect.stringContaining(
@@ -1268,8 +1295,11 @@ describe('migrateTsxToVpx', () => {
 
     migrateTsxToVpx(root, packages, report);
 
-    expect(readJson('packages/a/package.json').scripts.gen).toBe('vpx gen.ts');
-    expect(readJson('packages/b/package.json').scripts.calc).toBe("tsx -e 'run()'");
+    expect(readJson('packages/a/package.json')).toHaveProperty(['scripts', 'gen'], 'vpx gen.ts');
+    expect(readJson('packages/b/package.json')).toHaveProperty(
+      ['scripts', 'calc'],
+      "tsx -e 'run()'",
+    );
     expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
     expect(report.warnings).toEqual([
       expect.stringContaining('Kept tsx in packages/b/package.json scripts "calc"'),

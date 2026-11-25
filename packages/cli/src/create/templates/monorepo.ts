@@ -2,20 +2,26 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log } from '@voidzero-dev/vite-plus-prompts';
 
 import { removeConfigKey } from '../../../binding/index.js';
 import { rewriteMonorepoProject, supportsCatalog } from '../../migration/migrator.ts';
-import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
-import { editJsonFile } from '../../utils/json.ts';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
+import { VITE_PLUS_VERSION } from '../../utils/constants.ts';
+import type { JsonObject } from '../../utils/json-value.ts';
+import { isObjectValue } from '../../utils/json-value.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { getScopeFromPackageName } from '../../utils/package.ts';
 import { templatesDir } from '../../utils/path.ts';
+import { isPreviewVitePlusVersion } from '../../utils/preview-registry.ts';
 import { editYamlFile, readYamlFile } from '../../utils/yaml.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
 import { copyDir, formatDisplayTargetDir, renameFiles, setPackageName } from '../utils.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
-import { type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
+import type { BuiltinTemplateInfo } from './types.ts';
+import { LibraryTemplateRepo } from './types.ts';
 
 export const InitialMonorepoAppDir = 'apps/website';
 
@@ -32,8 +38,8 @@ export async function executeMonorepoTemplate(
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
 
   if (!options?.silent) {
-    prompts.log.info(`Target directory: ${formatDisplayTargetDir(templateInfo.targetDir)}`);
-    prompts.log.step('Creating Vite+ monorepo...');
+    log.info(`Target directory: ${formatDisplayTargetDir(templateInfo.targetDir)}`);
+    log.step('Creating Vite+ monorepo...');
   }
 
   // Copy template files
@@ -41,9 +47,15 @@ export async function executeMonorepoTemplate(
   copyDir(templateDir, fullPath);
   renameFiles(fullPath);
 
-  // set project name
   editJsonFile(path.join(fullPath, 'package.json'), (pkg) => {
     pkg.name = templateInfo.packageName;
+    if (
+      workspaceInfo.packageManager === PackageManager.npm &&
+      (VITE_PLUS_VERSION === '0.0.0' || isPreviewVitePlusVersion(VITE_PLUS_VERSION))
+    ) {
+      // npm checks the preset's optional Vite+ peer against the CI or preview version.
+      pkg.overrides = { '@cloudflare/oxlint-config': { 'vite-plus': '$vite-plus' } };
+    }
     return pkg;
   });
 
@@ -88,12 +100,12 @@ export async function executeMonorepoTemplate(
   }
 
   if (!options?.silent) {
-    prompts.log.success('Monorepo template created');
+    log.success('Monorepo template created');
   }
 
   // Automatically create a default application in apps/website
   if (!options?.silent) {
-    prompts.log.step('Creating default application in apps/website...');
+    log.step('Creating default application in apps/website...');
   }
 
   const appTemplateInfo = discoverTemplate(
@@ -110,7 +122,7 @@ export async function executeMonorepoTemplate(
   );
 
   if (appResult.exitCode !== 0) {
-    prompts.log.error(`Failed to create default application: ${appResult.exitCode}`);
+    log.error(`Failed to create default application: ${appResult.exitCode}`);
     return appResult;
   }
 
@@ -132,7 +144,7 @@ export async function executeMonorepoTemplate(
 
   // Automatically create a default library in packages/utils
   if (!options?.silent) {
-    prompts.log.step('Creating default library in packages/utils...');
+    log.step('Creating default library in packages/utils...');
   }
   const libraryDir = 'packages/utils';
   const libraryTemplateInfo = discoverTemplate(LibraryTemplateRepo, [libraryDir], workspaceInfo);
@@ -144,7 +156,7 @@ export async function executeMonorepoTemplate(
     options?.silent ?? false,
   );
   if (libraryResult.exitCode !== 0) {
-    prompts.log.error(`Failed to create default library, exit code: ${libraryResult.exitCode}`);
+    log.error(`Failed to create default library, exit code: ${libraryResult.exitCode}`);
     return libraryResult;
   }
 
@@ -212,13 +224,12 @@ export function alignMonorepoTypeScriptVersion(
 ): void {
   const appPackagePath = path.join(appProjectPath, 'package.json');
   const libraryPackagePath = path.join(libraryProjectPath, 'package.json');
-  const libraryPackage = JSON.parse(fs.readFileSync(libraryPackagePath, 'utf8')) as {
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-    optionalDependencies?: Record<string, string>;
-    peerDependencies?: Record<string, string>;
-  };
-  const typescriptVersion = libraryPackage.devDependencies?.typescript;
+  const libraryPackage = readJsonFile(libraryPackagePath);
+  const devDependencies = libraryPackage.devDependencies;
+  const typescriptVersion =
+    isObjectValue(devDependencies) && typeof devDependencies.typescript === 'string'
+      ? devDependencies.typescript
+      : undefined;
   const catalogCapable = supportsCatalog(packageManager, packageManagerVersion, true);
 
   let nodeTypesVersion: string | undefined;
@@ -228,8 +239,9 @@ export function alignMonorepoTypeScriptVersion(
     'optionalDependencies',
     'peerDependencies',
   ] as const) {
-    const version = libraryPackage[field]?.['@types/node'];
-    if (version) {
+    const deps = libraryPackage[field];
+    const version = isObjectValue(deps) ? deps['@types/node'] : undefined;
+    if (typeof version === 'string' && version) {
       nodeTypesVersion = version;
       break;
     }
@@ -264,7 +276,7 @@ export function alignMonorepoTypeScriptVersion(
     const catalogPath = path.join(workspaceRootPath, catalogFile);
     if (fs.existsSync(catalogPath)) {
       const workspaceConfig = readYamlFile(catalogPath) as {
-        catalog?: Record<string, unknown>;
+        catalog?: JsonObject;
       } | null;
       for (const [name, version] of Object.entries(catalogVersions)) {
         if (workspaceConfig?.catalog?.[name] !== undefined) {

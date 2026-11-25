@@ -8,9 +8,9 @@ import {
   shouldIgnoreScriptsForAutoInstall,
 } from '../prompts.ts';
 
-vi.mock('../../../binding/index.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../binding/index.js')>()),
-  downloadPackageManager: vi.fn(),
+vi.mock(import('../../../binding/index.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  downloadPackageManager: vi.fn<typeof downloadPackageManagerBinding>(),
 }));
 
 describe('downloadPackageManager', () => {

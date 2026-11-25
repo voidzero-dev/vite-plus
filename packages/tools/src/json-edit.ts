@@ -16,9 +16,10 @@ if (!filename || !script) {
   process.exit(1);
 }
 
-const json = JSON.parse(readFileSync(filename, 'utf-8'));
+const json: unknown = JSON.parse(readFileSync(filename, 'utf8'));
 // oxlint-disable-next-line typescript/no-implied-eval
 const func = new Function('_', script + '; return _;');
-const result = func(json);
+// oxlint-disable-next-line typescript/no-unsafe-call -- Function has no typed signature for the caller's edit script.
+const result: unknown = func(json);
 
-writeFileSync(filename, JSON.stringify(result, null, 2) + '\n', 'utf-8');
+writeFileSync(filename, JSON.stringify(result, null, 2) + '\n', 'utf8');

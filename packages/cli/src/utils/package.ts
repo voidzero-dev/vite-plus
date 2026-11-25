@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { VITE_PLUS_NAME } from './constants.ts';
+import type { JsonObject } from './json-value.ts';
 import { readJsonFile } from './json.ts';
 import { fetchNpmResource, getNpmRegistry } from './npm-config.ts';
 
@@ -15,7 +16,7 @@ export function getScopeFromPackageName(packageName: string): string {
 
 interface PackageMetadata {
   name: string;
-  version: string;
+  version: string | undefined;
   path: string;
 }
 
@@ -32,7 +33,7 @@ function findOwningPackageJson(resolvedPath: string, packageName: string): strin
     const candidate = path.join(currentDir, 'package.json');
     if (fs.existsSync(candidate)) {
       try {
-        const candidatePkg = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+        const candidatePkg = readJsonFile(candidate);
         if (candidatePkg.name === packageName) {
           return candidate;
         }
@@ -81,6 +82,23 @@ function findPnpApiPath(projectPath: string): string | undefined {
   return undefined;
 }
 
+interface PnpApi {
+  resolveToUnqualified(request: string, issuer: string): string;
+  findPackageLocator?(location: string): { name: string; reference: string } | null;
+  setup?(): void;
+}
+
+function isPnpApi(value: unknown): value is PnpApi {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'resolveToUnqualified' in value &&
+    typeof value.resolveToUnqualified === 'function' &&
+    (!('findPackageLocator' in value) || typeof value.findPackageLocator === 'function') &&
+    (!('setup' in value) || typeof value.setup === 'function')
+  );
+}
+
 export function detectPackageMetadata(
   projectPath: string,
   packageName: string,
@@ -95,11 +113,10 @@ export function detectPackageMetadata(
       return;
     }
     try {
-      const pnpApi = createRequire(pnpApiPath)(pnpApiPath) as {
-        resolveToUnqualified: (request: string, issuer: string) => string;
-        findPackageLocator?: (location: string) => unknown;
-        setup?: () => void;
-      };
+      const pnpApi: unknown = createRequire(pnpApiPath)(pnpApiPath);
+      if (!isPnpApi(pnpApi)) {
+        return;
+      }
       const issuer = path.join(projectPath, 'noop.js');
       // The `.pnp.cjs` walk can climb above the project into an unrelated
       // ancestor's stale PnP data. Only trust an API that actually owns the
@@ -124,10 +141,10 @@ export function detectPackageMetadata(
     return;
   }
   try {
-    const pkg = JSON.parse(fs.readFileSync(pkgFilePath, 'utf8'));
+    const pkg = readJsonFile(pkgFilePath);
     return {
-      name: pkg.name,
-      version: pkg.version,
+      name: typeof pkg.name === 'string' ? pkg.name : packageName,
+      version: typeof pkg.version === 'string' ? pkg.version : undefined,
       path: path.dirname(pkgFilePath),
     };
   } catch {
@@ -140,7 +157,7 @@ export function detectPackageMetadata(
  * @param currentDir - The current directory to start searching from.
  * @returns The package.json content as a JSON object, or null if no package.json is found.
  */
-export function readNearestPackageJson(currentDir: string): Record<string, unknown> | null {
+export function readNearestPackageJson(currentDir: string): JsonObject | null {
   do {
     const packageJsonPath = path.join(currentDir, 'package.json');
     if (fs.existsSync(packageJsonPath)) {

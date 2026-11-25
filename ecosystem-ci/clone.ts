@@ -2,13 +2,14 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { hasOwnKey } from '../packages/cli/src/utils/object.ts';
 import { ecosystemCiDir } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 
 const cwd = import.meta.dirname;
 
 function exec(cmd: string, execCwd: string = cwd): string {
-  return execSync(cmd, { cwd: execCwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+  return execSync(cmd, { cwd: execCwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 }
 
 function getRemoteUrl(dir: string): string | null {
@@ -52,12 +53,12 @@ function checkoutHash(dir: string, hash: string): void {
 }
 
 function cloneProject(repoName: string): void {
-  const repo = repos[repoName as keyof typeof repos];
-  if (!repo) {
+  if (!hasOwnKey(repos, repoName)) {
     console.error(`Project ${repoName} is not defined in repo.json`);
     process.exit(1);
   }
 
+  const repo = repos[repoName];
   const targetDir = join(ecosystemCiDir, repoName);
 
   if (existsSync(targetDir)) {

@@ -5,7 +5,7 @@ export function patchNpmxVitestConfig(config: string): string {
   if ([...config.matchAll(nuxtProject)].length !== 1) {
     throw new Error('npmx.dev patch: expected the pinned Nuxt test project configuration');
   }
-  return config.replace(
+  return config.replaceAll(
     nuxtProject,
     `defineVitestProject({
           plugins: [liveDollarFetch(), {

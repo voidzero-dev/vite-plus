@@ -31,9 +31,6 @@ import { parseArgs } from 'node:util';
 export const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 /** The `vite` alias to the core: `npm:@voidzero-dev/vite-plus-core@<version>`. */
 export const CORE_ALIAS_PREFIX = `npm:${CORE_PACKAGE_NAME}@`;
-// Same convention as oxlint-tsgolint, which Vite+ bundles: `7.0.2000` is its
-// first release on TypeScript `7.0.2`, and `7.0.2001` the next one
-// (https://github.com/oxc-project/tsgolint#versioning).
 const PATCH_FACTOR = 1000;
 const MAX_RELEASE_COUNTER = 998;
 const LOCAL_BUILD_COUNTER = 999;
@@ -46,7 +43,7 @@ interface ParsedVersion {
   major: number;
   minor: number;
   patch: number;
-  prerelease: string[];
+  prerelease: Array<string>;
 }
 
 export interface DecodedCoreVersion {
@@ -102,8 +99,8 @@ export function decodeCoreVersion(core: string): DecodedCoreVersion {
   if (prerelease.length === 0) {
     return { vite: stableVite, n: patch % PATCH_FACTOR };
   }
-  const k = prerelease.at(-1)!;
-  if (prerelease.at(-2) !== PRERELEASE_TAG || !/^(?:0|[1-9]\d*)$/.test(k)) {
+  const k = prerelease.at(-1);
+  if (k === undefined || prerelease.at(-2) !== PRERELEASE_TAG || !/^(?:0|[1-9]\d*)$/.test(k)) {
     throw new Error(`${core} is not an encoded core version`);
   }
   if (prerelease.length === 2) {
@@ -164,7 +161,7 @@ export function nextCoreVersion({
 }: {
   vite: string;
   vitePlus: string;
-  published: readonly string[];
+  published: ReadonlyArray<string>;
 }): string {
   const isVitePlusPrerelease = isPrereleaseVersion(vitePlus);
   const decoded = published.flatMap((version) => {
@@ -202,10 +199,13 @@ export function nextCoreVersion({
   return `${base}-${PRERELEASE_TAG}.${k}`;
 }
 
-interface CoreManifest {
+interface CoreReleaseMetadata {
+  vitePlusVersion?: string;
+}
+
+interface CoreManifest extends CoreReleaseMetadata {
   version: string;
   bundledVersions?: { vite?: string };
-  vitePlusVersion?: string;
 }
 
 /**
@@ -286,15 +286,42 @@ export function assertCoreVersionUnclaimed(
 
 const CORE_MANIFEST_URL = new URL('../../core/package.json', import.meta.url);
 
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
+
+function isReleaseMetadata(value: unknown): value is CoreReleaseMetadata {
+  return (
+    isObject(value) && (!('vitePlusVersion' in value) || typeof value.vitePlusVersion === 'string')
+  );
+}
+
+function isCoreManifest(value: unknown): value is CoreManifest {
+  if (!isReleaseMetadata(value) || !('version' in value) || typeof value.version !== 'string') {
+    return false;
+  }
+  const bundled = 'bundledVersions' in value ? value.bundledVersions : undefined;
+  return (
+    bundled === undefined ||
+    (isObject(bundled) && (!('vite' in bundled) || typeof bundled.vite === 'string'))
+  );
+}
+
 function readManifest(url: URL): CoreManifest {
-  return JSON.parse(readFileSync(url, 'utf8'));
+  const value: unknown = JSON.parse(readFileSync(url, 'utf8'));
+  if (!isCoreManifest(value)) {
+    throw new Error(`Invalid package manifest at ${url}`);
+  }
+  return value;
 }
 
 const DEFAULT_NPM_REGISTRY = 'https://registry.npmjs.org';
 
 export interface CorePackument {
-  versions?: Record<string, { vitePlusVersion?: string }>;
-  time?: Record<string, unknown> & { unpublished?: { versions?: unknown } };
+  versions?: Record<string, CoreReleaseMetadata>;
+  time?: Record<string, string | { versions?: Array<string> }> & {
+    unpublished?: { versions?: Array<string> };
+  };
 }
 
 /**
@@ -303,7 +330,7 @@ export interface CorePackument {
  * version from `versions` and keeps it in `time` (or in `time.unpublished`
  * when every version is unpublished).
  */
-export function usedVersionNumbers(packument: CorePackument): string[] {
+export function usedVersionNumbers(packument: CorePackument): Array<string> {
   const used = new Set(Object.keys(packument.versions ?? {}));
   for (const key of Object.keys(packument.time ?? {})) {
     if (key !== 'created' && key !== 'modified' && key !== 'unpublished') {
@@ -319,6 +346,36 @@ export function usedVersionNumbers(packument: CorePackument): string[] {
     }
   }
   return [...used];
+}
+
+function isUnpublishedMetadata(value: unknown): boolean {
+  return (
+    isObject(value) &&
+    (!('versions' in value) ||
+      (Array.isArray(value.versions) &&
+        value.versions.every((version) => typeof version === 'string')))
+  );
+}
+
+function isCorePackument(value: unknown): value is CorePackument {
+  if (!isObject(value)) {
+    return false;
+  }
+  if (
+    'versions' in value &&
+    (!isObject(value.versions) || !Object.values(value.versions).every(isReleaseMetadata))
+  ) {
+    return false;
+  }
+  if (!('time' in value)) {
+    return true;
+  }
+  return (
+    isObject(value.time) &&
+    Object.entries(value.time).every(([key, entry]: [string, unknown]) =>
+      key === 'unpublished' ? isUnpublishedMetadata(entry) : typeof entry === 'string',
+    )
+  );
 }
 
 /**
@@ -340,10 +397,14 @@ async function readCorePackument(): Promise<CorePackument> {
   if (!response.ok) {
     throw new Error(`Registry returned HTTP ${response.status} for ${url}`);
   }
-  return (await response.json()) as CorePackument;
+  const data: unknown = await response.json();
+  if (!isCorePackument(data)) {
+    throw new Error(`Invalid core packument at ${url}`);
+  }
+  return data;
 }
 
-async function main(argv: string[]): Promise<void> {
+async function main(argv: Array<string>): Promise<void> {
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -395,7 +456,7 @@ if (import.meta.main) {
   try {
     await main(process.argv.slice(2));
   } catch (error) {
-    console.error(`[core-version] ${(error as Error).message}`);
+    console.error(`[core-version] ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }

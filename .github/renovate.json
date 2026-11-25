@@ -38,7 +38,8 @@
       "managerFilePatterns": ["/^\\.github/actions/setup-xwin/action\\.yml$/"],
       "matchStrings": ["CARGO_XWIN_VERSION: '(?<currentValue>[^']+)'"],
       "depNameTemplate": "cargo-xwin",
-      "datasourceTemplate": "crate"
+      "datasourceTemplate": "crate",
+      "versioningTemplate": "semver"
     },
     {
       "description": "Update the Windows SDK release and its archive checksum together.",
@@ -94,7 +95,6 @@
         "lint-staged",
         "oxfmt",
         "oxlint",
-        "oxlint-tsgolint",
         "tsdown",
         "tsrs",
         "vite",

@@ -124,7 +124,10 @@ async function registry(packagesDir) {
 // The private mirror also checks credentials without forwarding them upstream.
 async function mirrorRegistry(upstream, authenticated = false) {
   const requests = new Set();
-  const server = createServer(async (request, response) => {
+  const server = createServer((request, response) => {
+    void forward(request, response).catch(() => response.destroy());
+  });
+  async function forward(request, response) {
     if (authenticated && request.headers.authorization !== `Bearer ${token}`) {
       response.writeHead(401).end('Unauthorized');
       return;
@@ -156,7 +159,7 @@ async function mirrorRegistry(upstream, authenticated = false) {
     } catch {
       response.writeHead(502).end('Registry fixture failed');
     }
-  });
+  }
   servers.push(server);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -278,11 +281,6 @@ try {
     HOMEBREW_NO_INSTALL_CLEANUP: '1',
     PATH: [noNpm, '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(path.delimiter),
   };
-  await run(
-    brew,
-    ['ruby', path.join(repository, '.github/scripts/__tests__/homebrew-preview.rb')],
-    brewEnv,
-  );
   const tapSource = path.join(root, 'tap');
   await fs.mkdir(path.join(tapSource, 'HomebrewFormula'), { recursive: true });
   await fs.writeFile(

@@ -9,8 +9,7 @@
  * Used for: `vite doc` command
  */
 
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import { DEFAULT_ENVS } from './utils/constants.ts';
 
@@ -28,7 +27,7 @@ export async function doc(): Promise<{
   envs: Record<string, string>;
 }> {
   // VitePress's CLI binary is located at bin/vitepress.js relative to the package root
-  const binPath = join(dirname(fileURLToPath(import.meta.url)), 'vitepress', 'node', 'cli.js');
+  const binPath = join(import.meta.dirname, 'vitepress', 'node', 'cli.js');
 
   return {
     binPath,

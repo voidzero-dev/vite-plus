@@ -18,9 +18,9 @@ export function resolveDocsSiteOrigin(env: NodeJS.ProcessEnv = process.env): str
   // Match Wrangler's generatePreviewAlias, including its long-branch hash:
   // https://developers.cloudflare.com/workers/versions-and-deployments/preview-urls/
   let alias = branch
-    .replace(/[^a-zA-Z0-9-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replaceAll(/[^a-zA-Z0-9-]/g, '-')
+    .replaceAll(/-+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
     .toLowerCase();
   if (!/^[a-z](?:[a-z0-9-]*[a-z0-9])?$/.test(alias)) {
     throw new Error('Set DOCS_SITE_ORIGIN: this branch has no valid Workers preview alias.');

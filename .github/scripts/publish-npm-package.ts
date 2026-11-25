@@ -2,9 +2,8 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import type { FetchLike, NpmPackageVersion } from './wait-for-npm-packages.ts';
 import {
-  type FetchLike,
-  type NpmPackageVersion,
   DEFAULT_NPM_REGISTRY,
   isNpmPackagePublished,
   parseNpmPackageSpec,
@@ -20,14 +19,14 @@ export interface PublishCommandResult {
 
 export type PublishCommandRunner = (
   command: string,
-  args: readonly string[],
+  args: ReadonlyArray<string>,
   cwd: string,
 ) => Promise<PublishCommandResult>;
 
 export interface PublishNpmPackageOptions {
   pkg: NpmPackageVersion;
   command: string;
-  args: readonly string[];
+  args: ReadonlyArray<string>;
   cwd: string;
   registry: string;
   fetchImpl: FetchLike;
@@ -95,7 +94,7 @@ export async function publishNpmPackage(
 
 function runPublishCommand(
   command: string,
-  args: readonly string[],
+  args: ReadonlyArray<string>,
   cwd: string,
 ): Promise<PublishCommandResult> {
   return new Promise((resolveResult) => {
@@ -122,7 +121,7 @@ function runPublishCommand(
 export async function publishNpmPackageFromEnv(
   pkg: NpmPackageVersion,
   command: string,
-  args: readonly string[],
+  args: ReadonlyArray<string>,
   cwd = process.cwd(),
 ): Promise<PublishNpmPackageResult> {
   return publishNpmPackage({
@@ -157,7 +156,7 @@ async function main(): Promise<void> {
 
 const invokedPath = process.argv[1];
 if (invokedPath && pathToFileURL(resolve(invokedPath)).href === import.meta.url) {
-  main().catch((error: unknown) => {
+  await main().catch((error: unknown) => {
     console.error(`::error::${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
   });

@@ -19,15 +19,13 @@ and toolchain metadata identify `tsrs`.
 
 ## Dependency changes
 
-| Dependency                | Before                                      | After                                      |
-| ------------------------- | ------------------------------------------- | ------------------------------------------ |
-| Linter frontend           | `oxlint`                                    | Unchanged                                  |
-| Production backend        | `oxlint-tsgolint@7.0.2007`                  | `tsrs@7.1.0-beta.tsrs2`                    |
-| Development-only backend  | None                                        | `oxlint-tsgolint@7.0.2007` for comparisons |
-| Backend platform packages | `@oxlint-tsgolint/*`: six optional packages | `@tsrs/*`: eight optional packages         |
+| Dependency                | Before                                      | After                              |
+| ------------------------- | ------------------------------------------- | ---------------------------------- |
+| Linter frontend           | `oxlint`                                    | Unchanged                          |
+| Production backend        | `oxlint-tsgolint@7.0.2007`                  | `tsrs@7.1.0-beta.tsrs2`            |
+| Backend platform packages | `@oxlint-tsgolint/*`: six optional packages | `@tsrs/*`: eight optional packages |
 
-Production installs use tsrs. The root `package.json` retains `oxlint-tsgolint`
-as a development dependency for `bench/tsrs-lint.ts`.
+Development and production installs both use tsrs.
 The project's `typescript` dependency and standalone `tsc` tasks are unchanged.
 
 ## Compatibility and release considerations
@@ -43,6 +41,3 @@ The project's `typescript` dependency and standalone `tsc` tasks are unchanged.
   `vp migrate` adds an exception for the exact bundled `tsrs` version to
   `trustPolicyExclude` when that policy is enabled in `pnpm-workspace.yaml`.
   Other packages and versions remain subject to the policy.
-
-The [benchmark report](../bench/tsrs-lint.md) records timing, memory, and disk usage.
-The [ecosystem report](../bench/tsrs-lint-ecosystem.md) records compatibility results.

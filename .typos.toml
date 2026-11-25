@@ -11,11 +11,6 @@ pn = "pn" # pnpm short alias
 Jod = "Jod" # Node.js v22 LTS codename
 flate = "flate" # flate2 crate name (gzip/deflate compression)
 
-[default.extend-identifiers]
-# Repository name and pinned commit in the ecosystem benchmark report.
-sigle = "sigle"
-"6b2b2ba86" = "6b2b2ba86"
-
 [files]
 extend-exclude = [
   # Vendored PGP key/signature blobs: base64 armor trips the spell checker.

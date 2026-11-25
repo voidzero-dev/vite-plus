@@ -82,7 +82,7 @@
       "name": "tsrs",
       "kind": "tool",
       "delivery": ["dependency"],
-      "aliases": ["tsrs-lint", "tsgolint", "oxlint-tsgolint"],
+      "aliases": ["tsrs-lint"],
       "versionSource": {
         "type": "npm-dependency",
         "package": "tsrs"

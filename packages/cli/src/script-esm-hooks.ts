@@ -5,7 +5,8 @@
  */
 
 import type { InitializeHook, LoadHook, ResolveHook } from 'node:module';
-import { isMainThread, type MessagePort, MessageChannel } from 'node:worker_threads';
+import type { MessagePort } from 'node:worker_threads';
+import { isMainThread, MessageChannel } from 'node:worker_threads';
 
 import type { FrozenTsconfig } from '../binding/index.js';
 import { HELPER_MODULE_NAME, loadOxcNode, resolveWithOxcNode, withFlush } from './script-hooks.ts';
@@ -21,12 +22,7 @@ const resolveHook: ResolveHook = (specifier, context, nextResolve) =>
   resolveWithOxcNode(oxcNode, specifier, context, nextResolve);
 
 const loadHook: LoadHook = (url, context, nextLoad) =>
-  oxcNode.load(
-    url,
-    context as never,
-    nextLoad as never,
-    HELPER_MODULE_NAME,
-  ) as ReturnType<LoadHook>;
+  oxcNode.load(url, context, nextLoad, HELPER_MODULE_NAME);
 
 /** Under watch mode, the hooks wrapped to report what each call read or looked for. */
 let watchHooks: { resolve: ResolveHook; load: LoadHook } | undefined;

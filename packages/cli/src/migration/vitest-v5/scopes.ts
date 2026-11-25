@@ -1,8 +1,9 @@
 import path from 'node:path';
 
-import type * as t from '@oxc-project/types';
+import type { Node, ObjectExpression } from '@oxc-project/types';
 import { minimatch } from 'minimatch';
 
+import { parseJsonValue, isObjectValue } from '../../utils/json-value.ts';
 import {
   isString,
   objectProperty,
@@ -11,17 +12,12 @@ import {
   isBoolean,
   memberName,
 } from '../ast-utils.ts';
-import {
-  SourceEditor,
-  importedName,
-  isModuleExports,
-  projectElements,
-  type SourceOptions,
-  type VitestV5Finding,
-} from './ast.ts';
+import type { SourceOptions, VitestV5Finding } from './ast.ts';
+import { SourceEditor, importedName, isModuleExports, projectElements } from './ast.ts';
 import { literalTestCommands, vitestCommandArgsStart } from './commands.ts';
 import { resolveConfigObject } from './config-object.ts';
-import { resolveStorybookScope, type StorybookScope } from './storybook.ts';
+import type { StorybookScope } from './storybook.ts';
+import { resolveStorybookScope } from './storybook.ts';
 
 interface ConfigEntry {
   implicit?: boolean;
@@ -32,26 +28,26 @@ interface ConfigEntry {
   rootOverride?: string;
   dirOverride?: string;
   cwd?: string;
-  projects?: string[];
+  projects?: Array<string>;
 }
 
 interface TestScope {
   storybook?: StorybookScope;
   name?: string;
-  excludedRoots?: string[];
+  excludedRoots?: Array<string>;
   root: string;
   dir?: string;
   discoveryRoot?: string;
-  include?: string[];
+  include?: Array<string>;
   // An empty array disables in-source discovery; undefined requires review.
-  includeSource?: string[];
-  exclude?: string[];
+  includeSource?: Array<string>;
+  exclude?: Array<string>;
   benchmark?: {
-    include?: string[];
-    exclude?: string[];
-    includeSource?: string[];
+    include?: Array<string>;
+    exclude?: Array<string>;
+    includeSource?: Array<string>;
   };
-  setupFiles?: string[];
+  setupFiles?: Array<string>;
   unresolvedSetup?: boolean;
   browser?: boolean;
   globals?: boolean;
@@ -96,13 +92,15 @@ function defaultConfig(sources: ReadonlyMap<string, string>, root: string): stri
 export function findVitestV5ConfigEntries(
   sources: ReadonlyMap<string, string>,
   directories: Iterable<string>,
-): ConfigEntry[] {
-  const entries: ConfigEntry[] = [];
+): Array<ConfigEntry> {
+  const entries: Array<ConfigEntry> = [];
   for (const root of directories) {
-    const manifest = JSON.parse(
+    const manifest = parseJsonValue(
       (sources.get(path.join(root, 'package.json')) ?? '{}').replace(/^\uFEFF/, ''),
     );
-    const commands = Object.values(manifest.scripts ?? {}).filter(
+    const commands = Object.values(
+      isObjectValue(manifest) && isObjectValue(manifest.scripts) ? manifest.scripts : {},
+    ).filter(
       (command): command is string =>
         typeof command === 'string' && /\bvitest\b|\bvp\s+test\b/.test(command),
     );
@@ -125,7 +123,7 @@ export function findVitestV5ConfigEntries(
         let dirOverride: string | undefined;
         let uncertain = false;
         let browserOverride = false;
-        const projects: string[] = [];
+        const projects: Array<string> = [];
         for (let index = start; index < argv.length && argv[index] !== '--'; index++) {
           const arg = argv[index];
           const option = arg.split('=')[0];
@@ -162,7 +160,7 @@ export function findVitestV5ConfigEntries(
           dirOverride,
           projects,
           browserOverride,
-          uncertain: uncertain || (!!config && !sources.has(file!)),
+          uncertain: uncertain || (!!config && (file === undefined || !sources.has(file))),
         });
       }
     }
@@ -170,7 +168,7 @@ export function findVitestV5ConfigEntries(
   return entries;
 }
 
-function staticPatterns(node: t.Node | undefined, editor: SourceEditor): string[] | undefined {
+function staticPatterns(node: Node | undefined, editor: SourceEditor): Array<string> | undefined {
   if (
     node?.type === 'MemberExpression' &&
     importedName(editor, node.object, TEST_CONFIG_SOURCES) === 'configDefaults'
@@ -185,7 +183,7 @@ function staticPatterns(node: t.Node | undefined, editor: SourceEditor): string[
   if (node?.type !== 'ArrayExpression') {
     return undefined;
   }
-  const patterns: string[] = [];
+  const patterns: Array<string> = [];
   for (const entry of node.elements) {
     if (isString(entry)) {
       patterns.push(entry.value);
@@ -202,10 +200,7 @@ function staticPatterns(node: t.Node | undefined, editor: SourceEditor): string[
   return patterns.some((pattern) => pattern.startsWith('!')) ? undefined : patterns;
 }
 
-function booleanOption(
-  node: t.Node | undefined,
-  fallback: boolean | undefined,
-): boolean | undefined {
+function booleanOption(node: Node | undefined, fallback: boolean | undefined): boolean | undefined {
   if (!node) {
     return fallback;
   }
@@ -213,7 +208,7 @@ function booleanOption(
 }
 
 function benchmarkPatterns(
-  node: t.Node | undefined,
+  node: Node | undefined,
   inherited: TestScope['benchmark'],
   editor: SourceEditor,
 ): TestScope['benchmark'] {
@@ -249,14 +244,14 @@ function matchesProject(name: string, pattern: string): boolean {
   // Vitest supports only '*', case-insensitively; other glob syntax is literal.
   const expression = pattern
     .split('*')
-    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .map((part) => part.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`))
     .join('.*');
   return new RegExp(`^${expression}$`, 'i').test(name);
 }
 
 function projectSelected(
-  test: t.ObjectExpression | undefined,
-  filters: string[],
+  test: ObjectExpression | undefined,
+  filters: Array<string>,
   inheritedBrowser: boolean | undefined,
 ): boolean | undefined {
   if (!filters.length) {
@@ -331,17 +326,20 @@ function resolveSetupFile(
       .split('/')
       .slice(0, reference.startsWith('@') ? 2 : 1)
       .join('/');
-    for (const parent of sources.keys()) {
+    for (const [parent, source] of sources) {
       if (
         path.basename(parent) !== 'package.json' ||
         !insideDirectory(root, path.dirname(parent))
       ) {
         continue;
       }
-      const manifest = JSON.parse(sources.get(parent)!.replace(/^\uFEFF/, ''));
+      const manifest = parseJsonValue(source.replace(/^\uFEFF/, ''));
       if (
         ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'].some(
-          (key) => manifest[key]?.[packageName],
+          (key) => {
+            const section = isObjectValue(manifest) ? manifest[key] : undefined;
+            return isObjectValue(section) && section[packageName];
+          },
         )
       ) {
         return undefined;
@@ -367,10 +365,10 @@ export function resolveVitestV5TestModes(
   sources: ReadonlyMap<string, string>,
   configFiles: ReadonlySet<string>,
   preserveV4: boolean,
-  entries: ConfigEntry[],
-): { modes: Map<string, VitestV5TestMode>; findings: VitestV5Finding[] } {
-  const scopes: TestScope[] = [];
-  const findings: VitestV5Finding[] = [];
+  entries: Array<ConfigEntry>,
+) {
+  const scopes: Array<TestScope> = [];
+  const findings: Array<VitestV5Finding> = [];
   const queue = [...entries];
   const packageRoots = [...new Set(entries.map((entry) => entry.root))];
   const visitedEntries = new Set<string>();
@@ -385,14 +383,20 @@ export function resolveVitestV5TestModes(
       unknown();
       continue;
     }
-    if (!entry.file) {
+    const configFile = entry.file;
+    if (!configFile) {
+      continue;
+    }
+    const source = sources.get(configFile);
+    if (source === undefined) {
+      unknown();
       continue;
     }
     let found = false;
     let editor: SourceEditor;
-    const visited = new Set<t.ObjectExpression>();
+    const visited = new Set<ObjectExpression>();
     const walk = (
-      object: t.Node | undefined,
+      object: Node | undefined,
       directory = entry.root,
       base?: TestScope,
       inline = false,
@@ -432,7 +436,7 @@ export function resolveVitestV5TestModes(
         return;
       }
       const storybook =
-        resolveStorybookScope(editor, object, sources, entry.file!, entry.cwd ?? entry.root) ??
+        resolveStorybookScope(editor, object, sources, configFile, entry.cwd ?? entry.root) ??
         base?.storybook;
       // The addon supplies a Vite root beside its config directory. An explicit
       // test.root still overrides it, and test.dir controls glob exclusions.
@@ -465,7 +469,7 @@ export function resolveVitestV5TestModes(
       const globals = test && objectProperty(test, 'globals')?.value;
       const benchmark = test && objectProperty(test, 'benchmark')?.value;
       const setup = test && objectProperty(test, 'setupFiles')?.value;
-      let setupFiles: string[] | undefined = [];
+      let setupFiles: Array<string> | undefined = [];
       if (setup) {
         setupFiles = isString(setup) ? [setup.value] : staticPatterns(setup, editor);
       }
@@ -480,7 +484,7 @@ export function resolveVitestV5TestModes(
       const projectName = test && objectProperty(test, 'name')?.value;
       const scope: TestScope = {
         storybook,
-        name: isString(projectName) ? projectName.value : path.basename(entry.file!),
+        name: isString(projectName) ? projectName.value : path.basename(configFile),
         // Merely discovering a workspace's tooling config does not make it a
         // test invocation over every child package. Explicit scripts, Vitest
         // configs, and ownership options still authorize cross-package scopes.
@@ -489,7 +493,7 @@ export function resolveVitestV5TestModes(
           entry.implicit &&
           !inline &&
           !root &&
-          path.basename(entry.file!).startsWith('vite.config.') &&
+          path.basename(configFile).startsWith('vite.config.') &&
           (!test ||
             test.properties.every(
               (property) =>
@@ -671,7 +675,7 @@ export function resolveVitestV5TestModes(
       }
     };
     try {
-      editor = new SourceEditor(entry.file, sources.get(entry.file)!);
+      editor = new SourceEditor(configFile, source);
       editor.visit({
         ExportDefaultDeclaration(node) {
           walk(node.declaration);
@@ -776,7 +780,7 @@ export function resolveVitestV5TestModes(
         {
           benchmark: benchmarkFile,
           browser: browserModes.size === 1 ? browserModes.values().next().value : undefined,
-          ...(ownershipReason ? { ownershipReason } : {}),
+          ...(ownershipReason ? { ownershipReason } : undefined),
           globals,
           reviewGlobals:
             !globals && matching.some(({ scope, certain }) => !certain || scope.globals !== false),

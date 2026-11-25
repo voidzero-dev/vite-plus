@@ -9,10 +9,11 @@
  * vite-plus installation using oxc_resolver and runs its dist/bin.js directly.
  * If no local installation is found, this global dist/bin.js is used as fallback.
  */
-
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { pathToFileURL } from 'node:url';
+import { isMainThread } from 'node:worker_threads';
 
+import type { DevCommand } from '../binding/index.js';
 import { ensureBlockingStdio, run } from '../binding/index.js';
 import { maybePrintCommandHelp } from './help.ts';
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.ts';
@@ -22,6 +23,8 @@ import { lint } from './resolve-lint.ts';
 import { pack } from './resolve-pack.ts';
 import { test } from './resolve-test.ts';
 import { vite } from './resolve-vite.ts';
+import { errorMessage } from './utils/error.ts';
+import { setBlocking } from './utils/stdio.ts';
 import { accent, errorMsg, log } from './utils/terminal.ts';
 import { setUserAgent } from './utils/user-agent.ts';
 
@@ -29,13 +32,8 @@ setUserAgent();
 
 // Node.js sets O_NONBLOCK when pipe-backed stdio is first accessed. Materialize
 // the output streams before restoring the blocking semantics expected by Rust.
-void process.stdout;
-void process.stderr;
+const { stdout, stderr } = process;
 ensureBlockingStdio();
-
-interface StdioStream {
-  _handle?: { setBlocking?: (blocking: boolean) => number };
-}
 
 /**
  * Loading a config through Vite imports `node:process` as ESM, and building that
@@ -49,20 +47,28 @@ function restoreBlockingStdin(): void {
   if (process.platform === 'win32') {
     return;
   }
-  /* oxlint-disable-next-line no-underscore-dangle -- Node.js has no public API for this */
-  (process.stdin as StdioStream)._handle?.setBlocking?.(true);
+  setBlocking(process.stdin, true);
 }
 
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
+/**
+ * Run the dev server command in this process, as `vite` would run. The
+ * launcher's process ID is then the dev server's, so a signal to it reaches
+ * Vite, and Node.js options such as `--inspect` or `--cpu-prof` cover Vite.
+ */
+async function runInProcess(command: DevCommand): Promise<void> {
+  Object.assign(process.env, command.env);
+  process.chdir(command.cwd);
+  process.argv = [process.execPath, command.entry, ...command.args];
+  // Vite writes through this process's stdio. Let pipe writes queue, as they
+  // do when Vite opens its own stdio, so a slow reader cannot stall the server.
+  if (process.platform !== 'win32') {
+    for (const stream of [stdout, stderr]) {
+      if (!stream.isTTY) {
+        setBlocking(stream, false);
+      }
+    }
   }
-
-  if (typeof err === 'object' && err && 'message' in err && typeof err.message === 'string') {
-    return err.message;
-  }
-
-  return String(err);
+  await import(pathToFileURL(command.entry).href);
 }
 
 // Parse command line arguments
@@ -91,12 +97,13 @@ if (args[0]?.startsWith('-C')) {
   // through one catchable path.
   try {
     process.chdir(target);
-  } catch (err) {
-    const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined;
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       errorMsg(`directory not found: ${dir}`);
     } else {
-      errorMsg(`cannot change directory to ${dir}: ${getErrorMessage(err)}`);
+      errorMsg(`cannot change directory to ${dir}: ${errorMessage(error)}`);
     }
     process.exit(1);
   }
@@ -130,7 +137,7 @@ if (args[0] === 'help' && args[1]) {
 }
 
 const command = args[0];
-const cliDistDir = path.dirname(fileURLToPath(import.meta.url));
+const cliDistDir = import.meta.dirname;
 const vitePlusPackagePath = path.dirname(cliDistDir);
 
 if (maybePrintCommandHelp(args)) {
@@ -165,7 +172,7 @@ if (maybePrintCommandHelp(args)) {
       process.exit(0);
     }
 
-    const exitCode = await run({
+    const { exitCode, devCommand } = await run({
       nodeExecPath: process.execPath,
       lint,
       pack,
@@ -176,8 +183,8 @@ if (maybePrintCommandHelp(args)) {
       toolchainManifestPath: path.join(cliDistDir, 'toolchain.json'),
       vitePlusPackagePath,
       // Only task/config-metadata commands need this resolver. Importing it
-      // eagerly also loads Vitest and Vite in the parent of `vp dev`, before
-      // the separate Vite process even starts.
+      // eagerly also loads Vitest and Vite before `vp dev` starts Vite in
+      // this process.
       resolveUniversalViteConfig: async (err, cwd) => {
         const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
         const config = await resolveUniversalViteConfig(err, cwd);
@@ -187,6 +194,9 @@ if (maybePrintCommandHelp(args)) {
       },
       nodeVersion: process.version,
       explicitChdir,
+      // A Worker cannot change the working directory, so it keeps Vite in a
+      // child process. Rust decides which command can run in this process.
+      devInProcess: isMainThread,
       args: rustCliArgs,
     });
 
@@ -214,15 +224,20 @@ if (maybePrintCommandHelp(args)) {
             `Skipped initialization: '${accent(result.configKey)}' already exists in '${accent(path.basename(result.viteConfigPath))}'.`,
           );
         }
-      } catch (err) {
-        console.error('[Vite+] Failed to initialize config in vite.config.ts:', err);
+      } catch (error) {
+        console.error('[Vite+] Failed to initialize config in vite.config.ts:', error);
         finalExitCode = 1;
       }
     }
 
-    process.exit(finalExitCode);
-  } catch (err) {
-    errorMsg(getErrorMessage(err));
+    if (devCommand) {
+      // Vite keeps this process running and exits by itself.
+      await runInProcess(devCommand);
+    } else {
+      process.exit(finalExitCode);
+    }
+  } catch (error) {
+    errorMsg(errorMessage(error));
     process.exit(1);
   }
 }

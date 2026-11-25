@@ -20,6 +20,7 @@ pub(crate) mod resolution;
 mod shim;
 mod spec;
 mod user_config;
+mod yarn_path;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::{

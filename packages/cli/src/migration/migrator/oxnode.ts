@@ -3,19 +3,22 @@ import os from 'node:os';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  confirm as promptConfirm,
+  isCancel,
+  log as promptLog,
+} from '@voidzero-dev/vite-plus-prompts';
 
-import { type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { WATCH_OPTIONS_WITH_VALUE } from '../../vpx-script.ts';
+import type { ScriptRunnerCommandRewrite, ScriptRunnerMigration } from '../migrator.ts';
 import {
   detectScriptRunnerProject,
   migrateScriptRunnerToVpx,
   rewriteScriptRunnerCommand,
-  type ScriptRunnerCommandRewrite,
-  type ScriptRunnerMigration,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
 
 // Match commands and every core subpath conservatively. Only --import register is
 // converted; other loaders and APIs still need the standalone packages.
@@ -59,7 +62,7 @@ function isOxnodeRegister(option: string, value: string): boolean {
   return option === '--import' && /^@oxc-node\/core\/register(?:\.mjs)?$/.test(value);
 }
 
-function oxnodeEnvironmentReason(assignments: readonly string[]): string | undefined {
+function oxnodeEnvironmentReason(assignments: ReadonlyArray<string>): string | undefined {
   for (const assignment of assignments) {
     const separator = assignment.indexOf('=');
     const name = assignment.slice(0, separator).toUpperCase();
@@ -178,16 +181,16 @@ export function rewriteOxnodeCommand(command: string, cwd?: string): ScriptRunne
 
 export function detectOxnodeProject(
   rootDir: string,
-  packages?: readonly WorkspacePackage[],
+  packages?: ReadonlyArray<WorkspacePackage>,
 ): boolean {
   return detectScriptRunnerProject(OXNODE_RUNNER, rootDir, packages);
 }
 
 export function migrateOxnodeToVpx(
   rootDir: string,
-  packages?: readonly WorkspacePackage[],
+  packages?: ReadonlyArray<WorkspacePackage>,
   report?: MigrationReport,
-): { changed: boolean; dependencyRemoved: boolean } {
+) {
   const result = migrateScriptRunnerToVpx(OXNODE_RUNNER, rootDir, packages, report);
   if (report && result.scriptsChanged) {
     report.oxnodeMigrated = true;
@@ -197,7 +200,7 @@ export function migrateOxnodeToVpx(
 
 export async function confirmOxnodeMigration(interactive: boolean): Promise<boolean> {
   if (interactive) {
-    const confirmed = await prompts.confirm({
+    const confirmed = await promptConfirm({
       message:
         'Migrate oxnode scripts to Vite+?\n  ' +
         styleText(
@@ -206,11 +209,11 @@ export async function confirmOxnodeMigration(interactive: boolean): Promise<bool
         ),
       initialValue: true,
     });
-    if (prompts.isCancel(confirmed)) {
+    if (isCancel(confirmed)) {
       cancelAndExit();
     }
     return confirmed;
   }
-  prompts.log.info('oxnode scripts detected. Auto-migrating to Vite+...');
+  promptLog.info('oxnode scripts detected. Auto-migrating to Vite+...');
   return true;
 }

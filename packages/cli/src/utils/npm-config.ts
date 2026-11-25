@@ -44,9 +44,11 @@ export async function fetchNpmResource(
   if (!authorization) {
     return first;
   }
+  const headers = new Headers(callerHeaders);
+  headers.set('authorization', authorization);
   return fetch(url, {
     ...rest,
-    headers: { ...(callerHeaders as Record<string, string> | undefined), authorization },
+    headers: Object.fromEntries(headers),
     signal: AbortSignal.timeout(timeoutMs),
   });
 }

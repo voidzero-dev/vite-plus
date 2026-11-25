@@ -1,16 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log as promptLog } from '@voidzero-dev/vite-plus-prompts';
 import { globSync } from 'tinyglobby';
 import { normalize } from 'verkit';
 import { parse as parseYaml } from 'yaml';
 
-import { type DownloadPackageManagerResult } from '../../../binding/index.js';
+import type { DownloadPackageManagerResult } from '../../../binding/index.js';
 import { SETUP_VP_VERSION } from '../../utils/constants.ts';
+import type { JsonObject } from '../../utils/json.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import { detectConfigs } from '../detector.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
 import { isPlainRecord, warnMigration } from './shared.ts';
 
 export function setPackageManager(
@@ -23,7 +24,7 @@ export function setPackageManager(
   // is written to `devEngines.packageManager` (the recommended standard field).
   editJsonFile<{
     packageManager?: string;
-    devEngines?: { packageManager?: unknown; [key: string]: unknown };
+    devEngines?: JsonObject;
   }>(path.join(projectDir, 'package.json'), (pkg) => {
     if (!pkg.packageManager && !pkg.devEngines?.packageManager) {
       // Only spread a well-formed object: spreading a malformed devEngines value
@@ -89,7 +90,7 @@ function isCompositeActionFile(filePath: string): boolean {
  * Action metadata must declare `runs.using: composite`. Paths are absolute, and
  * filename matching is case-insensitive.
  */
-function collectGithubActionFiles(projectPath: string): string[] {
+function collectGithubActionFiles(projectPath: string): Array<string> {
   const globOptions = {
     cwd: path.join(projectPath, '.github'),
     absolute: true,
@@ -122,14 +123,17 @@ const SETUP_VP_V1_RE =
  *
  * Returns the project-relative paths of the updated files.
  */
-export function migrateSetupVpVersion(projectPath: string, report?: MigrationReport): string[] {
-  const updatedFiles: string[] = [];
+export function migrateSetupVpVersion(
+  projectPath: string,
+  report?: MigrationReport,
+): Array<string> {
+  const updatedFiles: Array<string> = [];
 
   for (const filePath of collectGithubActionFiles(projectPath)) {
     const relativePath = path.relative(projectPath, filePath);
     try {
       const original = fs.readFileSync(filePath, 'utf8');
-      const rewritten = original.replace(
+      const rewritten = original.replaceAll(
         SETUP_VP_V1_RE,
         `$1$2voidzero-dev/setup-vp@${SETUP_VP_VERSION}$2`,
       );
@@ -182,7 +186,7 @@ export function migrateNodeVersionManagerFile(
     report.manualSteps.push('Remove the "volta" field from package.json');
     report.nodeVersionFileMigrated = true;
   } else {
-    prompts.log.info('You can now remove the "volta" field from package.json manually.');
+    promptLog.info('You can now remove the "volta" field from package.json manually.');
   }
   return true;
 }

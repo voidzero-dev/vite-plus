@@ -86,6 +86,9 @@ pub struct CliOptions {
     pub cwd: Option<String>,
     /// Whether the user supplied the global `-C` option.
     pub explicit_chdir: Option<bool>,
+    /// Return the `vp dev` command in `RunResult.devCommand` instead of
+    /// starting it, so that the launcher runs Vite in its own process.
+    pub dev_in_process: Option<bool>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
     pub args: Option<Vec<String>>,
     /// Host Node.js version (`process.version`), used for the package-manager
@@ -97,6 +100,43 @@ pub struct CliOptions {
     pub vite_plus_package_path: String,
     /// Read the vite.config.ts in the Node.js side and return the `lint` and `fmt` config JSON string back to the Rust side
     pub resolve_universal_vite_config: Arc<ThreadsafeFunction<String, Promise<String>>>,
+}
+
+/// The result of [`run`].
+#[napi(object, object_from_js = false)]
+pub struct RunResult {
+    /// The exit code. It is 0 when `devCommand` is set.
+    pub exit_code: i32,
+    /// The `vp dev` command for the launcher to run in its own process.
+    pub dev_command: Option<DevCommand>,
+}
+
+/// A `node <entry> ...` command that the launcher runs in its own process.
+#[napi(object, object_from_js = false)]
+pub struct DevCommand {
+    /// The JavaScript entry point to import.
+    pub entry: String,
+    /// The arguments after the entry point.
+    pub args: Vec<String>,
+    /// The working directory.
+    pub cwd: String,
+    /// Environment variables that differ from the launcher's environment.
+    pub env: HashMap<String, String>,
+}
+
+impl From<cli::InProcessCommand> for DevCommand {
+    fn from(command: cli::InProcessCommand) -> Self {
+        Self {
+            entry: command.entry.to_string(),
+            args: command.args.iter().map(ToString::to_string).collect(),
+            cwd: command.cwd.as_path().to_string_lossy().into_owned(),
+            env: command
+                .env
+                .into_iter()
+                .map(|(name, value)| (name.to_string(), value.to_string()))
+                .collect(),
+        }
+    }
 }
 
 /// Execution context after command dispatch selects the working directory.
@@ -193,7 +233,7 @@ fn format_error_message(error: &(dyn StdError + 'static)) -> String {
 /// from vt, while allowing the NAPI async context to continue running
 /// and process JavaScript callbacks (via ThreadsafeFunction).
 #[napi]
-pub async fn run(options: CliOptions) -> Result<i32> {
+pub async fn run(options: CliOptions) -> Result<RunResult> {
     // Use provided cwd or current directory
     let mut cwd = current_dir()?;
     if let Some(options_cwd) = options.cwd {
@@ -211,6 +251,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     let args = options.args;
     let node_version = options.node_version;
     let explicit_chdir = options.explicit_chdir.unwrap_or(false);
+    let in_process_dev = options.dev_in_process.unwrap_or(false);
     let toolchain_manifest_path = options.toolchain_manifest_path;
     let vite_plus_package_path = options.vite_plus_package_path;
     let node_exec_path = Arc::from(OsStr::new(&options.node_exec_path));
@@ -237,6 +278,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
                 resolve_universal_vite_config_tsf,
             ),
             node_version,
+            in_process_dev,
         };
 
         // Create a new single-threaded runtime for non-Send futures
@@ -261,7 +303,12 @@ pub async fn run(options: CliOptions) -> Result<i32> {
     tracing::debug!("Result: {result:?}");
 
     match result {
-        Ok(exit_status) => Ok(exit_status.0.into()),
+        Ok(cli::Outcome::Exit(status)) => {
+            Ok(RunResult { exit_code: status.0.into(), dev_command: None })
+        }
+        Ok(cli::Outcome::InProcess(command)) => {
+            Ok(RunResult { exit_code: 0, dev_command: Some(command.into()) })
+        }
         Err(e) => {
             tracing::error!("Rust error: {:?}", e);
             Err(napi::Error::from_reason(format_error_message(&e)))

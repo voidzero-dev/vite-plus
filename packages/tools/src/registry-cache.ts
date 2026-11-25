@@ -4,11 +4,18 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { request as httpRequest, type IncomingMessage } from 'node:http';
+import type { IncomingMessage } from 'node:http';
+import { request as httpRequest } from 'node:http';
 import { Agent, request as httpsRequest } from 'node:https';
 import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib';
+
+import { isObjectValue, parseJsonValue } from '../../cli/src/utils/json-value.ts';
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
 
 interface Response {
   status: number;
@@ -41,17 +48,22 @@ export function upstreamUrl(requestPath: string, upstream: string): string {
 
 // Rewrite only dist.tarball fields. Other URLs (readmes, repository links,
 // provenance, etc.) must retain their meaning. Tarball bytes stay unchanged.
-export function rewriteTarballs(value: unknown, registry: string): unknown {
+export function rewriteTarballs<T>(value: T, registry: string): T {
   if (!value || typeof value !== 'object') {
     return value;
   }
-  const object = value as Record<string, unknown>;
-  const dist = object.dist as Record<string, unknown> | undefined;
-  if (dist && typeof dist.tarball === 'string' && dist.tarball.startsWith('https://')) {
+  const dist = 'dist' in value ? value.dist : undefined;
+  if (
+    typeof dist === 'object' &&
+    dist !== null &&
+    'tarball' in dist &&
+    typeof dist.tarball === 'string' &&
+    dist.tarball.startsWith('https://')
+  ) {
     dist.tarball = registryTarballUrl(dist.tarball, registry);
   }
-  if (object.versions && typeof object.versions === 'object') {
-    for (const version of Object.values(object.versions)) {
+  if ('versions' in value && value.versions !== null && typeof value.versions === 'object') {
+    for (const version of Object.values(value.versions)) {
       rewriteTarballs(version, registry);
     }
   }
@@ -131,31 +143,47 @@ export class RegistryCache {
     }
   }
 
+  private async readCachedResponse(file: string, url: string): Promise<Response | undefined> {
+    try {
+      const bytes = await readFile(file);
+      const separator = bytes.indexOf(10);
+      const header = parseJsonValue(bytes.subarray(0, separator).toString());
+      if (
+        !isObjectValue(header) ||
+        typeof header.status !== 'number' ||
+        typeof header.contentType !== 'string'
+      ) {
+        throw new Error('Invalid registry response cache header');
+      }
+      this.record('hit', url);
+      return {
+        status: header.status,
+        contentType: header.contentType,
+        body: bytes.subarray(separator + 1),
+      };
+    } catch (error) {
+      if (hasErrorCode(error, 'ENOENT')) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
   private async load(key: string, url: string, accept: string): Promise<Response> {
     await mkdir(this.directory, { recursive: true });
     const file = path.join(this.directory, key);
     const lock = `${file}.lock`;
     const deadline = Date.now() + 120_000;
     for (;;) {
-      try {
-        const bytes = await readFile(file);
-        const separator = bytes.indexOf(10);
-        const header = JSON.parse(bytes.subarray(0, separator).toString()) as Omit<
-          Response,
-          'body'
-        >;
-        this.record('hit', url);
-        return { ...header, body: bytes.subarray(separator + 1) };
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error;
-        }
+      const cached = await this.readCachedResponse(file, url);
+      if (cached) {
+        return cached;
       }
       try {
         await mkdir(lock);
         break;
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        if (!hasErrorCode(error, 'EEXIST')) {
           throw error;
         }
         if (Date.now() >= deadline) {
@@ -167,19 +195,9 @@ export class RegistryCache {
     const temporary = `${file}.${randomUUID()}.tmp`;
     try {
       // Another worker may have published between our read and mkdir.
-      try {
-        const bytes = await readFile(file);
-        const separator = bytes.indexOf(10);
-        const header = JSON.parse(bytes.subarray(0, separator).toString()) as Omit<
-          Response,
-          'body'
-        >;
-        this.record('hit', url);
-        return { ...header, body: bytes.subarray(separator + 1) };
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error;
-        }
+      const cached = await this.readCachedResponse(file, url);
+      if (cached) {
+        return cached;
       }
       const response = await this.download(url, accept);
       if (response.status === 200) {
@@ -241,7 +259,7 @@ export class RegistryCache {
             }
             return;
           }
-          const chunks: Buffer[] = [];
+          const chunks: Array<Buffer> = [];
           res.on('data', (chunk: Buffer) => {
             progress();
             chunks.push(chunk);
@@ -250,6 +268,8 @@ export class RegistryCache {
             try {
               let body = Buffer.concat(chunks);
               switch (res.headers['content-encoding']) {
+                case undefined:
+                  break;
                 case 'gzip':
                   body = gunzipSync(body);
                   break;

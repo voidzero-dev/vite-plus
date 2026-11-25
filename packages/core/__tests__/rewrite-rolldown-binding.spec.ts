@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import url from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -8,12 +7,8 @@ import cliPkgJson from '../../cli/package.json' with { type: 'json' };
 import { rewriteRolldownBindingRequires } from '../build-support/rewrite-rolldown-binding.ts';
 import corePkgJson from '../package.json' with { type: 'json' };
 
-const fixturePath = path.join(
-  path.dirname(url.fileURLToPath(import.meta.url)),
-  'fixtures',
-  'rolldown-binding-loader.txt',
-);
-const loaderFixture = fs.readFileSync(fixturePath, 'utf-8');
+const fixturePath = path.join(import.meta.dirname, 'fixtures', 'rolldown-binding-loader.txt');
+const loaderFixture = fs.readFileSync(fixturePath, 'utf8');
 
 const PACKAGE_NAME = '@voidzero-dev/vite-plus';
 

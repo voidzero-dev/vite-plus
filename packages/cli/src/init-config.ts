@@ -5,15 +5,16 @@ import { hasConfigKey, mergeJsonConfig } from '../binding/index.js';
 import { createDefaultVitePlusLintConfig } from './oxlint-plugin-config.ts';
 import { fmt as resolveFmt } from './resolve-fmt.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_CONFIG_FILES, VITE_PLUS_NAME } from './utils/constants.ts';
+import { hasOwnKey } from './utils/object.ts';
 import { warnMsg } from './utils/terminal.ts';
 
 interface InitCommandSpec {
   configKey: 'lint' | 'fmt';
-  triggerFlags: string[];
-  defaultConfigFiles: string[];
+  triggerFlags: Array<string>;
+  defaultConfigFiles: Array<string>;
 }
 
-const INIT_COMMAND_SPECS: Record<string, InitCommandSpec> = {
+const INIT_COMMAND_SPECS = {
   lint: {
     configKey: 'lint',
     triggerFlags: ['--init'],
@@ -24,7 +25,7 @@ const INIT_COMMAND_SPECS: Record<string, InitCommandSpec> = {
     triggerFlags: ['--init', '--migrate'],
     defaultConfigFiles: ['.oxfmtrc.json', '.oxfmtrc.jsonc'],
   },
-};
+} satisfies Record<string, InitCommandSpec>;
 
 function normalizeInitCommand(command: string | undefined): string | undefined {
   return command === 'format' ? 'fmt' : command;
@@ -44,12 +45,12 @@ export interface ApplyToolInitResult {
   viteConfigPath?: string;
 }
 
-function optionTerminatorIndex(args: string[]): number {
+function optionTerminatorIndex(args: Array<string>): number {
   const index = args.indexOf('--');
   return index === -1 ? args.length : index;
 }
 
-function hasTriggerFlag(args: string[], triggerFlags: string[]): boolean {
+function hasTriggerFlag(args: Array<string>, triggerFlags: Array<string>): boolean {
   const limit = optionTerminatorIndex(args);
   for (let i = 0; i < limit; i++) {
     const arg = args[i];
@@ -60,7 +61,7 @@ function hasTriggerFlag(args: string[], triggerFlags: string[]): boolean {
   return false;
 }
 
-function extractConfigPathArg(args: string[]): string | null {
+function extractConfigPathArg(args: Array<string>): string | null {
   const limit = optionTerminatorIndex(args);
   for (let i = 0; i < limit; i++) {
     const arg = args[i];
@@ -80,8 +81,8 @@ function extractConfigPathArg(args: string[]): string | null {
 
 function resolveGeneratedConfigPath(
   projectPath: string,
-  args: string[],
-  defaultConfigFiles: readonly string[],
+  args: Array<string>,
+  defaultConfigFiles: ReadonlyArray<string>,
 ): string | null {
   const configArg = extractConfigPathArg(args);
   if (configArg) {
@@ -146,9 +147,9 @@ async function vpFmt(cwd: string, filePath: string): Promise<void> {
   }
 }
 
-function resolveInitSpec(command: string | undefined, args: string[]): InitCommandSpec | null {
+function resolveInitSpec(command: string | undefined, args: Array<string>): InitCommandSpec | null {
   const normalizedCommand = normalizeInitCommand(command);
-  if (!normalizedCommand) {
+  if (!normalizedCommand || !hasOwnKey(INIT_COMMAND_SPECS, normalizedCommand)) {
     return null;
   }
   const spec = INIT_COMMAND_SPECS[normalizedCommand];
@@ -160,7 +161,7 @@ function resolveInitSpec(command: string | undefined, args: string[]): InitComma
 
 export function inspectInitCommand(
   command: string | undefined,
-  args: string[],
+  args: Array<string>,
   projectPath = process.cwd(),
 ): InitCommandInspection {
   const spec = resolveInitSpec(command, args);
@@ -193,14 +194,17 @@ export function inspectInitCommand(
  */
 export async function applyToolInitConfigToViteConfig(
   command: string | undefined,
-  args: string[],
+  args: Array<string>,
   projectPath = process.cwd(),
 ): Promise<ApplyToolInitResult> {
   const inspection = inspectInitCommand(command, args, projectPath);
   if (!inspection.handled || !inspection.configKey) {
     return { handled: false };
   }
-  const spec = INIT_COMMAND_SPECS[normalizeInitCommand(command) as keyof typeof INIT_COMMAND_SPECS];
+  const spec = resolveInitSpec(command, args);
+  if (!spec) {
+    return { handled: false };
+  }
   const viteConfigPath = ensureViteConfigPath(projectPath);
   const generatedConfigPath = resolveGeneratedConfigPath(
     projectPath,

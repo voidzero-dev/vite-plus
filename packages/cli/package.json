@@ -1,6 +1,6 @@
 {
   "name": "vite-plus",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -369,6 +369,7 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/oxlint-config": "catalog:",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",

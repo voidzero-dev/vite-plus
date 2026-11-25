@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getNpmAuthHeader, getNpmRegistry } from '../npm-config.js';
+import { getNpmAuthHeader, getNpmRegistry } from '../npm-config.ts';
 
 describe('getNpmRegistry / getNpmAuthHeader', () => {
   let homeDir: string;

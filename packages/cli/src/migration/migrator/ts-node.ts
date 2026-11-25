@@ -3,22 +3,25 @@ import os from 'node:os';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import type { Program } from '@oxc-project/types';
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  confirm as promptConfirm,
+  isCancel,
+  log as promptLog,
+} from '@voidzero-dev/vite-plus-prompts';
 
-import { analyzeMigrationSource, ResolverFactory } from '../../../binding/index.js';
-import { type WorkspacePackage } from '../../types/index.ts';
+import { ResolverFactory } from '../../../binding/index.js';
+import type { WorkspacePackage } from '../../types/index.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
+import { parseSource } from '../ast-utils.ts';
+import type { ScriptRunnerCommandRewrite, ScriptRunnerMigration } from '../migrator.ts';
 import {
   detectScriptRunnerProject,
   migrateScriptRunnerToVpx,
   prepareTsNodeRun,
   rewriteScriptRunnerCommand,
-  type ScriptRunnerCommandRewrite,
-  type ScriptRunnerMigration,
   typescriptScriptKeepReason,
 } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
 
 // Include unsupported entrypoints and package subpaths in retention scans.
 const TS_NODE_REFERENCE =
@@ -28,12 +31,10 @@ const TS_NODE_LOADERS = /^ts-node(?:\/.*)?$/;
 /** Check module metadata only; migration must not execute a project's dependencies. */
 function incompatibleModuleSource(file: string, source: string): string | undefined {
   file = fs.realpathSync(file);
-  const { ast } = JSON.parse(analyzeMigrationSource(file, source)) as {
-    ast: { node: Program };
-  };
+  const { program } = parseSource(file, source);
   let requireResolver: ResolverFactory | undefined;
   let importResolver: ResolverFactory | undefined;
-  for (const node of ast.node.body) {
+  for (const node of program.body) {
     let specifier: string;
     let namedOnly = false;
     if (node.type === 'ImportDeclaration' && node.importKind !== 'type') {
@@ -197,16 +198,16 @@ export function rewriteTsNodeCommand(command: string, cwd?: string): ScriptRunne
 
 export function detectTsNodeProject(
   rootDir: string,
-  packages?: readonly WorkspacePackage[],
+  packages?: ReadonlyArray<WorkspacePackage>,
 ): boolean {
   return detectScriptRunnerProject(TS_NODE_RUNNER, rootDir, packages);
 }
 
 export function migrateTsNodeToVpx(
   rootDir: string,
-  packages?: readonly WorkspacePackage[],
+  packages?: ReadonlyArray<WorkspacePackage>,
   report?: MigrationReport,
-): { changed: boolean; dependencyRemoved: boolean } {
+) {
   const result = migrateScriptRunnerToVpx(TS_NODE_RUNNER, rootDir, packages, report);
   if (report && result.scriptsChanged) {
     report.tsNodeMigrated = true;
@@ -216,7 +217,7 @@ export function migrateTsNodeToVpx(
 
 export async function confirmTsNodeMigration(interactive: boolean): Promise<boolean> {
   if (interactive) {
-    const confirmed = await prompts.confirm({
+    const confirmed = await promptConfirm({
       message:
         'Migrate ts-node scripts to Vite+?\n  ' +
         styleText(
@@ -225,11 +226,11 @@ export async function confirmTsNodeMigration(interactive: boolean): Promise<bool
         ),
       initialValue: true,
     });
-    if (prompts.isCancel(confirmed)) {
+    if (isCancel(confirmed)) {
       cancelAndExit();
     }
     return confirmed;
   }
-  prompts.log.info('ts-node scripts detected. Auto-migrating supported commands to Vite+...');
+  promptLog.info('ts-node scripts detected. Auto-migrating supported commands to Vite+...');
   return true;
 }

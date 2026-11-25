@@ -2,10 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import {
+  confirm as promptConfirm,
+  isCancel,
+  log as promptLog,
+} from '@voidzero-dev/vite-plus-prompts';
 
 import { hasConfigKey, removeConfigKey, rewritePrettier } from '../../../binding/index.js';
-import { type WorkspacePackage } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
 import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
@@ -13,16 +17,10 @@ import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { PRETTIER_CONFIG_FILES, PRETTIER_PACKAGE_JSON_CONFIG, detectConfigs } from '../detector.ts';
 import { hasOnlyInjectedDefaults, rewriteToolLintStagedConfigFiles } from '../migrator.ts';
-import { type MigrationReport } from '../report.ts';
-import { warnMigration } from './shared.ts';
+import type { MigrationReport } from '../report.ts';
+import { rewritePackageScriptFields, warnMigration } from './shared.ts';
 
-export function detectPrettierProject(
-  projectPath: string,
-  packages?: WorkspacePackage[],
-): {
-  hasDependency: boolean;
-  configFile?: string;
-} {
+export function detectPrettierProject(projectPath: string, packages?: Array<WorkspacePackage>) {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return { hasDependency: false };
@@ -81,21 +79,21 @@ async function runPrettierMigrateStep(
           stderr.includes('Only JSON format is supported for `.prettierrc`.'));
       spinner.stop(unsupportedConfig ? 'Prettier migration skipped' : failMessage);
       if (stderr) {
-        prompts.log.warn(`⚠ ${stderr}`);
+        promptLog.warn(`⚠ ${stderr}`);
       }
       if (unsupportedConfig) {
-        prompts.log.info(
+        promptLog.info(
           'Keeping Prettier. Convert its config to JSON or JS and run `vp migrate --full` to migrate it later.',
         );
         return 'skipped';
       }
-      prompts.log.info(manualHint);
+      promptLog.info(manualHint);
       return 'failed';
     }
     return 'migrated';
   } catch {
     spinner.stop(failMessage);
-    prompts.log.info(manualHint);
+    promptLog.info(manualHint);
     return 'failed';
   }
 }
@@ -104,7 +102,7 @@ export async function migratePrettierToOxfmt(
   projectPath: string,
   interactive: boolean,
   prettierConfigFile?: string,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<'migrated' | 'skipped' | 'failed'> {
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
@@ -168,7 +166,9 @@ export async function migratePrettierToOxfmt(
       if (tempPrettierConfig) {
         try {
           fs.unlinkSync(tempPrettierConfig);
-        } catch {}
+        } catch {
+          // A failed conversion may already have removed its temporary config.
+        }
       }
     }
   }
@@ -220,7 +220,7 @@ function deletePrettierConfigFiles(
         report.removedConfigCount++;
       }
       if (!silent) {
-        prompts.log.success(`✔ Removed ${displayRelative(configPath)}`);
+        promptLog.success(`✔ Removed ${displayRelative(configPath)}`);
       }
     }
   }
@@ -237,7 +237,7 @@ function deletePrettierConfigFiles(
         report.removedConfigCount++;
       }
       if (!silent) {
-        prompts.log.success(`✔ Removed ${displayRelative(configPath)}`);
+        promptLog.success(`✔ Removed ${displayRelative(configPath)}`);
       }
     }
   }
@@ -259,7 +259,7 @@ function rewritePrettierPackageJson(packageJsonPath: string): void {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
     scripts?: Record<string, string>;
-    'lint-staged'?: Record<string, string | string[]>;
+    'lint-staged'?: Record<string, string | Array<string>>;
   }>(packageJsonPath, (pkg) => {
     let changed = false;
     // Remove prettier and prettier-plugin-* dependencies
@@ -279,21 +279,8 @@ function rewritePrettierPackageJson(packageJsonPath: string): void {
         }
       }
     }
-    if (pkg.scripts) {
-      const updated = rewritePrettier(JSON.stringify(pkg.scripts));
-      if (updated) {
-        pkg.scripts = JSON.parse(updated);
-        changed = true;
-      }
-    }
-    if (pkg['lint-staged']) {
-      const updated = rewritePrettier(JSON.stringify(pkg['lint-staged']));
-      if (updated) {
-        pkg['lint-staged'] = JSON.parse(updated);
-        changed = true;
-      }
-    }
-    return changed ? pkg : undefined;
+    const scriptsChanged = rewritePackageScriptFields(pkg, rewritePrettier);
+    return changed || scriptsChanged ? pkg : undefined;
   });
 }
 
@@ -302,14 +289,14 @@ function rewritePrettierLintStagedConfigFiles(projectPath: string, report?: Migr
 }
 
 export function warnPackageLevelPrettier() {
-  prompts.log.warn(
+  promptLog.warn(
     'Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.',
   );
 }
 
 export async function confirmPrettierMigration(interactive: boolean): Promise<boolean> {
   if (interactive) {
-    const confirmed = await prompts.confirm({
+    const confirmed = await promptConfirm({
       message:
         'Migrate Prettier to Oxfmt?\n  ' +
         styleText(
@@ -318,19 +305,19 @@ export async function confirmPrettierMigration(interactive: boolean): Promise<bo
         ),
       initialValue: true,
     });
-    if (prompts.isCancel(confirmed)) {
+    if (isCancel(confirmed)) {
       cancelAndExit();
     }
     return confirmed;
   }
-  prompts.log.info('Prettier configuration detected. Auto-migrating to Oxfmt...');
+  promptLog.info('Prettier configuration detected. Auto-migrating to Oxfmt...');
   return true;
 }
 
 export async function promptPrettierMigration(
   projectPath: string,
   interactive: boolean,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): Promise<boolean> {
   const prettierProject = detectPrettierProject(projectPath, packages);
   if (!prettierProject.hasDependency) {

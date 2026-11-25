@@ -14,7 +14,16 @@ function toolUse(id: string, command: string, description?: string) {
   };
 }
 
-function toolResult(id: string, toolUseResult: Record<string, unknown>) {
+function toolResult(
+  id: string,
+  toolUseResult: {
+    timedOutAfterMs?: number;
+    stdout?: string;
+    stderr?: string;
+    interrupted?: boolean;
+    backgroundTaskId?: string;
+  },
+) {
   return {
     type: 'user',
     message: {
@@ -32,18 +41,18 @@ test('finds Bash calls that exceeded their timeout', () => {
     toolResult('fast', { stdout: 'ok', stderr: '', interrupted: false }),
     toolUse('slow', 'pnpm build-native --release', 'Rebuild binding'),
     { type: 'tool_progress', tool_use_id: 'slow-heartbeat-1', elapsed_time_seconds: 600 },
-    toolResult('slow', { backgroundTaskId: 'b1', timedOutAfterMs: 600000 }),
+    toolResult('slow', { backgroundTaskId: 'b1', timedOutAfterMs: 600_000 }),
     { type: 'result', is_error: true },
   ];
 
   expect(findCommandTimeouts(messages)).toEqual([
-    { command: 'pnpm build-native --release', description: 'Rebuild binding', timeoutMs: 600000 },
+    { command: 'pnpm build-native --release', description: 'Rebuild binding', timeoutMs: 600_000 },
   ]);
 });
 
 test('keeps a timeout whose call is missing from the messages', () => {
-  expect(findCommandTimeouts([toolResult('unknown', { timedOutAfterMs: 120000 })])).toEqual([
-    { command: '', description: undefined, timeoutMs: 120000 },
+  expect(findCommandTimeouts([toolResult('unknown', { timedOutAfterMs: 120_000 })])).toEqual([
+    { command: '', description: undefined, timeoutMs: 120_000 },
   ]);
 });
 
@@ -54,8 +63,8 @@ test('rejects an execution file without a message array', () => {
 test('formats each command in a code block inside the list item', () => {
   expect(
     formatCommandTimeouts([
-      { command: 'cargo check\ncargo shear', description: 'Check Rust', timeoutMs: 600000 },
-      { command: 'echo ```', description: undefined, timeoutMs: 120000 },
+      { command: 'cargo check\ncargo shear', description: 'Check Rust', timeoutMs: 600_000 },
+      { command: 'echo ```', description: undefined, timeoutMs: 120_000 },
     ]),
   ).toBe(
     [

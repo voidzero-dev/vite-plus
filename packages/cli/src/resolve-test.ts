@@ -9,15 +9,11 @@
  *
  * Used for: `vite-plus test` command
  */
-
-import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { DEFAULT_ENVS, resolveBundled } from './utils/constants.ts';
-
-interface VitestPackageJson {
-  bin?: string | Record<string, string>;
-}
+import { isObjectValue } from './utils/json-value.ts';
+import { readJsonFile } from './utils/json.ts';
 
 /**
  * Resolves the Vitest binary path and environment variables.
@@ -40,9 +36,9 @@ export async function test(): Promise<{
 }> {
   const pkgJsonPath = resolveBundled('vitest/package.json');
   const pkgRoot = dirname(pkgJsonPath);
-  const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as VitestPackageJson;
-  const binRel = typeof pkgJson.bin === 'string' ? pkgJson.bin : pkgJson.bin?.vitest;
-  if (!binRel) {
+  const pkgJson = readJsonFile(pkgJsonPath);
+  const binRel = isObjectValue(pkgJson.bin) ? pkgJson.bin.vitest : pkgJson.bin;
+  if (typeof binRel !== 'string' || !binRel) {
     throw new Error(`Could not find 'vitest' bin entry in ${pkgJsonPath}`);
   }
   const binPath = join(pkgRoot, binRel);

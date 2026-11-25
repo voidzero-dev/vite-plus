@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log as promptLog } from '@voidzero-dev/vite-plus-prompts';
 import type { OxlintConfig } from 'oxlint';
 import { coerce, isLessThan, satisfies, tryParse } from 'verkit';
 
@@ -11,10 +11,15 @@ import {
   VITE_PLUS_OVERRIDE_PACKAGES,
   coreAliasVersion,
 } from '../../utils/constants.ts';
+import { parseJsonObject } from '../../utils/json-value.ts';
+import type { JsonObject, JsonValue } from '../../utils/json.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
-import { addManualStep, addMigrationWarning, type MigrationReport } from '../report.ts';
+import type { YamlMapping } from '../../utils/yaml.ts';
+import { isYamlMapping } from '../../utils/yaml.ts';
+import type { MigrationReport } from '../report.ts';
+import { addManualStep, addMigrationWarning } from '../report.ts';
 
 export interface RetainedImportDependencies {
   /** Package directories that need a direct Vitest dependency. */
@@ -26,7 +31,7 @@ export interface RetainedImportDependencies {
 export const DISABLED_IMPORT_RULE_CONFIG = JSON.stringify({ enabled: false, overrides: [] });
 
 // Commands whose effects prevent literal analysis of later invocations.
-export const SHELL_STATE_COMMANDS: readonly string[] = [
+export const SHELL_STATE_COMMANDS: ReadonlyArray<string> = [
   'cd',
   'pushd',
   'popd',
@@ -39,7 +44,7 @@ export const SHELL_STATE_COMMANDS: readonly string[] = [
 ];
 
 /** Locate the executable after a supported package-manager wrapper. */
-export function getCommandStartIndex(argv: readonly string[]): number {
+export function getCommandStartIndex(argv: ReadonlyArray<string>): number {
   if (!['pnpm', 'npm', 'yarn', 'bun', 'npx', 'bunx'].includes(argv[0])) {
     return 0;
   }
@@ -72,9 +77,9 @@ export const OXLINT_OWNER_CONFIG_KEYS = new Set(['env', 'globals', 'settings', '
 export interface OxlintConfigFile {
   filename: string;
   config: OxlintConfig;
-  extends: OxlintConfigFile[];
+  extends: Array<OxlintConfigFile>;
   // Keep declared paths as well as canonical sources for JSON fallback cleanup.
-  extendsPaths: string[];
+  extendsPaths: Array<string>;
   // A dependency must use the same generated module in its owning workspace.
   shared?: boolean;
   // A committed or previously generated module that workspace consumers can reuse.
@@ -91,7 +96,7 @@ export type PreparedOxlintConfigs = Map<string, OxlintConfigMigration | Error>;
 
 export interface OxlintModulePlan {
   configContent: string;
-  imports: string[];
+  imports: Array<string>;
   completionMarker?: string;
   modules: Map<string, { file: OxlintConfigFile; content: string }>;
 }
@@ -125,7 +130,7 @@ export const LINT_STAGED_ALL_CONFIG_FILES = [
 // packages that are replaced with vite-plus
 export const REMOVE_PACKAGES = [
   'oxlint',
-  'oxlint-tsgolint',
+  'oxlint-tsgolint', // Older projects may still declare the previous lint backend.
   'oxfmt',
   'tsdown',
   '@vitest/browser',
@@ -133,7 +138,7 @@ export const REMOVE_PACKAGES = [
 ] as const;
 
 // A preserved browser import still needs its original dependency and catalog entry.
-export function bundledPackagesToRemove(retained?: ReadonlySet<string>): readonly string[] {
+export function bundledPackagesToRemove(retained?: ReadonlySet<string>): ReadonlyArray<string> {
   return retained?.size ? REMOVE_PACKAGES.filter((name) => !retained.has(name)) : REMOVE_PACKAGES;
 }
 
@@ -163,12 +168,12 @@ export const PROVIDER_OVERRIDE_DROP_NAMES = [
 
 // When a browser provider package is removed, its runtime peer dependency
 // must be preserved in devDependencies so browser tests continue to work.
-export const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
+export const BROWSER_PROVIDER_PEER_DEPS = {
   '@vitest/browser-playwright': 'playwright',
 };
 
 // Packages that include runtime peer as a dependency.
-const RUNTIME_PEER_INCLUDED_BY: Record<string, readonly string[]> = {
+const RUNTIME_PEER_INCLUDED_BY = {
   playwright: ['@playwright/test'],
 };
 
@@ -187,7 +192,7 @@ export function findDeclaredSpec(pkg: DependencyBag, name: string): string | und
 export function hasProviderPeerDependency(pkg: DependencyBag, runtimePeer: string): boolean {
   return (
     findDeclaredSpec(pkg, runtimePeer) !== undefined ||
-    (RUNTIME_PEER_INCLUDED_BY[runtimePeer] ?? []).some(
+    (lookupSetting(RUNTIME_PEER_INCLUDED_BY, runtimePeer) ?? []).some(
       (packageName) => findDeclaredSpec(pkg, packageName) !== undefined,
     )
   );
@@ -282,7 +287,7 @@ export function vitePeerDependencyRuleRequired(
 // ranges (e.g. `vitest: ^3.0.0`) are preserved — only the wrapper alias is
 // rewritten. For `vitest`, we substitute the vitest version vite-plus
 // bundles so any `catalog:` reference the user still has resolves cleanly.
-export const LEGACY_WRAPPER_FALLBACK_VERSIONS: Record<string, string> = {
+export const LEGACY_WRAPPER_FALLBACK_VERSIONS = {
   vitest: VITEST_VERSION,
 };
 
@@ -352,14 +357,14 @@ export type PackageJsonDependencyField =
 export function warnMigration(message: string, report?: MigrationReport) {
   addMigrationWarning(report, message);
   if (!report) {
-    prompts.log.warn(message);
+    promptLog.warn(message);
   }
 }
 
 export function infoMigration(message: string, report?: MigrationReport) {
   addManualStep(report, message);
   if (!report) {
-    prompts.log.info(message);
+    promptLog.info(message);
   }
 }
 
@@ -383,33 +388,35 @@ function checkPackageVersion(projectPath: string, name: string, minVersion: stri
   if (!metadata || metadata.name !== name) {
     return true;
   }
-  if (satisfies(metadata.version, `<${minVersion}`)) {
+  if (metadata.version && satisfies(metadata.version, `<${minVersion}`)) {
     const packageJsonFilePath = path.join(projectPath, 'package.json');
-    prompts.log.error(
+    promptLog.error(
       `✘ ${name}@${metadata.version} in ${displayRelative(packageJsonFilePath)} is not supported by auto migration`,
     );
-    prompts.log.info(`Please upgrade ${name} to version >=${minVersion} first`);
+    promptLog.info(`Please upgrade ${name} to version >=${minVersion} first`);
     return false;
   }
   return true;
 }
 
 export type PnpmPeerDependencyRules = {
-  allowAny?: string[];
+  allowAny?: Array<string>;
   allowedVersions?: Record<string, string>;
-  [key: string]: unknown;
+  [key: string]: JsonValue | undefined;
 };
 
 export type PnpmPackageJsonSettings = {
   overrides?: Record<string, string>;
   peerDependencyRules?: PnpmPeerDependencyRules;
   allowBuilds?: Record<string, boolean>;
-  onlyBuiltDependencies?: string[];
-  [key: string]: unknown;
+  onlyBuiltDependencies?: Array<string>;
+  [key: string]: JsonValue | undefined;
 };
 
-export function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+export function isPlainRecord(value: JsonValue | undefined): value is JsonObject;
+export function isPlainRecord(value: unknown): value is YamlMapping;
+export function isPlainRecord(value: unknown): value is YamlMapping {
+  return isYamlMapping(value);
 }
 
 export type DependencyBag = {
@@ -485,9 +492,9 @@ export function packageOwnsOxlintApi(pkg: DependencyBag): boolean {
  */
 export function collectOxlintOwnerDirs(
   rootDir: string,
-  packages?: readonly { path: string }[],
-): string[] {
-  const owners: string[] = [];
+  packages?: ReadonlyArray<{ path: string }>,
+): Array<string> {
+  const owners: Array<string> = [];
   const candidates = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
   for (const dir of candidates) {
     const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
@@ -496,4 +503,51 @@ export function collectOxlintOwnerDirs(
     }
   }
   return owners;
+}
+
+// String keys come from project files and need not name a supported tool.
+export function lookupSetting<T>(table: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
+type NativeScriptRewrite = (serialized: string) => string | null | undefined;
+type Scripts = Record<string, string>;
+type StagedCommands = Record<string, string | Array<string>>;
+
+// The native script rewriters change strings in place and preserve all other
+// JSON values, including non-command entries in user-authored configuration.
+export function rewriteScriptMap(
+  commands: Scripts,
+  rewrite: NativeScriptRewrite,
+): Scripts | undefined;
+export function rewriteScriptMap(
+  commands: StagedCommands,
+  rewrite: NativeScriptRewrite,
+): StagedCommands | undefined;
+export function rewriteScriptMap(
+  commands: JsonObject,
+  rewrite: NativeScriptRewrite,
+): JsonObject | undefined;
+export function rewriteScriptMap(
+  commands: JsonObject,
+  rewrite: NativeScriptRewrite,
+): JsonObject | undefined {
+  const updated = rewrite(JSON.stringify(commands));
+  return updated ? parseJsonObject(updated) : undefined;
+}
+
+/** Rewrite the command fields that both ESLint and Prettier can appear in. */
+export function rewritePackageScriptFields(
+  pkg: { scripts?: Scripts; 'lint-staged'?: StagedCommands },
+  rewrite: NativeScriptRewrite,
+): boolean {
+  const scripts = pkg.scripts && rewriteScriptMap(pkg.scripts, rewrite);
+  if (scripts) {
+    pkg.scripts = scripts;
+  }
+  const staged = pkg['lint-staged'] && rewriteScriptMap(pkg['lint-staged'], rewrite);
+  if (staged) {
+    pkg['lint-staged'] = staged;
+  }
+  return Boolean(scripts || staged);
 }

@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import { parseArgs } from 'node:util';
 
-import { runTemplate, runTemplateCLI, type Template } from 'bingo';
+import { runTemplate, runTemplateCLI } from 'bingo';
 import { z } from 'zod';
 
 import template from '../src/template.ts';
@@ -14,8 +14,8 @@ async function main() {
     process.argv.includes('--help') ||
     process.argv.includes('--version')
   ) {
-    // runTemplateCLI accepts a wider type than createTemplate returns.
-    return await runTemplateCLI(template as unknown as Template);
+    // @ts-expect-error Bingo's CLI accepts this template but its types require a generic options schema.
+    return await runTemplateCLI(template);
   }
 
   // Add CLI entries here when adding options to src/template.ts.

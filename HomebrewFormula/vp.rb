@@ -58,7 +58,8 @@ class Vp < Formula
       # the normal formula fetch reuses this archive from Homebrew's download cache.
       archive = resource.cached_download
       resource.fetch(verify_download_integrity: false, quiet: true) unless archive.file?
-      if "sha512-#{Digest::SHA512.file(archive).base64digest}" != integrity
+      digest = Digest::SHA512.file(archive).base64digest
+      if "sha512-#{digest}" != integrity
         resource.clear_cache
         raise "Vite+ preview checksum mismatch"
       end
@@ -79,23 +80,23 @@ class Vp < Formula
   # BEGIN RELEASE ASSETS
   on_macos do
     on_arm do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.7.0/vp-aarch64-apple-darwin.tar.gz"
-      sha256 "a68076a1f57466de1c3e0c0a9cc43f998a05924a5735e87e22209a922b670a8a"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.8.0/vp-aarch64-apple-darwin.tar.gz"
+      sha256 "cc7dffc938d6fb91445e2a4c37825dc933ff3b1d7a480a9f17bf8b4f77357421"
     end
     on_intel do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.7.0/vp-x86_64-apple-darwin.tar.gz"
-      sha256 "5ccaeb423273e9b5a5ce099cce5623ccdc95d75d1012e42616f834a0e4972bf6"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.8.0/vp-x86_64-apple-darwin.tar.gz"
+      sha256 "1b8e825a2031994358df0681a3f41bf3e5079ebff1697442c5de19aad68a42f4"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.7.0/vp-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "5b3238b8827a6e7ba3383e7b3569b77fe506ae60a52daff281c6488779edeb9d"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.8.0/vp-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "21cc1ee922571b59dc9b8dedb2d0a0f7adaa8783354849d51f937043c7c9c948"
     end
     on_intel do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.7.0/vp-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "59cb8f13d7f312c634072bf6f72d7cc02fb77595b886e749adc79761fc84c737"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.8.0/vp-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "09c610b61f22f3a02bb38dae948d4ddcdada0c019ff96341b72894be576c6b03"
     end
   end
   # END RELEASE ASSETS
@@ -103,7 +104,8 @@ class Vp < Formula
   if preview_ref
     os = OS.mac? ? "darwin" : "linux"
     arch = Hardware::CPU.arm? ? "arm64" : "x64"
-    platform = "#{os}-#{arch}#{"-gnu" if OS.linux?}"
+    gnu_suffix = "-gnu" if OS.linux?
+    platform = "#{os}-#{arch}#{gnu_suffix}"
     preview = Preview.resolve(preview_ref, platform)
     url preview.fetch(:url)
     version preview.fetch(:version)

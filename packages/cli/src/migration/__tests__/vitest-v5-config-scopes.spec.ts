@@ -14,7 +14,7 @@ import {
 import { migrateVitestV5Config } from '../vitest-v5/config.ts';
 import { migrateVitestV5Source } from '../vitest-v5/source.ts';
 
-const directories: string[] = [];
+const directories: Array<string> = [];
 afterEach(() => {
   for (const directory of directories.splice(0)) {
     fs.rmSync(directory, { recursive: true, force: true });
@@ -245,11 +245,8 @@ describe('In-source test ownership', () => {
     expect(plan.findings).toEqual([]);
     applyVitestV5Migration(plan);
     expect(read('web/extra/add.ts')).toContain('concurrent: false');
-    if (inherits) {
-      expect(read('web/src/add.ts')).toContain('concurrent: false');
-    } else {
-      expect(read('web/src/add.ts')).toBe(source);
-    }
+    const migrated = expect.stringContaining('concurrent: false');
+    expect(read('web/src/add.ts')).toEqual(inherits ? migrated : source);
     expect(finishVitestV5Migration(plan)).toEqual([]);
   });
 

@@ -4,7 +4,7 @@ const originalEnv = process.env.VP_EMIT_MILESTONES;
 
 // Parsed with string ops rather than a regex: the marker embeds ESC (U+001B),
 // which `no-control-regex` forbids inside a regex literal.
-const ESC = '\x1b';
+const ESC = '\u001b';
 const TITLE_PREFIX = `${ESC}]2;vt-pty-terminal-test:`;
 const TITLE_SUFFIX = `${ESC}\\`;
 
@@ -30,7 +30,7 @@ async function loadMilestone(value: string | undefined) {
   } else {
     process.env.VP_EMIT_MILESTONES = value;
   }
-  return import('../milestone.js');
+  return import('../milestone.ts');
 }
 
 afterEach(() => {

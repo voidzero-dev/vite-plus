@@ -7,7 +7,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function syncVersionsArgs(argv: readonly string[]): string[] {
+function syncVersionsArgs(argv: ReadonlyArray<string>): Array<string> {
   const args = argv.slice(2);
   return args[0] === 'sync-versions' ? args.slice(1) : args;
 }

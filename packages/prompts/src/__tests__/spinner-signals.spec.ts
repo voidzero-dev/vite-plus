@@ -1,4 +1,5 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -103,8 +104,11 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
           process.send(worker.pid);
         `,
         (child, pid) => {
-          worker = pid as number;
-          child.stdin!.write('\x03');
+          if (typeof pid !== 'number') {
+            throw new Error('Expected the worker PID');
+          }
+          worker = pid;
+          child.stdin!.write('\u0003');
         },
       );
       expect(result).toMatchObject({ code: null, signal: 'SIGINT', stderr: '' });
@@ -132,7 +136,7 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
         spinner({ output: output(true) }).start('Second');
         process.send('ready');
       `,
-      (child) => child.stdin!.write('\x03'),
+      (child) => child.stdin!.write('\u0003'),
     );
     expect(result).toMatchObject({ code: 0, signal: null, stderr: '' });
     expect(result.stdout).toContain('cleanup complete');
@@ -147,7 +151,7 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
         spinner({ output: output(true) }).start('Second');
         process.send('ready');
       `,
-      (child) => child.stdin!.write('\x03'),
+      (child) => child.stdin!.write('\u0003'),
     );
     expect(result).toMatchObject({ code: null, signal: 'SIGINT', stderr: '' });
     expect(result.stdout).toContain('cleanup hook ran');

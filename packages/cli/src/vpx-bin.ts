@@ -11,10 +11,8 @@
  * Only `vp dlx` loads the CLI bundle and the native binding. A script's own Node.js
  * process loads the binding through `script-preload.cjs`.
  */
-
 import type { Serializable } from 'node:child_process';
-import { statSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
@@ -22,6 +20,9 @@ import { styleText } from 'node:util';
 import spawn from 'cross-spawn';
 
 import { exitCodeFromClose } from './utils/command.ts';
+import { errorMessage } from './utils/error.ts';
+import { parseJsonObject } from './utils/json-value.ts';
+import { setBlocking } from './utils/stdio.ts';
 import { setUserAgent } from './utils/user-agent.ts';
 import {
   canExecDirectly,
@@ -36,7 +37,6 @@ import {
 setUserAgent();
 
 function errorMsg(message: string) {
-  /* oxlint-disable-next-line no-console */
   console.error(styleText(['red', 'bold'], 'error:'), message);
 }
 
@@ -60,10 +60,6 @@ function childEnv(cwd: string): NodeJS.ProcessEnv {
 const IGNORED_SIGNALS = ['SIGPIPE', 'SIGXFSZ'] as const;
 const ignoreSignal = () => {};
 
-interface StdioStream {
-  _handle?: { setBlocking?: (blocking: boolean) => number };
-}
-
 /**
  * Replace this process with `command`, as the global `vpx` does on Unix, so the caller's
  * PID, every signal sent to it, and the exit status belong to the script or binary.
@@ -75,7 +71,7 @@ interface StdioStream {
  * `process.execve()` passes on (nodejs/node#66824). Removing a signal listener restores
  * the default disposition.
  */
-function execInPlace(command: string, args: string[], env: NodeJS.ProcessEnv): void {
+function execInPlace(command: string, args: Array<string>, env: NodeJS.ProcessEnv): void {
   if (process.platform === 'win32' || typeof process.execve !== 'function') {
     return;
   }
@@ -83,8 +79,7 @@ function execInPlace(command: string, args: string[], env: NodeJS.ProcessEnv): v
     process.on(signal, ignoreSignal).off(signal, ignoreSignal);
   }
   for (const stream of [process.stdin, process.stdout, process.stderr]) {
-    /* oxlint-disable-next-line no-underscore-dangle -- Node.js has no public API for this */
-    (stream as StdioStream)._handle?.setBlocking?.(true);
+    setBlocking(stream, true);
   }
   // A failed exec aborts most supported Node.js versions instead of throwing, so a
   // binary `canExecDirectly` cannot vouch for execs through `/bin/sh`, which reports one
@@ -115,14 +110,15 @@ function execInPlace(command: string, args: string[], env: NodeJS.ProcessEnv): v
  */
 function runAndExit(
   command: string,
-  args: string[],
+  args: Array<string>,
   env: NodeJS.ProcessEnv,
   { relayIpc = false } = {},
 ): void {
   if (process.send === undefined) {
     execInPlace(command, args, env);
   }
-  const ipc = relayIpc && process.send !== undefined;
+  const send = relayIpc ? process.send?.bind(process) : undefined;
+  const ipc = send !== undefined;
   const child = spawn(command, args, {
     stdio: ipc ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit',
     env,
@@ -151,7 +147,7 @@ function runAndExit(
   if (ipc) {
     child.on('message', (message) => {
       pendingSends++;
-      process.send!(message, undefined, undefined, () => {
+      send(message, undefined, undefined, () => {
         pendingSends--;
         exitWhenDone();
       });
@@ -166,9 +162,11 @@ function runAndExit(
         return;
       }
       try {
+        // Node delivers only values that have already passed its IPC serializer.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The process message event is declared as unknown.
         child.send(message as Serializable);
       } catch (error) {
-        errorMsg(`vpx: Failed to relay an IPC message to the script: ${(error as Error).message}`);
+        errorMsg(`vpx: Failed to relay an IPC message to the script: ${errorMessage(error)}`);
       }
     });
     process.on('disconnect', () => {
@@ -227,7 +225,6 @@ Examples:
 function fail(message: string, note?: string): never {
   errorMsg(message);
   if (note) {
-    /* oxlint-disable-next-line no-console */
     console.error(styleText(['dim', 'bold'], 'note:'), note);
   }
   process.exit(1);
@@ -242,7 +239,12 @@ if (flags.help) {
   process.exit(0);
 }
 if (flags.version) {
-  const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
+  const { version } = parseJsonObject(
+    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+  );
+  if (typeof version !== 'string') {
+    throw new Error('Missing vite-plus version');
+  }
   process.stdout.write(`vite-plus v${version}\n`);
   process.exit(0);
 }

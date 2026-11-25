@@ -11,7 +11,17 @@ export type {
   TrustedStackStatsFile,
 } from './trusted-stack-stats.types';
 
-export const trustedStackStats = raw as TrustedStackStatsFile;
+function isTrustedStackProject(
+  project: (typeof raw.projects)[number],
+): project is TrustedStackStatProject {
+  return project.id === 'vite' || project.id === 'vitest' || project.id === 'oxc';
+}
+
+const { projects } = raw;
+if (!projects.every(isTrustedStackProject)) {
+  throw new Error('Unexpected project ID in trusted-stack-stats.json');
+}
+export const trustedStackStats: TrustedStackStatsFile = { projects };
 
 export function trustedStackById(id: TrustedStackProjectId): TrustedStackStatProject {
   const project = trustedStackStats.projects.find((p) => p.id === id);

@@ -1,4 +1,4 @@
-use crate::script_rewrite::{ScriptRewriteConfig, rewrite_script};
+use crate::script_rewrite::{FlagConversion, ScriptRewriteConfig, rewrite_script};
 
 const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
     source_command: "eslint",
@@ -6,9 +6,13 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
     boolean_flags: &[
         "--cache",
         "--no-eslintrc",
-        "--no-error-on-unmatched-pattern",
         "--debug",
         "--no-inline-config",
+        "--color",
+        "--no-color",
+        "--exit-on-fatal-error",
+        "--stats",
+        "--pass-on-unpruned-suppressions",
     ],
     value_flags: &[
         "--ext",
@@ -17,10 +21,20 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--parser",
         "--parser-options",
         "--plugin",
+        "-o",
         "--output-file",
         "--env",
+        "--cache-location",
+        "--cache-file",
+        "--cache-strategy",
+        "--concurrency",
     ],
-    flag_conversions: &[],
+    // ESLint only warns about ignored files, but Oxlint fails when they leave nothing to lint.
+    flag_conversions: &[FlagConversion {
+        source_flags: &["--no-warn-ignored"],
+        target_flag: "--no-error-on-unmatched-pattern",
+        dedup_flag: "--no-error-on-unmatched-pattern",
+    }],
 };
 
 /// Rewrite a single script: rename `eslint` → `vp lint` and strip ESLint-only flags.
@@ -57,11 +71,39 @@ mod tests {
         assert_eq!(rewrite_eslint_script("eslint --cache --fix ."), "vp lint --fix .");
         assert_eq!(rewrite_eslint_script("eslint --no-eslintrc --fix ."), "vp lint --fix .");
         assert_eq!(rewrite_eslint_script("eslint --debug ."), "vp lint .");
+        // Oxlint supports this flag with the same meaning, so it is kept
         assert_eq!(
             rewrite_eslint_script("eslint --no-error-on-unmatched-pattern --fix ."),
-            "vp lint --fix ."
+            "vp lint --no-error-on-unmatched-pattern --fix ."
+        );
+        // ignored-only file lists keep succeeding, as they did with ESLint
+        assert_eq!(
+            rewrite_eslint_script("eslint --max-warnings 0 --no-warn-ignored --fix"),
+            "vp lint --max-warnings 0 --no-error-on-unmatched-pattern --fix"
+        );
+        assert_eq!(
+            rewrite_eslint_script(
+                "eslint --no-warn-ignored --no-error-on-unmatched-pattern --fix ."
+            ),
+            "vp lint --no-error-on-unmatched-pattern --fix ."
         );
         assert_eq!(rewrite_eslint_script("eslint --no-inline-config ."), "vp lint .");
+        assert_eq!(rewrite_eslint_script("eslint --no-color --stats --fix ."), "vp lint --fix .");
+
+        // Oxlint has no cache, so cache options go with --cache
+        assert_eq!(
+            rewrite_eslint_script(
+                "eslint --cache --cache-location node_modules/.cache/eslint --cache-strategy content --fix ."
+            ),
+            "vp lint --fix ."
+        );
+        assert_eq!(rewrite_eslint_script("eslint -o report.txt ."), "vp lint .");
+
+        // flags Oxlint accepts stay
+        assert_eq!(
+            rewrite_eslint_script("eslint --quiet --max-warnings 0 --ignore-pattern dist ."),
+            "vp lint --quiet --max-warnings 0 --ignore-pattern dist ."
+        );
 
         // multiple flags stripped at once
         assert_eq!(
@@ -106,6 +148,60 @@ mod tests {
         assert_eq!(
             rewrite_eslint_script("NODE_ENV=test eslint --cache --ext .ts ."),
             "NODE_ENV=test vp lint ."
+        );
+    }
+
+    #[test]
+    fn test_rewrite_eslint_strips_flags_oxlint_rejects() {
+        // Each value flag must also drop its value; a boolean flag must keep the next token.
+        for flags in [
+            "-o report.txt",
+            "--cache-location .eslintcache",
+            "--cache-file .eslintcache",
+            "--cache-strategy content",
+            "--concurrency 2",
+            "--color",
+            "--no-color",
+            "--stats",
+            "--exit-on-fatal-error",
+            "--pass-on-unpruned-suppressions",
+        ] {
+            assert_eq!(
+                rewrite_eslint_script(&format!("eslint {flags} --fix .")),
+                "vp lint --fix .",
+                "{flags}"
+            );
+        }
+
+        // Stripping these would change what the script checks or fixes, so they stay and fail loudly.
+        assert_eq!(
+            rewrite_eslint_script("eslint -c eslint.ci.config.mjs src"),
+            "vp lint -c eslint.ci.config.mjs src"
+        );
+        assert_eq!(
+            rewrite_eslint_script("eslint --rule 'no-console: error' src"),
+            "vp lint --rule 'no-console: error' src"
+        );
+        for flags in [
+            "--no-config-lookup",
+            "--global appRuntime",
+            "--report-unused-inline-configs error",
+            "--suppress-rule no-console",
+            "--suppressions-location suppressions.json",
+            "--flag v10_config_lookup_from_file",
+        ] {
+            assert_eq!(
+                rewrite_eslint_script(&format!("eslint {flags} --fix src")),
+                format!("vp lint {flags} --fix src"),
+            );
+        }
+        assert_eq!(
+            rewrite_eslint_script("eslint --fix --pass-on-no-patterns $FILES"),
+            "vp lint --fix --pass-on-no-patterns $FILES"
+        );
+        assert_eq!(
+            rewrite_eslint_script("eslint --fix --fix-type layout src"),
+            "vp lint --fix --fix-type layout src"
         );
     }
 

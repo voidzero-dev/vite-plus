@@ -3,30 +3,30 @@ import path from 'node:path';
 
 import { minimatch } from 'minimatch';
 import { globSync } from 'tinyglobby';
-import { Scalar, YAMLSeq } from 'yaml';
+import { isSeq, Scalar, YAMLSeq } from 'yaml';
 
 import { detectWorkspace as detectWorkspaceBinding } from '../../binding/index.js';
-import {
-  DependencyType,
-  PackageManager,
-  type WorkspaceInfo,
-  type WorkspaceInfoOptional,
-  type WorkspacePackage,
-} from '../types/index.ts';
+import type { DependencyType } from '../types/index.ts';
+import type { WorkspaceInfo, WorkspaceInfoOptional, WorkspacePackage } from '../types/index.ts';
+import { PackageManager } from '../types/index.ts';
+import { isPackageManager } from '../types/package.ts';
 import { editJsonFile, readJsonFile } from './json.ts';
 import { getScopeFromPackageName } from './package.ts';
 import { editYamlFile, readYamlFile } from './yaml.ts';
 
 // npm/yarn use an array; Bun catalogs and Yarn classic nohoist use an object with `packages`.
 export type NpmWorkspaces =
-  | string[]
+  | Array<string>
   | {
-      packages?: string[];
+      packages?: Array<string>;
       catalog?: Record<string, string>;
       catalogs?: Record<string, Record<string, string>>;
     };
 
-export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string): string[] {
+export function findPackageJsonFilesFromPatterns(
+  patterns: Array<string>,
+  cwd: string,
+): Array<string> {
   if (patterns.length === 0) {
     return [];
   }
@@ -49,8 +49,8 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
     parentDirs: [],
     packages: [],
   };
-  if (bindingResult.packageManagerName) {
-    result.packageManager = bindingResult.packageManagerName as PackageManager;
+  if (isPackageManager(bindingResult.packageManagerName)) {
+    result.packageManager = bindingResult.packageManagerName;
   }
   if (bindingResult.packageManagerVersion) {
     result.packageManagerVersion = bindingResult.packageManagerVersion;
@@ -68,8 +68,11 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
     const pnpmWorkspaceFile = path.join(result.rootDir, 'pnpm-workspace.yaml');
     const packageJsonFile = path.join(result.rootDir, 'package.json');
     if (fs.existsSync(pnpmWorkspaceFile)) {
-      const workspaceConfig = readYamlFile(pnpmWorkspaceFile) as { packages?: string[] };
-      if (Array.isArray(workspaceConfig.packages)) {
+      const workspaceConfig = readYamlFile(pnpmWorkspaceFile);
+      if (
+        Array.isArray(workspaceConfig?.packages) &&
+        workspaceConfig.packages.every((pattern) => typeof pattern === 'string')
+      ) {
         result.workspacePatterns = workspaceConfig.packages;
       }
     } else if (fs.existsSync(packageJsonFile)) {
@@ -118,10 +121,10 @@ export function isBingoTemplate(pkg: { dependencies?: Record<string, string> }):
 
 // Discover all workspace packages
 export function discoverWorkspacePackages(
-  workspacePatterns: string[],
+  workspacePatterns: Array<string>,
   rootDir: string,
-): WorkspacePackage[] {
-  const packages: WorkspacePackage[] = [];
+): Array<WorkspacePackage> {
+  const packages: Array<WorkspacePackage> = [];
 
   if (workspacePatterns.length === 0) {
     return packages;
@@ -164,7 +167,7 @@ export function discoverWorkspacePackages(
 export function updatePackageJsonWithDeps(
   rootDir: string,
   projectDir: string,
-  dependencies: string[],
+  dependencies: Array<string>,
   dependencyType: DependencyType,
 ) {
   const packageJsonPath = path.join(rootDir, projectDir, 'package.json');
@@ -195,10 +198,11 @@ export function updateWorkspaceConfig(projectPath: string, workspaceInfo: Worksp
 
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     editYamlFile(path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml'), (doc) => {
-      let packages = doc.getIn(['packages']) as YAMLSeq<Scalar<string>>;
-      if (!packages) {
-        packages = new YAMLSeq<Scalar<string>>();
+      const existing: unknown = doc.getIn(['packages']);
+      if (existing && !isSeq(existing)) {
+        throw new TypeError('Expected packages to be a YAML sequence');
       }
+      const packages = isSeq(existing) ? existing : new YAMLSeq<Scalar<string>>();
       packages.add(new Scalar(pattern));
       doc.setIn(['packages'], packages);
     });

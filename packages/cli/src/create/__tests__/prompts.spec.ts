@@ -4,17 +4,24 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockSelect } = vi.hoisted(() => ({
-  mockSelect: vi.fn(),
+import type { cancelAndExit as cancelAndExitImplementation } from '../../utils/prompts.ts';
+
+const { mockSelect, mockText } = vi.hoisted(() => ({
+  mockSelect: vi.fn<() => Promise<string>>(),
+  mockText:
+    vi.fn<
+      (options: { validate?: (value: string | undefined) => string | undefined }) => Promise<string>
+    >(),
 }));
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   isCancel: () => false,
   select: mockSelect,
+  text: mockText,
 }));
 
 vi.mock('../../utils/prompts.ts', () => ({
-  cancelAndExit: vi.fn(() => {
+  cancelAndExit: vi.fn<typeof cancelAndExitImplementation>(() => {
     throw new Error('Operation cancelled');
   }),
 }));
@@ -23,10 +30,10 @@ vi.mock('../../utils/terminal.ts', () => ({
   accent: (value: string) => value,
 }));
 
-const { checkProjectDirExists, isTargetDirAvailable, suggestAvailableTargetDir } =
-  await import('../prompts.js');
+const { checkProjectDirExists, isTargetDirAvailable, promptTargetDir, suggestAvailableTargetDir } =
+  await import('../prompts.ts');
 
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
@@ -74,6 +81,24 @@ describe('target directory helpers', () => {
     fs.symlinkSync(linkedDir, targetDir, process.platform === 'win32' ? 'junction' : 'dir');
 
     expect(isTargetDirAvailable(targetDir)).toBe(false);
+  });
+
+  it('rejects ".." path segments but accepts directory names that contain two dots', async () => {
+    const cwd = makeTempDir();
+    let validate: ((value: string | undefined) => string | undefined) | undefined;
+    mockText.mockImplementation((options) => {
+      validate = options.validate;
+      return Promise.resolve('my..lib');
+    });
+
+    await expect(promptTargetDir('my-project', true, { cwd })).resolves.toBe('my..lib');
+
+    const parentError = 'Relative path contains ".." which is not allowed';
+    expect(validate?.('my..lib')).toBeUndefined();
+    expect(validate?.('foo/my..lib')).toBeUndefined();
+    expect(validate?.('..')).toBe(parentError);
+    expect(validate?.('../my-project')).toBe(parentError);
+    expect(validate?.('foo/../../my-project')).toBe(parentError);
   });
 
   it('suggests a different target directory when the default already exists', () => {
@@ -216,9 +241,10 @@ describe('target directory helpers', () => {
         }),
       );
       expect(fs.lstatSync(targetDir, { throwIfNoEntry: false })).toBeUndefined();
-      if (!dangling) {
-        expect(fs.readFileSync(path.join(linkedDir, 'keep.txt'), 'utf8')).toBe('keep');
-      }
+      const kept = path.join(linkedDir, 'keep.txt');
+      expect(fs.existsSync(kept) ? fs.readFileSync(kept, 'utf8') : undefined).toBe(
+        dangling ? undefined : 'keep',
+      );
     },
   );
 

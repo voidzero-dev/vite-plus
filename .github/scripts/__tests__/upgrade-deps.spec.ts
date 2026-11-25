@@ -1,6 +1,6 @@
 /// <reference types="node" />
 
-import * as childProcess from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import {
   copyFileSync,
   mkdirSync,
@@ -15,10 +15,9 @@ import { dirname, join, resolve } from 'node:path';
 
 import { expect, onTestFinished, test, vi } from 'vite-plus/test';
 
-vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:child_process')>();
-  return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
-});
+import { readJsonObject as readJson, requireJsonObject } from '../../../scripts/json.ts';
+
+vi.mock('node:child_process', { spy: true });
 
 test.each([false, true])(
   'runs the upgrade pipeline and retains metadata (install fails: %s)',
@@ -26,7 +25,7 @@ test.each([false, true])(
     const root = resolve(import.meta.dirname, '../../..');
     const { root: tempDir, metaDir, corePath, pluginPath, parserPath } = createSyncFixture();
     onTestFinished(() => {
-      vi.mocked(childProcess.execFileSync).mockReset();
+      vi.mocked(execFileSync).mockReset();
       vi.restoreAllMocks();
       vi.unstubAllGlobals();
       vi.unstubAllEnvs();
@@ -63,8 +62,8 @@ test.each([false, true])(
     writeFileSync(
       workspacePath,
       readFileSync(workspacePath, 'utf8')
-        .replace(/  lint-staged: .+/, '  lint-staged: ^16.2.6')
-        .replace(/^  oxc-(?:minify|transform): .+\n/gm, ''),
+        .replace(/ {2}lint-staged: .+/, '  lint-staged: ^16.2.6')
+        .replaceAll(/^ {2}oxc-(?:minify|transform): .+\n/gm, ''),
     );
 
     vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
@@ -76,6 +75,7 @@ test.each([false, true])(
     const pinnedOxcNode = JSON.parse(
       readFileSync(join(tempDir, 'packages/tools/.upstream-versions.json'), 'utf8'),
     )['oxc-node'].hash;
+    const compareUrls: Array<string> = [];
     vi.stubGlobal('fetch', async (url: string) => {
       if (url === 'https://nodejs.org/dist/index.json') {
         return Response.json([
@@ -87,7 +87,7 @@ test.each([false, true])(
         ]);
       }
       if (url.startsWith('https://api.github.com/repos/oxc-project/oxc-node/compare/')) {
-        expect(url).toContain(`/compare/${pinnedOxcNode}...`);
+        compareUrls.push(url);
         return Response.json({ status: failInstall ? 'diverged' : 'ahead' });
       }
       if (url.startsWith('https://api.github.com/repos/')) {
@@ -120,9 +120,6 @@ test.each([false, true])(
       if (url === 'https://registry.npmjs.org/@oxlint/plugins/latest') {
         throw new Error('@oxlint/plugins must use the selected oxlint version');
       }
-      if (url === 'https://registry.npmjs.org/oxlint-tsgolint/latest') {
-        return Response.json({ version: '7.0.2004' });
-      }
       if (url === 'https://registry.npmjs.org/tsrs/next') {
         throw new Error('tsrs must use the latest dist-tag');
       }
@@ -140,10 +137,14 @@ test.each([false, true])(
       }
       throw new Error(`Unexpected request: ${url}`);
     });
-    const commands: string[][] = [];
-    vi.mocked(childProcess.execFileSync).mockImplementation((command, args) => {
+    const commands: Array<Array<string>> = [];
+    let parserAtFinalInstall;
+    vi.mocked(execFileSync).mockImplementation((command, args) => {
       expect(command).toBe('pnpm');
-      commands.push(args as string[]);
+      if (!Array.isArray(args)) {
+        throw new Error('Expected pnpm command arguments');
+      }
+      commands.push([...args]);
       if (failInstall) {
         throw new Error('Installation failed');
       }
@@ -155,30 +156,39 @@ test.each([false, true])(
         writeJson(parserPath, { version: '0.11.2' });
       }
       if (commands.length === 4) {
-        expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.11.2');
+        parserAtFinalInstall = requireJsonObject(readJson(corePath).dependencies, corePath)[
+          'yuku-parser'
+        ];
       }
       return Buffer.from('');
     });
 
     vi.resetModules();
-    if (failInstall) {
-      await expect(import('../upgrade-deps.ts')).rejects.toThrow('Installation failed');
-      expect(commands).toEqual([['install', '--no-frozen-lockfile']]);
-      expect(readJson(corePath).dependencies['yuku-parser']).toBe('^0.9.3');
-    } else {
-      await import('../upgrade-deps.ts');
-      expect(commands).toEqual([
-        ['install', '--no-frozen-lockfile'],
-        ['tool', 'sync-remote'],
-        ['dedupe'],
-        ['install', '--no-frozen-lockfile'],
-      ]);
-    }
+    const failure = await import('../upgrade-deps.ts').then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(failure).toEqual(failInstall ? new Error('Installation failed') : undefined);
+    expect(commands).toEqual(
+      failInstall
+        ? [['install', '--no-frozen-lockfile']]
+        : [
+            ['install', '--no-frozen-lockfile'],
+            ['tool', 'sync-remote'],
+            ['dedupe'],
+            ['install', '--no-frozen-lockfile'],
+          ],
+    );
+    expect(compareUrls).toEqual([expect.stringContaining(`/compare/${pinnedOxcNode}...`)]);
+    expect(parserAtFinalInstall).toBe(failInstall ? undefined : '0.11.2');
+    expect(readJson(corePath)).toHaveProperty(
+      ['dependencies', 'yuku-parser'],
+      failInstall ? '^0.9.3' : '0.11.2',
+    );
 
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  lint-staged: ^17.5.1\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain("\n  '@oxlint/plugins': =1.88.0\n");
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint: =1.88.0\n');
-    expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint-tsgolint: =7.0.2004\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  tsrs: =7.1.0-beta.tsrs3\n');
     expect(readFileSync(nodeVersionPath, 'utf8')).toBe('24.10.2\n');
     expect(readFileSync(installerPath, 'utf8')).toContain(
@@ -207,7 +217,6 @@ test.each([false, true])(
     expect(versions['lint-staged']).toEqual({ old: '16.2.6', new: '17.5.1' });
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);
-    expect(versions['oxlint-tsgolint'].new).toBe('7.0.2004');
     expect(versions.tsrs.new).toBe('7.1.0-beta.tsrs3');
     expect(versions).not.toHaveProperty('oxc-minify');
     expect(versions).not.toHaveProperty('oxc-transform');
@@ -216,9 +225,9 @@ test.each([false, true])(
         ? { old: pinnedOxcNode, new: pinnedOxcNode }
         : { old: pinnedOxcNode, new: 'a'.repeat(40), tag: 'v1.2.3' },
     );
-    if (!failInstall) {
-      expect(versions['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.11.2' });
-    }
+    expect(versions['yuku-parser']).toEqual(
+      failInstall ? undefined : { old: '^0.9.3', new: '0.11.2' },
+    );
     expect(readFileSync(join(metaDir, 'commit-message.txt'), 'utf8')).toContain(
       '- lint-staged: 16.2.6 -> 17.5.1',
     );
@@ -234,10 +243,6 @@ test.each([false, true])(
 function writeJson(file: string, value: unknown) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
-}
-
-function readJson(file: string) {
-  return JSON.parse(readFileSync(file, 'utf8'));
 }
 
 function createSyncFixture() {
@@ -286,7 +291,7 @@ function createSyncFixture() {
   });
   writeJson(versionsPath, { oxlint: { old: '1.86.0', new: '1.87.0' } });
   const run = () =>
-    childProcess.execFileSync(
+    execFileSync(
       process.execPath,
       [resolve(import.meta.dirname, '../upgrade-deps.ts'), '--sync-bundled-deps'],
       {
@@ -329,7 +334,7 @@ test('pins the bundled parser, syncs Vite ranges, and preserves upgrade metadata
   run();
   expect(readJson(corePath).dependencies).not.toHaveProperty('yuku-ast');
   expect(readJson(corePath).dependencies).not.toHaveProperty('yuku-codegen');
-  expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.11.2');
+  expect(readJson(corePath)).toHaveProperty(['dependencies', 'yuku-parser'], '0.11.2');
   expect(readJson(versionsPath)['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.11.2' });
   expect(readFileSync(join(metaDir, 'commit-message.txt'), 'utf8')).toContain(
     '- yuku-parser: ^0.9.3 -> 0.11.2',
@@ -385,7 +390,7 @@ test('updates the parser pin when its installed version changes within the same 
   run();
   writeJson(parserPath, { version: '0.10.4' });
   run();
-  expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.10.4');
+  expect(readJson(corePath)).toHaveProperty(['dependencies', 'yuku-parser'], '0.10.4');
   expect(readJson(versionsPath)['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.10.4' });
 });
 
@@ -410,7 +415,8 @@ test.each([
 ] as const)('fails without writing core when upstream removes $name', ({ source, field, name }) => {
   const fixture = createSyncFixture();
   const pkg = readJson(fixture[source]);
-  delete pkg[field][name];
+  const dependencies = requireJsonObject(pkg[field], field);
+  delete dependencies[name];
   writeJson(fixture[source], pkg);
   const before = readFileSync(fixture.corePath, 'utf8');
   expect(fixture.run).toThrow("review core's externals");

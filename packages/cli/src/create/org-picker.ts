@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { isCancel, select } from '@voidzero-dev/vite-plus-prompts';
 
-import {
-  filterManifestForContext,
-  type OrgManifest,
-  type OrgTemplateEntry,
-} from './org-manifest.ts';
+import type { OrgManifest, OrgTemplateEntry } from './org-manifest.ts';
+import { filterManifestForContext } from './org-manifest.ts';
 
 export const ORG_PICKER_CANCEL = Symbol('org-picker-cancel');
 export const ORG_PICKER_BUILTIN_ESCAPE = Symbol('org-picker-builtin-escape');
@@ -43,7 +40,7 @@ export async function pickOrgTemplate(
   // they chose.
   const escapeValue = `__vp_builtin_escape__::${randomUUID()}`;
   const lookup = new Map<string, OrgTemplateEntry | typeof ESCAPE_HATCH>();
-  const options: { value: string; label: string; hint?: string }[] = filtered.map((entry) => {
+  const options: Array<{ value: string; label: string; hint?: string }> = filtered.map((entry) => {
     lookup.set(entry.name, entry);
     return { value: entry.name, label: entry.name, hint: entry.description };
   });
@@ -56,12 +53,12 @@ export async function pickOrgTemplate(
     : 'Use defaults (monorepo / application / library)';
   options.push({ value: escapeValue, label: 'Vite+ built-in templates', hint: builtinHint });
 
-  const picked = await prompts.select({
+  const picked = await select({
     message: `Pick a template from ${manifest.scope}`,
     options,
   });
 
-  if (prompts.isCancel(picked)) {
+  if (isCancel(picked)) {
     return ORG_PICKER_CANCEL;
   }
   const found = lookup.get(picked);
@@ -72,7 +69,7 @@ export async function pickOrgTemplate(
     // Unreachable: every option's `value` was just registered in `lookup`
     // a few lines above. Throw rather than masquerade as a cancel — a
     // missing entry would mean a real internal bug.
-    throw new Error(`org-picker: prompts.select returned an unregistered value: ${picked}`);
+    throw new Error(`org-picker: select returned an unregistered value: ${picked}`);
   }
   return { kind: 'entry', entry: found };
 }
@@ -82,10 +79,7 @@ export async function pickOrgTemplate(
  * error output. Fixed column order so AI agents and scripts can recover
  * available template names without a `--json` flag.
  */
-export function formatManifestTable(
-  manifest: OrgManifest,
-  isMonorepo: boolean,
-): { lines: string[]; filteredCount: number } {
+export function formatManifestTable(manifest: OrgManifest, isMonorepo: boolean) {
   const visible = filterManifestForContext(manifest.templates, isMonorepo);
   const filteredCount = manifest.templates.length - visible.length;
 
@@ -94,7 +88,7 @@ export function formatManifestTable(
     'DESCRIPTION'.length,
     ...visible.map((entry) => entry.description.length),
   );
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   lines.push(`  ${'NAME'.padEnd(nameWidth)}  ${'DESCRIPTION'.padEnd(descWidth)}  TEMPLATE`);
   for (const entry of visible) {
     lines.push(

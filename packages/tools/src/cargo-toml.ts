@@ -2,7 +2,7 @@
 // module free of package imports: CI runs `patch-oxc-node` before installing dependencies.
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 // Parse every `oxc*` crate version from a Cargo.toml in a single pass, keyed by

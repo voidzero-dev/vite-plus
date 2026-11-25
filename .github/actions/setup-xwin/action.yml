@@ -46,7 +46,7 @@ runs:
       env:
         EXTRA_TOOLS: ${{ inputs.tools }}
         # Renovate updates these pins. Keep the SDK version and checksum together.
-        CARGO_XWIN_VERSION: '0.23.1'
+        CARGO_XWIN_VERSION: '0.24.1'
         SYSROOT_VERSION: '2026-09-15'
         SYSROOT_SHA256: 6aeecd2d25bcc90c72af09dc525dfdf7143c374d476dc4296692d42efb27a9b9
 

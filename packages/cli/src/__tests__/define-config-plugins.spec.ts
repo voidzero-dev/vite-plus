@@ -2,10 +2,15 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type {
+  ignoreInput as ignoreInputImplementation,
+  ignoreOutput as ignoreOutputImplementation,
+} from '@voidzero-dev/vite-task-client';
 import type { Plugin } from 'vite';
 import { normalizePath } from 'vite';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createVitest, type VitestPluginContext } from 'vitest/node';
+import { assert, afterEach, describe, expect, it, vi } from 'vitest';
+import type { VitestPluginContext } from 'vitest/node';
+import { createVitest } from 'vitest/node';
 
 import {
   assertCoverageProviderVersionMatch,
@@ -21,8 +26,8 @@ import { VITEST_VERSION } from '../utils/constants.ts';
 // Capture the runner notifications so the cache-paths plugin can be asserted
 // without a live `vp run` around the test process.
 const taskClientMocks = vi.hoisted(() => ({
-  ignoreInput: vi.fn(),
-  ignoreOutput: vi.fn(),
+  ignoreInput: vi.fn<typeof ignoreInputImplementation>(),
+  ignoreOutput: vi.fn<typeof ignoreOutputImplementation>(),
 }));
 vi.mock('@voidzero-dev/vite-task-client', () => taskClientMocks);
 
@@ -32,7 +37,7 @@ const CACHE_PATHS_PLUGIN_NAME = 'vite-plus:vitest-cache-paths';
 
 function pluginName(p: unknown): string | undefined {
   if (p && typeof p === 'object' && 'name' in p && typeof p.name === 'string') {
-    return (p as { name: string }).name;
+    return p.name;
   }
   return undefined;
 }
@@ -40,15 +45,15 @@ function pluginName(p: unknown): string | undefined {
 describe('defineConfig project plugin injection', () => {
   it('injects resolver + auto-inline plugins at the root plugins array', () => {
     const existing: Plugin = { name: 'user-existing-root-plugin' };
-    const result = defineConfig({ plugins: [existing] }) as { plugins: unknown[] };
+    const result = defineConfig({ plugins: [existing] });
 
-    expect(pluginName(result.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
-    expect(pluginName(result.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
-    expect(pluginName(result.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
-    expect(pluginName(result.plugins[3])).toBe(CACHE_PATHS_PLUGIN_NAME);
-    expect(pluginName(result.plugins[4])).toBe('user-existing-root-plugin');
-    expect((result.plugins[0] as Plugin).enforce).toBe('pre');
-    expect((result.plugins[1] as Plugin).enforce).toBe('pre');
+    expect(pluginName(result.plugins![0])).toBe(RESOLVER_PLUGIN_NAME);
+    expect(pluginName(result.plugins![1])).toBe(AUTO_INLINE_PLUGIN_NAME);
+    expect(pluginName(result.plugins![2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
+    expect(pluginName(result.plugins![3])).toBe(CACHE_PATHS_PLUGIN_NAME);
+    expect(pluginName(result.plugins![4])).toBe('user-existing-root-plugin');
+    expect(result.plugins![0]).toHaveProperty('enforce', 'pre');
+    expect(result.plugins![1]).toHaveProperty('enforce', 'pre');
   });
 
   it('injects resolver + auto-inline plugins into an inline-object project entry, preserving existing plugins', () => {
@@ -63,10 +68,11 @@ describe('defineConfig project plugin injection', () => {
           },
         ],
       },
-    }) as { test: { projects: unknown[] } };
+    });
 
-    const project = result.test.projects[0] as { plugins: unknown[]; test: { name: string } };
-    expect(project.test.name).toBe('unit');
+    const project = result.test!.projects![0];
+    assert(project && typeof project === 'object' && 'plugins' in project && project.plugins);
+    expect(project.test?.name).toBe('unit');
     expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(project.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
@@ -76,7 +82,7 @@ describe('defineConfig project plugin injection', () => {
     expect(project.plugins[4]).toBe(existing);
   });
 
-  it('injects plugins into the return value of a function-shaped project entry', () => {
+  it('injects plugins into the return value of a function-shaped project entry', async () => {
     const existing: Plugin = { name: 'user-fn-project-plugin' };
     const projectFn = () => ({
       extends: false,
@@ -85,15 +91,17 @@ describe('defineConfig project plugin injection', () => {
     });
     const result = defineConfig({
       test: { projects: [projectFn] },
-    }) as { test: { projects: unknown[] } };
+    });
 
-    const wrapped = result.test.projects[0];
+    const wrapped = result.test!.projects![0];
     expect(typeof wrapped).toBe('function');
 
     // Vitest passes a `ConfigEnv` to the function; we don't depend on its
     // shape here, the wrapper just forwards it.
     const fakeEnv = { mode: 'test', command: 'serve' as const };
-    const resolved = (wrapped as (env: typeof fakeEnv) => { plugins: unknown[] })(fakeEnv);
+    assert(typeof wrapped === 'function');
+    const resolved = await wrapped(fakeEnv);
+    assert(resolved.plugins);
     expect(pluginName(resolved.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(resolved.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
     expect(pluginName(resolved.plugins[2])).toBe(COVERAGE_GUARD_PLUGIN_NAME);
@@ -106,9 +114,9 @@ describe('defineConfig project plugin injection', () => {
       test: {
         projects: ['./packages/*', './apps/*'],
       },
-    }) as { test: { projects: unknown[] } };
+    });
 
-    expect(result.test.projects).toEqual(['./packages/*', './apps/*']);
+    expect(result.test!.projects!).toEqual(['./packages/*', './apps/*']);
   });
 
   it('handles projects with no existing plugins array', () => {
@@ -121,10 +129,11 @@ describe('defineConfig project plugin injection', () => {
           },
         ],
       },
-    }) as { test: { projects: unknown[] } };
+    });
 
-    const project = result.test.projects[0] as { plugins: unknown[]; test: { name: string } };
-    expect(project.test.name).toBe('no-plugins');
+    const project = result.test!.projects![0];
+    assert(project && typeof project === 'object' && 'plugins' in project && project.plugins);
+    expect(project.test?.name).toBe('no-plugins');
     expect(project.plugins).toHaveLength(4);
     expect(pluginName(project.plugins[0])).toBe(RESOLVER_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(AUTO_INLINE_PLUGIN_NAME);
@@ -156,7 +165,8 @@ describe('defineConfig project plugin injection', () => {
       throw new Error('Expected project function');
     }
     expect(await fn({ command: 'serve', mode: 'test' })).toBe(inherited);
-    const resolved = (await promise) as { plugins: unknown[] };
+    const resolved = await promise;
+    assert(resolved && typeof resolved === 'object' && 'plugins' in resolved && resolved.plugins);
     expect(resolved.plugins.map(pluginName)).toEqual([
       RESOLVER_PLUGIN_NAME,
       AUTO_INLINE_PLUGIN_NAME,
@@ -193,9 +203,9 @@ describe('defineConfig project plugin injection', () => {
       },
     });
     expect(config.plugins).toHaveLength(4);
-    const [independent, inherited] = config.test!.projects! as { plugins?: unknown[] }[];
-    expect(independent.plugins).toHaveLength(4);
-    expect(inherited.plugins).toBeUndefined();
+    const [independent, inherited] = config.test!.projects!;
+    expect(independent).toHaveProperty('plugins.length', 4);
+    expect(inherited).not.toHaveProperty('plugins');
   });
 });
 
@@ -203,7 +213,7 @@ const AUTO_INLINE_PLUGIN_NAME = 'vite-plus:auto-inline-matcher-deps';
 
 /** Builds a mock require-factory where only `installedPkgs` resolve. */
 function makeRequireFactory(
-  installedPkgs: string[],
+  installedPkgs: Array<string>,
 ): (from: string) => { resolve: (id: string) => string } {
   return (_from: string) => ({
     resolve(id: string) {
@@ -244,7 +254,7 @@ describe('computeAutoInlineList', () => {
   });
 
   it('merges with an existing user inline array, preserving order and deduplicating', () => {
-    const existing: (string | RegExp)[] = ['my-pkg', '@testing-library/jest-dom'];
+    const existing: Array<string | RegExp> = ['my-pkg', '@testing-library/jest-dom'];
     const result = computeAutoInlineList(existing, '/project', allInstalledFactory);
     expect(result).toEqual([
       'my-pkg',
@@ -261,7 +271,7 @@ describe('computeAutoInlineList', () => {
   });
 
   it('treats a regexp entry that matches an auto-inline pkg as already covered', () => {
-    const existing: (string | RegExp)[] = [/^@testing-library\//, /^@storybook\//];
+    const existing: Array<string | RegExp> = [/^@testing-library\//, /^@storybook\//];
     const result = computeAutoInlineList(existing, '/project', allInstalledFactory);
     // Both '@testing-library/jest-dom' and '@storybook/test' are covered;
     // only 'jest-extended' should be appended.
@@ -272,12 +282,12 @@ describe('computeAutoInlineList', () => {
   });
 
   it('returns null when all auto-inline packages are already in the existing list', () => {
-    const existing: (string | RegExp)[] = [...AUTO_INLINE_DEPS];
+    const existing: Array<string | RegExp> = [...AUTO_INLINE_DEPS];
     expect(computeAutoInlineList(existing, '/project', allInstalledFactory)).toBeNull();
   });
 
   it('passes the project root to the require factory', () => {
-    const capturedFromPaths: string[] = [];
+    const capturedFromPaths: Array<string> = [];
     const factory = (from: string) => {
       capturedFromPaths.push(from);
       return { resolve: (_id: string) => `/mock/node_modules/${_id}/index.js` };
@@ -292,10 +302,7 @@ describe('computeAutoInlineList', () => {
  * packages in `installed` resolve, and reading their package.json returns the
  * mapped version.
  */
-function makeCoverageDeps(installed: Record<string, string>): {
-  createRequire: (from: string) => { resolve: (id: string) => string };
-  readFile: (path: string) => string;
-} {
+function makeCoverageDeps(installed: Record<string, string>) {
   return {
     createRequire: (_from: string) => ({
       resolve(id: string) {
@@ -414,10 +421,16 @@ describe('checkCoverageProviderVersion', () => {
 
 /** Extract the cache-paths plugin from a fresh defineConfig. */
 function getCachePathsPlugin(): { configureVitest: (ctx: unknown) => void } {
-  const result = defineConfig({}) as { plugins: unknown[] };
-  const plugin = result.plugins.find(
+  const result = defineConfig({});
+  const plugins: Array<unknown> = result.plugins!;
+  const plugin = plugins.find(
     (p): p is { configureVitest: (ctx: unknown) => void } =>
-      !!p && typeof p === 'object' && (p as { name?: unknown }).name === CACHE_PATHS_PLUGIN_NAME,
+      typeof p === 'object' &&
+      p !== null &&
+      'name' in p &&
+      'configureVitest' in p &&
+      typeof p.configureVitest === 'function' &&
+      p.name === CACHE_PATHS_PLUGIN_NAME,
   );
   if (!plugin) {
     throw new Error('cache-paths plugin not found');
@@ -538,8 +551,7 @@ describe('defineConfig vitest cache paths plugin', () => {
                 };
               },
             },
-            // Vitest 5.0.4's type unwraps object hooks, but its runtime accepts them.
-          } as unknown as Plugin,
+          },
         ],
       }),
     );
@@ -574,10 +586,16 @@ describe('defineConfig vitest cache paths plugin', () => {
 
 /** Extract the coverage-version-guard plugin from a fresh defineConfig. */
 function getCoverageGuard(): { configureVitest: (ctx: unknown) => void } {
-  const result = defineConfig({}) as { plugins: unknown[] };
-  const plugin = result.plugins.find(
+  const result = defineConfig({});
+  const plugins: Array<unknown> = result.plugins!;
+  const plugin = plugins.find(
     (p): p is { configureVitest: (ctx: unknown) => void } =>
-      !!p && typeof p === 'object' && (p as { name?: unknown }).name === COVERAGE_GUARD_PLUGIN_NAME,
+      typeof p === 'object' &&
+      p !== null &&
+      'name' in p &&
+      'configureVitest' in p &&
+      typeof p.configureVitest === 'function' &&
+      p.name === COVERAGE_GUARD_PLUGIN_NAME,
   );
   if (!plugin) {
     throw new Error('coverage guard plugin not found');
@@ -621,7 +639,7 @@ describe('defineConfig coverage version guard plugin', () => {
     const root = makeSkewedCoverageRoot();
     try {
       const guard = getCoverageGuard();
-      const original = vi.fn(async () => {});
+      const original = vi.fn<() => Promise<void>>(async () => {});
       const vitest = {
         config: { root, coverage: { enabled: false, provider: 'v8' } },
         enableCoverage: original,
@@ -641,7 +659,7 @@ describe('defineConfig coverage version guard plugin', () => {
     const original = async () => {
       originalCalls += 1;
     };
-    const vitest: Record<string, unknown> = {
+    const vitest = {
       config: { root: '/project', coverage: { provider: 'v8' } },
       enableCoverage: original,
     };
@@ -650,13 +668,13 @@ describe('defineConfig coverage version guard plugin', () => {
     expect(vitest.enableCoverage).not.toBe(original);
     // ...and the wrapper delegates to the original (no provider resolves from
     // this fake root, so the late-path check is a no-op).
-    await (vitest.enableCoverage as () => Promise<void>)();
+    await vitest.enableCoverage();
     expect(originalCalls).toBe(1);
   });
 
   it('handles the shared vitest instance once even though configureVitest runs per project', () => {
     const guard = getCoverageGuard();
-    const vitest: Record<string, unknown> = {
+    const vitest = {
       config: { root: '/project', coverage: {} },
       enableCoverage: async () => {},
     };

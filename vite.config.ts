@@ -1,3 +1,4 @@
+import cloudflare from '@cloudflare/oxlint-config/vite-plus';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
@@ -6,6 +7,8 @@ export default defineConfig({
     '*.rs': 'cargo fmt --',
   },
   lint: {
+    extends: [cloudflare],
+    env: cloudflare.env,
     options: {
       typeAware: true,
       typeCheck: true,
@@ -43,10 +46,64 @@ export default defineConfig({
       'no-shadow': 'off',
       'typescript/no-unnecessary-boolean-literal-compare': 'off',
       'typescript/no-unnecessary-type-arguments': 'off',
-      'typescript/no-unsafe-type-assertion': 'off',
       curly: 'error',
+      // Vitest accepts an optional message as the second argument to expect.
+      'vitest/valid-expect': ['error', { maxArgs: 2 }],
     },
     overrides: [
+      {
+        files: ['packages/cli/src/__tests__/{js-command-args,oxlint-plugin}.spec.ts'],
+        rules: {
+          'vitest/expect-expect': [
+            'error',
+            { assertFunctionNames: ['expect', 'expectExit', 'checkImports'] },
+          ],
+        },
+      },
+      {
+        // The theme loads its styles through side-effect imports.
+        files: ['docs/.vitepress/theme/index.ts'],
+        rules: {
+          'import/no-unassigned-import': ['error', { allow: ['**/*.css', 'virtual:*.css'] }],
+        },
+      },
+      {
+        // These registry fixtures run as CommonJS executables on older Node versions.
+        files: ['crates/vp_cli_snapshots/tests/cli_snapshots/registry/packages/**/*.cjs'],
+        rules: { 'typescript/no-require-imports': 'off' },
+      },
+      {
+        // Keep the checks Vite+ already enforces on TypeScript files.
+        files: ['**/*.{ts,tsx,mts,cts}'],
+        rules: {
+          'constructor-super': 'error',
+          'getter-return': 'error',
+          'no-class-assign': 'error',
+          'no-const-assign': 'error',
+          'no-dupe-class-members': 'error',
+          'no-dupe-keys': 'error',
+          'no-func-assign': 'error',
+          'no-import-assign': 'error',
+          'no-new-native-nonconstructor': 'error',
+          'no-obj-calls': 'error',
+          'no-setter-return': 'error',
+          'no-this-before-super': 'error',
+          'no-unreachable': 'error',
+          'no-unsafe-negation': 'error',
+          'no-with': 'error',
+          'typescript/unbound-method': 'error',
+        },
+      },
+      {
+        files: ['docs/.vitepress/theme/**/*.vue'],
+        globals: {
+          defineEmits: 'readonly',
+          defineProps: 'readonly',
+          withDefaults: 'readonly',
+          __DOCS_INSTALL_PS1_URL__: 'readonly',
+          __DOCS_INSTALL_SH_URL__: 'readonly',
+        },
+      },
       {
         files: [
           '.github/**/*',
@@ -67,6 +124,7 @@ export default defineConfig({
       },
     ],
     ignorePatterns: [
+      ...cloudflare.ignorePatterns,
       // PTY snapshot fixtures; also excluded in test/fmt below and tsconfig.json
       'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
       'packages/*/binding/**',
@@ -81,8 +139,6 @@ export default defineConfig({
       '**/node_modules/**',
       // PTY snapshot fixtures; also excluded in lint/fmt here and tsconfig.json
       'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/**',
-      // FIXME: Error: failed to prepare the command for injection: Invalid argument (os error 22)
-      'packages/*/binding/__tests__/',
     ],
   },
   fmt: {

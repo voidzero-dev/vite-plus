@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log } from '@voidzero-dev/vite-plus-prompts';
 
 import { upsertJsonConfig } from '../../binding/index.js';
 import { findViteConfig } from '../resolve-vite-config.ts';
@@ -59,7 +59,7 @@ export async function registerLocalTemplate(
   const existingEntry = existing.templates.find((t) => t.name === entry.name);
   if (existingEntry) {
     if (existingEntry.template !== entry.template) {
-      prompts.log.warn(
+      log.warn(
         `create.templates already has an entry named '${entry.name}' pointing at '${existingEntry.template}'; left unchanged.\n` +
           `Update it by hand if it should run '${entry.template}' instead.`,
       );
@@ -67,10 +67,8 @@ export async function registerLocalTemplate(
     return undefined;
   }
 
-  const nextCreate: { defaultTemplate?: string; templates: CreateTemplateEntry[] } = {
-    ...(existing.defaultTemplate !== undefined
-      ? { defaultTemplate: existing.defaultTemplate }
-      : {}),
+  const nextCreate = {
+    ...existing,
     templates: [...existing.templates, entry],
   };
 
@@ -90,7 +88,7 @@ function ensureViteConfig(workspaceRoot: string, silent: boolean): string {
     `import { defineConfig } from '${VITE_PLUS_NAME}';\n\nexport default defineConfig({});\n`,
   );
   if (!silent) {
-    prompts.log.success(`✔ Created vite.config.ts in ${displayRelative(configPath)}`);
+    log.success(`✔ Created vite.config.ts in ${displayRelative(configPath)}`);
   }
   return configPath;
 }
@@ -106,7 +104,10 @@ function ensureViteConfig(workspaceRoot: string, silent: boolean): string {
  * point at a manual edit instead of reporting a registration that never
  * happened.
  */
-function writeCreateBlock(configPath: string, create: object): void {
+function writeCreateBlock(
+  configPath: string,
+  create: Awaited<ReturnType<typeof getConfiguredCreate>>,
+): void {
   // A unique OS-temp path: a fixed name in the workspace could collide with a
   // user's own file and be overwritten/deleted by the merge.
   const tempPath = path.join(os.tmpdir(), `vite-plus-create-register-${randomUUID()}.json`);

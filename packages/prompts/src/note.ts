@@ -1,7 +1,7 @@
 import color from 'picocolors';
 
 import { box } from './box.js';
-import { type CommonOptions } from './common.js';
+import type { CommonOptions } from './common.js';
 
 export interface NoteOptions extends CommonOptions {
   /** Format note content; readable, un-dimmed text by default. */

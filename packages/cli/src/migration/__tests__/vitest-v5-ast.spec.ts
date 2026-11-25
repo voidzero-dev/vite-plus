@@ -25,7 +25,7 @@ describe('Oxc migration analysis', () => {
     expect(() => parseSource('test.js', '// @flow\nconst value: string = "x";')).toThrow(
       'Flow is not supported',
     );
-    expect(() => parseSource('test.ts', 'const = ;')).toThrow();
+    expect(() => parseSource('test.ts', 'const = ;')).toThrow(/expected|parse|unexpected/i);
   });
 
   it.each([

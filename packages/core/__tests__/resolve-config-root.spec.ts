@@ -5,10 +5,10 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test';
 
+import type { InlineConfig, ResolvedConfig } from '../dist/vite/node/index.js';
 // Import the built core directly: a source-only test cannot detect a missing
 // branding patch or a CLI running against an older core artifact.
 import { normalizePath, resolveConfig } from '../dist/vite/node/index.js';
-import type { InlineConfig, ResolvedConfig } from '../dist/vite/node/index.js';
 
 const resolveWithOptions = resolveConfig as (
   config: InlineConfig,
@@ -57,7 +57,10 @@ function expectedRoot(root: string): string {
   }
 }
 
-function writeConfig(config: Record<string, unknown>, dir = configDir): string {
+function writeConfig(
+  config: { root?: string; resolve?: { preserveSymlinks: boolean } },
+  dir = configDir,
+): string {
   const file = path.join(dir, 'vite.config.mjs');
   writeFileSync(file, `export default ${JSON.stringify(config)};\n`);
   return file;

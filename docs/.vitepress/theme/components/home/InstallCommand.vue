@@ -8,7 +8,7 @@ type CommandCard = {
   command: string;
 };
 
-const commandCards: CommandCard[] = [
+const commandCards: Array<CommandCard> = [
   {
     id: 'unix',
     label: 'macOS / Linux',
@@ -39,7 +39,9 @@ const copyCommand = async (id: string, command: string) => {
   try {
     await navigator.clipboard.writeText(command);
     flashCopied(id);
-  } catch {}
+  } catch {
+    // The clipboard can be unavailable when the browser denies access.
+  }
 };
 
 onBeforeUnmount(() => {

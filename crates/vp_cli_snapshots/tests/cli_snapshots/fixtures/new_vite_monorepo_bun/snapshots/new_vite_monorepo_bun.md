@@ -40,6 +40,7 @@ check package.json with catalog
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@cloudflare/oxlint-config": "^0.2.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },

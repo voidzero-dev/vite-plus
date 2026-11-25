@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { isCancel, log, select, text } from '@voidzero-dev/vite-plus-prompts';
 import validateNpmPackageName from 'validate-npm-package-name';
 
 import { cancelAndExit } from '../utils/prompts.ts';
@@ -17,12 +17,12 @@ export async function promptPackageNameAndTargetDir(
   let targetDir: string;
 
   if (interactive) {
-    const selected = await prompts.text({
+    const selected = await text({
       message: 'Package name:',
       placeholder: defaultPackageName,
       defaultValue: defaultPackageName,
       validate: (value) => {
-        if (value == null || value.length === 0) {
+        if (value === null || value === undefined || value.length === 0) {
           return undefined;
         }
         const result = value ? validateNpmPackageName(value) : null;
@@ -32,7 +32,7 @@ export async function promptPackageNameAndTargetDir(
         return result?.errors?.[0] ?? result?.warnings?.[0] ?? 'Invalid package name';
       },
     });
-    if (prompts.isCancel(selected)) {
+    if (isCancel(selected)) {
       cancelAndExit();
     }
     packageName = selected;
@@ -41,7 +41,7 @@ export async function promptPackageNameAndTargetDir(
     // --no-interactive: use default
     packageName = defaultPackageName;
     targetDir = getProjectDirFromPackageName(packageName);
-    prompts.log.info(`Using default package name: ${accent(packageName)}`);
+    log.info(`Using default package name: ${accent(packageName)}`);
   }
 
   return { packageName, targetDir };
@@ -55,19 +55,19 @@ export async function promptTargetDir(
   let targetDir: string;
 
   if (interactive) {
-    const selected = await prompts.text({
+    const selected = await text({
       message: 'Target directory:',
       placeholder: defaultTargetDir,
       defaultValue: defaultTargetDir,
       validate: (value) => validateTargetDir(value ?? defaultTargetDir, options?.cwd).error,
     });
-    if (prompts.isCancel(selected)) {
+    if (isCancel(selected)) {
       cancelAndExit();
     }
     targetDir = validateTargetDir(selected ?? defaultTargetDir, options?.cwd).directory;
   } else {
     targetDir = validateTargetDir(defaultTargetDir, options?.cwd).directory;
-    prompts.log.info(`Using default target directory: ${accent(targetDir)}`);
+    log.info(`Using default target directory: ${accent(targetDir)}`);
   }
 
   return targetDir;
@@ -131,14 +131,12 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
   }
   const { description, removeLabel } = describeExistingTarget(targetPath, stats);
   if (!interactive) {
-    prompts.log.info(
-      'Use --directory to specify a different location or remove the directory first',
-    );
+    log.info('Use --directory to specify a different location or remove the directory first');
     cancelAndExit(description, 1);
   }
 
   // Handle an existing target that cannot be reused as-is.
-  const overwrite = await prompts.select({
+  const overwrite = await select({
     message: `${description}. Please choose how to proceed:`,
     options: [
       {
@@ -152,7 +150,7 @@ export async function checkProjectDirExists(projectDirFullPath: string, interact
     ],
   });
 
-  if (prompts.isCancel(overwrite)) {
+  if (isCancel(overwrite)) {
     cancelAndExit();
   }
 
@@ -223,7 +221,7 @@ export function isTargetDirAvailable(projectDirFullPath: string) {
   return !stats || (stats.isDirectory() && isEmpty(targetPath));
 }
 
-function validateTargetDir(input?: string, cwd?: string): { directory: string; error?: string } {
+function validateTargetDir(input?: string, cwd?: string) {
   const value = input?.trim() ?? '';
   if (!value) {
     return { directory: '', error: 'Target directory is required' };
@@ -236,7 +234,7 @@ function validateTargetDir(input?: string, cwd?: string): { directory: string; e
   if (path.isAbsolute(targetDir)) {
     return { directory: '', error: 'Absolute path is not allowed' };
   }
-  if (targetDir.includes('..')) {
+  if (targetDir.split(/[\\/]/).includes('..')) {
     return { directory: '', error: 'Relative path contains ".." which is not allowed' };
   }
   if (cwd && !isTargetDirAvailable(path.join(cwd, targetDir))) {

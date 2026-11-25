@@ -7,23 +7,23 @@ import {
   VITEST_VERSION,
   VITE_PLUS_CORE_ALIAS_PREFIX,
 } from '../packages/cli/src/utils/constants.ts';
+import { isObjectValue, parseJsonObject } from '../packages/cli/src/utils/json-value.ts';
+import { hasOwnKey } from '../packages/cli/src/utils/object.ts';
 import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
 import { patchNpmxVitestConfig } from './npmx.ts';
 import { ecosystemCiDir, tgzDir, vitePlusCoreTgzVersion, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 import { prepareWebdriverioProject } from './webdriverio.ts';
 
-const projects = Object.keys(repos);
-
 const project = process.argv[2];
 
-if (!projects.includes(project)) {
+if (!hasOwnKey(repos, project)) {
   console.error(`Project ${project} is not defined in repo.json`);
   process.exit(1);
 }
 
+const repoConfig = repos[project];
 const repoRoot = join(ecosystemCiDir, project);
-const repoConfig = repos[project as keyof typeof repos];
 // Migrate and install always run at the clone root: `vp migrate` rejects
 // workspace member targets (#2229). The workflow's `directory` matrix value
 // only steers where the later project commands run (e.g. dify's `vp run ...`
@@ -57,23 +57,30 @@ const registryServer = spawn(
     detached: true,
   },
 );
-const registryInfo = await new Promise<{ registry: string; env: Record<string, string> }>(
-  (resolve, reject) => {
-    let buffered = '';
-    registryServer.stdout.on('data', (chunk: Buffer) => {
-      buffered += chunk.toString();
-      const newline = buffered.indexOf('\n');
-      if (newline !== -1) {
-        resolve(JSON.parse(buffered.slice(0, newline)));
-      }
-    });
-    registryServer.on('error', reject);
-    registryServer.on('exit', (code) => reject(new Error(`registry exited early (${code})`)));
-  },
-);
-console.log(
-  `Serving local Vite+ packages at ${registryInfo.registry} (vite-plus@${vitePlusVersion})`,
-);
+const handshake = await new Promise<string>((resolve, reject) => {
+  let buffered = '';
+  registryServer.stdout.on('data', (chunk: Buffer) => {
+    buffered += chunk.toString();
+    const newline = buffered.indexOf('\n');
+    if (newline !== -1) {
+      resolve(buffered.slice(0, newline));
+    }
+  });
+  registryServer.on('error', reject);
+  registryServer.on('exit', (code) => reject(new Error(`registry exited early (${code})`)));
+});
+const { registry, env } = parseJsonObject(handshake, 'registry handshake');
+if (typeof registry !== 'string' || !isObjectValue(env)) {
+  throw new Error('Invalid registry handshake');
+}
+const registryEnv: Record<string, string> = {};
+for (const [key, value] of Object.entries(env)) {
+  if (typeof value !== 'string') {
+    throw new Error(`Invalid registry environment variable ${key}`);
+  }
+  registryEnv[key] = value;
+}
+console.log(`Serving local Vite+ packages at ${registry} (vite-plus@${vitePlusVersion})`);
 // The server prints nothing after the handshake; release the pipe and the
 // process handle so they don't keep this script's event loop alive after the
 // installs below finish.
@@ -82,7 +89,7 @@ registryServer.unref();
 
 if (process.env.GITHUB_ENV) {
   // Keep the registry reachable for the workflow's later steps.
-  const lines = Object.entries(registryInfo.env)
+  const lines = Object.entries(registryEnv)
     .map(([key, value]) => `${key}=${value}\n`)
     .join('');
   await appendFile(process.env.GITHUB_ENV, lines);
@@ -96,17 +103,20 @@ if (project === 'npmx.dev') {
   // The pinned workspace enables strict peer checks. Supply devframe's optional
   // cac peer explicitly so migration satisfies its ^7.0.0 requirement.
   const packagePath = join(repoRoot, 'package.json');
-  const pkg = JSON.parse(await readFile(packagePath, 'utf-8'));
+  const pkg = parseJsonObject(await readFile(packagePath, 'utf8'), packagePath);
+  if (!isObjectValue(pkg.devDependencies)) {
+    throw new Error('Expected npmx.dev to have devDependencies');
+  }
   pkg.devDependencies.cac = '7.0.0';
-  await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
+  await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
 }
 
 if (project === 'rollipop') {
-  const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf-8');
+  const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf8');
   await writeFile(
     join(repoRoot, '.oxfmtrc.json'),
     oxfmtrc.replace('      ["ts-equals-import"],\n', ''),
-    'utf-8',
+    'utf8',
   );
 }
 
@@ -115,99 +125,29 @@ if (project === 'vinext') {
   // (e.g. oxc 0.129.0 published <24h ago). Disable it for the ecosystem run so
   // upgrade-deps PRs can install transitive deps that were just published.
   const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
-  const workspace = await readFile(workspacePath, 'utf-8');
+  const workspace = await readFile(workspacePath, 'utf8');
   const patched = workspace.replace(/^minimumReleaseAge:.*$/m, 'minimumReleaseAge: 0');
   if (patched === workspace) {
     throw new Error(`vinext patch: \`minimumReleaseAge:\` not found in ${workspacePath}`);
   }
-  await writeFile(workspacePath, patched, 'utf-8');
+  await writeFile(workspacePath, patched, 'utf8');
 
-  // The single in-process `integration` project runs serially and its ISR
-  // revalidation test sits right at the 30s ceiling under CI load (observed
-  // 26.8s on green main runs, 30.0s here) — a borderline timeout, not a real
-  // regression (the vitest runner is byte-identical across this bump). Give it
-  // headroom so the ecosystem run isn't flaky.
+  // vinext uses standalone `void` expressions to mark intentional reads.
+  // tsrs5 removes `void` during autofix, then no-unused-expressions flags the reads.
   const viteConfigPath = join(repoRoot, 'vite.config.ts');
-  const viteConfig = await readFile(viteConfigPath, 'utf-8');
-  const testTimeout = 'testTimeout: 30000';
-  const reactRulesAnchor = '"react/rules-of-hooks": "error",';
-  if (!viteConfig.includes(testTimeout)) {
-    throw new Error(`vinext patch: \`testTimeout: 30000\` not found in ${viteConfigPath}`);
+  const viteConfig = await readFile(viteConfigPath, 'utf8');
+  const lintRule = '      "typescript/consistent-type-definitions": ["error", "type"],';
+  if (!viteConfig.includes(lintRule)) {
+    throw new Error(`vinext patch: expected TypeScript lint rule in ${viteConfigPath}`);
   }
-  if (!viteConfig.includes(reactRulesAnchor)) {
-    throw new Error(`vinext patch: React lint rules not found in ${viteConfigPath}`);
-  }
-  // Oxlint 1.79 enables split React Compiler rules by default. Keep the new
-  // diagnostics opt-in for this pinned ecosystem fixture.
-  const patchedConfig = viteConfig
-    .replace(testTimeout, 'testTimeout: 60000')
-    .replace(
-      reactRulesAnchor,
-      [
-        reactRulesAnchor,
-        '      "react/globals": "off",',
-        '      "react/refs": "off",',
-        '      "react/set-state-in-effect": "off",',
-      ].join('\n'),
-    );
-  await writeFile(viteConfigPath, patchedConfig, 'utf-8');
-
-  // Oxlint 1.79 runs no-redeclare in ES modules. The declarations intentionally
-  // use TypeScript interface/class merging, so extend their existing disables.
-  const documentPath = join(repoRoot, 'packages/vinext/src/shims/document.tsx');
-  const document = await readFile(documentPath, 'utf-8');
-  const declarationMergeDisable =
-    '// oxlint-disable-next-line typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging';
-  if (document.split(declarationMergeDisable).length !== 3) {
-    throw new Error(`vinext patch: declaration merge directives not found in ${documentPath}`);
-  }
-  const patchedDocument = document.replaceAll(
-    declarationMergeDisable,
-    '// oxlint-disable-next-line eslint/no-redeclare, typescript/consistent-type-definitions, typescript/no-unsafe-declaration-merging',
+  await writeFile(
+    viteConfigPath,
+    viteConfig.replace(
+      lintRule,
+      `${lintRule}\n      "typescript/no-meaningless-void-operator": "off",`,
+    ),
+    'utf8',
   );
-  await writeFile(documentPath, patchedDocument, 'utf-8');
-
-  // Oxlint 1.91 flags this assignment in the async click handler, but each
-  // navigation event owns its cancellation flag.
-  const linkPath = join(repoRoot, 'packages/vinext/src/shims/link.tsx');
-  const linkSource = await readFile(linkPath, 'utf-8');
-  const patchedLink = linkSource.replace(
-    '            prevented = true;',
-    '            // oxlint-disable-next-line react/immutability\n$&',
-  );
-  if (patchedLink === linkSource) {
-    throw new Error(`vinext patch: navigation cancellation flag not found in ${linkPath}`);
-  }
-  await writeFile(linkPath, patchedLink, 'utf-8');
-
-  // Oxlint 1.79 reports bare underscore parameters. Give this intentionally
-  // unused parameter a descriptive underscore-prefixed name.
-  const appRscHandlerTestPath = join(repoRoot, 'tests/app-rsc-handler.test.ts');
-  const appRscHandlerTest = await readFile(appRscHandlerTestPath, 'utf-8');
-  const unusedMiddlewareParameter = '(_: { nextUrl: URL })';
-  const patchedAppRscHandlerTest = appRscHandlerTest.replace(
-    unusedMiddlewareParameter,
-    '(_request: { nextUrl: URL })',
-  );
-  if (patchedAppRscHandlerTest === appRscHandlerTest) {
-    throw new Error(
-      `vinext patch: unused middleware parameter not found in ${appRscHandlerTestPath}`,
-    );
-  }
-  await writeFile(appRscHandlerTestPath, patchedAppRscHandlerTest, 'utf-8');
-
-  // Oxlint 1.79 checks comments for irregular whitespace. Escape the glob
-  // separator instead of retaining its invisible zero-width character.
-  const trailingSlashTestPath = join(repoRoot, 'tests/app-route-handler-trailing-slash.test.ts');
-  const trailingSlashTest = await readFile(trailingSlashTestPath, 'utf-8');
-  const patchedTrailingSlashTest = trailingSlashTest.replace(
-    'app/**\u200b/route.ts',
-    'app/**\\/route.ts',
-  );
-  if (patchedTrailingSlashTest === trailingSlashTest) {
-    throw new Error(`vinext patch: zero-width separator not found in ${trailingSlashTestPath}`);
-  }
-  await writeFile(trailingSlashTestPath, patchedTrailingSlashTest, 'utf-8');
 
   // oxlint 1.77 applies `.gitignore` to explicitly passed paths too
   // (oxc-project/oxc#25133). vinext's prefer-shared-utils rule test symlinks a
@@ -215,12 +155,12 @@ if (project === 'vinext') {
   // `.gitignore` covers the link name, so oxlint now reports "No files found to
   // lint". Drop the ignore entry so the rule test keeps linting its fixtures.
   const gitignorePath = join(repoRoot, '.gitignore');
-  const gitignore = await readFile(gitignorePath, 'utf-8');
+  const gitignore = await readFile(gitignorePath, 'utf8');
   const patchedGitignore = gitignore.replace(/^__lint_rule_fixtures__-\*$\n?/m, '');
   if (patchedGitignore === gitignore) {
     throw new Error(`vinext patch: \`__lint_rule_fixtures__-*\` not found in ${gitignorePath}`);
   }
-  await writeFile(gitignorePath, patchedGitignore, 'utf-8');
+  await writeFile(gitignorePath, patchedGitignore, 'utf8');
 }
 
 if (project === 'dify') {
@@ -230,7 +170,7 @@ if (project === 'dify') {
   // defining `minimumReleaseAge` there activates a resolution-policy path that
   // vp's bundled pnpm cannot handle.
   const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
-  const workspace = await readFile(workspacePath, 'utf-8');
+  const workspace = await readFile(workspacePath, 'utf8');
   if (!/^minimumReleaseAge:/m.test(workspace)) {
     throw new Error(`dify patch: \`minimumReleaseAge:\` not found in ${workspacePath}`);
   }
@@ -240,7 +180,7 @@ if (project === 'dify') {
   const patched = workspace
     .replace(/^minimumReleaseAge:.*$/m, 'minimumReleaseAge: 0')
     .replace(/^resolutionMode:\s*time-based[ \t]*$/m, 'resolutionMode: highest');
-  await writeFile(workspacePath, patched, 'utf-8');
+  await writeFile(workspacePath, patched, 'utf8');
 }
 
 if (project === 'nuxt-devtools') {
@@ -253,7 +193,7 @@ if (project === 'nuxt-devtools') {
   // Align that source with vite-plus-core so pnpm resolves the core package,
   // kit, and optional integration peers as one compatible release family.
   const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
-  const workspace = await readFile(workspacePath, 'utf-8');
+  const workspace = await readFile(workspacePath, 'utf8');
   const trustPolicy = 'trustPolicy: no-downgrade';
   if (!workspace.includes(trustPolicy)) {
     throw new Error(`nuxt-devtools patch: \`${trustPolicy}\` not found in ${workspacePath}`);
@@ -271,7 +211,7 @@ if (project === 'nuxt-devtools') {
       viteDevtoolsVersionSource,
       (_line, prefix: string) => `${prefix}${viteDevtoolsVersion}`,
     );
-  await writeFile(workspacePath, patched, 'utf-8');
+  await writeFile(workspacePath, patched, 'utf8');
 }
 
 // Projects that already use vite-plus need VP_FORCE_MIGRATE=1 so
@@ -310,7 +250,7 @@ const vitestOverrides = {
 const workspaceYamlPath = join(repoRoot, 'pnpm-workspace.yaml');
 const timeBasedResolution =
   existsSync(workspaceYamlPath) &&
-  /^resolutionMode:\s*time-based/m.test(readFileSync(workspaceYamlPath, 'utf-8'));
+  /^resolutionMode:\s*time-based/m.test(readFileSync(workspaceYamlPath, 'utf8'));
 const releaseAgeEnv = timeBasedResolution
   ? {}
   : {
@@ -320,8 +260,7 @@ const releaseAgeEnv = timeBasedResolution
 
 const migrateEnv: NodeJS.ProcessEnv = {
   ...process.env,
-  ...registryInfo.env,
-  ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
+  ...registryEnv,
   VP_OVERRIDE_PACKAGES: JSON.stringify({
     vite: `${VITE_PLUS_CORE_ALIAS_PREFIX}${vitePlusCoreVersion}`,
     ...vitestOverrides,
@@ -331,6 +270,9 @@ const migrateEnv: NodeJS.ProcessEnv = {
   VP_VERSION: vitePlusVersion,
   ...releaseAgeEnv,
 };
+if (forceFreshMigration) {
+  migrateEnv.VP_FORCE_MIGRATE = '1';
+}
 
 execSync(`${cli} migrate --no-agent --no-interactive`, {
   cwd: repoRoot,
@@ -343,7 +285,7 @@ if (project === 'vue-mini') {
   // Remove when the pinned setup declares both Vitest 5 type parameters.
   // https://vitest.dev/guide/migration/#assertion-types-expose-return-and-received-types
   const setupPath = join(repoRoot, 'vitest.setup.ts');
-  const setup = await readFile(setupPath, 'utf-8');
+  const setup = await readFile(setupPath, 'utf8');
   const legacyAssertion = 'interface Assertion<T = any> extends CustomMatchers<T> {}';
   if (setup.split(legacyAssertion).length !== 2) {
     throw new Error('vue-mini patch: expected the pinned custom matcher declaration');
@@ -351,7 +293,7 @@ if (project === 'vue-mini') {
   await writeFile(
     setupPath,
     setup.replace(legacyAssertion, 'interface Assertion<R, T> extends CustomMatchers<R> {}'),
-    'utf-8',
+    'utf8',
   );
 }
 
@@ -362,7 +304,7 @@ if (project === 'dify') {
   // Remove when the pinned project provides a v5-compatible matcher augmentation.
   // https://vitest.dev/guide/migration/#assertion-types-expose-return-and-received-types
   const setupPath = join(repoRoot, 'web', 'vitest.setup.ts');
-  const setup = await readFile(setupPath, 'utf-8');
+  const setup = await readFile(setupPath, 'utf8');
   const registration = "if (typeof expect.extend === 'function') {";
   if (
     setup.split(registration).length !== 2 ||
@@ -382,7 +324,7 @@ declare module 'vite-plus/test' {
 
 ${registration}`,
     ),
-    'utf-8',
+    'utf8',
   );
 }
 
@@ -390,8 +332,8 @@ if (project === 'npmx.dev') {
   // Nuxt loads app modules before per-file mocks; use request interception.
   // https://vitest.dev/config/browser/importmapmocks
   const viteConfigPath = join(repoRoot, 'vite.config.ts');
-  const viteConfig = await readFile(viteConfigPath, 'utf-8');
-  await writeFile(viteConfigPath, patchNpmxVitestConfig(viteConfig), 'utf-8');
+  const viteConfig = await readFile(viteConfigPath, 'utf8');
+  await writeFile(viteConfigPath, patchNpmxVitestConfig(viteConfig), 'utf8');
 }
 
 if (project === 'bun-vite-template') {
@@ -399,16 +341,17 @@ if (project === 'bun-vite-template') {
   // Vitest runtime, but allowJs: false excludes that file from type checking.
   // Apply the migration report's manual type-entry repair for this fixture.
   const tsconfigPath = join(repoRoot, 'tsconfig.json');
-  const tsconfig = JSON.parse(await readFile(tsconfigPath, 'utf-8'));
-  const types = tsconfig.compilerOptions?.types;
+  const tsconfig = parseJsonObject(await readFile(tsconfigPath, 'utf8'), tsconfigPath);
+  const options = tsconfig.compilerOptions;
   if (
-    !Array.isArray(types) ||
-    !types.includes('vitest/globals') ||
-    !types.includes('@testing-library/jest-dom')
+    !isObjectValue(options) ||
+    !Array.isArray(options.types) ||
+    !options.types.includes('vitest/globals') ||
+    !options.types.includes('@testing-library/jest-dom')
   ) {
     throw new Error('bun-vite-template patch: expected the pinned Jest DOM type configuration');
   }
-  tsconfig.compilerOptions.types = types.map((type) =>
+  options.types = options.types.map((type) =>
     type === '@testing-library/jest-dom' ? '@testing-library/jest-dom/vitest' : type,
   );
   await writeFile(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`);
@@ -420,5 +363,5 @@ if (project === 'bun-vite-template') {
 execSync(`${cli} install --no-frozen-lockfile`, {
   cwd: repoRoot,
   stdio: 'inherit',
-  env: { ...process.env, ...registryInfo.env, ...releaseAgeEnv },
+  env: { ...process.env, ...registryEnv, ...releaseAgeEnv },
 });

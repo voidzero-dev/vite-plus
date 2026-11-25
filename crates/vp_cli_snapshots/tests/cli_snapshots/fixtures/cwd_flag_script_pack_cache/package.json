@@ -1,0 +1,11 @@
+{
+  "name": "cwd-flag-script-pack-cache",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "pack:app": "vp -C packages/app pack"
+  }
+}

@@ -1,33 +1,33 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { executeBuiltinTemplate } from '../templates/builtin.js';
+import { executeBuiltinTemplate } from '../templates/builtin.ts';
+import type { runRemoteTemplateCommand as runRemoteTemplateCommandImplementation } from '../templates/remote.ts';
+import { makeWorkspaceInfo } from './workspace-fixture.ts';
 
-const { mockLogError } = vi.hoisted(() => ({ mockLogError: vi.fn() }));
+const { mockLogError } = vi.hoisted(() => ({ mockLogError: vi.fn<(message: string) => void>() }));
 
-vi.mock('../templates/remote.js', () => ({
-  runRemoteTemplateCommand: vi.fn(),
+vi.mock('../templates/remote.ts', () => ({
+  runRemoteTemplateCommand: vi.fn<typeof runRemoteTemplateCommandImplementation>(),
 }));
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   log: { error: mockLogError },
 }));
 
-const workspaceInfo = {
-  rootDir: '/tmp/workspace',
-} as any;
+const workspaceInfo = makeWorkspaceInfo('/tmp/workspace');
 
 const baseTemplateInfo = {
   packageName: 'wage-meeting',
   targetDir: 'wage-meeting',
   args: [],
   envs: {},
-  type: 'builtin' as any,
+  type: 'builtin' as const,
   interactive: false,
 };
 
 describe('executeBuiltinTemplate', () => {
   it('returns exitCode 1 for unknown vite: template', async () => {
-    const { runRemoteTemplateCommand } = await import('../templates/remote.js');
+    const { runRemoteTemplateCommand } = await import('../templates/remote.ts');
 
     const result = await executeBuiltinTemplate(workspaceInfo, {
       ...baseTemplateInfo,
@@ -47,7 +47,7 @@ describe('executeBuiltinTemplate', () => {
     });
 
     expect(mockLogError).toHaveBeenCalledOnce();
-    const message = mockLogError.mock.calls[0][0] as string;
+    const message = mockLogError.mock.calls[0][0];
     expect(message).toContain('vite:unknown');
     expect(message).toContain('vp create --list');
   });

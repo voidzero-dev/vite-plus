@@ -107,7 +107,11 @@ jobs:
       # unavailable to installs. After each dependency tier becomes visible on
       # this runner's registry edge, allow time for other CDN edges to settle.
       PUBLISH_PROPAGATION_MIN_SECONDS: '60'
-      PUBLISH_PROPAGATION_TIMEOUT_SECONDS: '600'
+      # Waits of 500 to 600 seconds are common, and some platform packages need
+      # more: in v1.8.0, two of them became installable about 26 minutes after
+      # upload. A timeout stops the release until a failed-jobs rerun is
+      # approved again, so allow 40 minutes for each tier.
+      PUBLISH_PROPAGATION_TIMEOUT_SECONDS: '2400'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone

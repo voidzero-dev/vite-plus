@@ -1,6 +1,6 @@
-import { describe, it } from 'vitest';
+import { expect, describe, it } from 'vitest';
 
-import { defineConfig } from '../index.js';
+import { defineConfig } from '../index.ts';
 
 describe('defineConfig test field typing', () => {
   it('accepts test config without TS error', () => {
@@ -11,7 +11,7 @@ describe('defineConfig test field typing', () => {
         include: ['src/**/*.spec.ts'],
       },
     });
-    void cfg;
+    expect(cfg.test).toMatchObject({ globals: true, environment: 'node' });
   });
 
   it('accepts test config alongside other vite-plus fields', () => {
@@ -22,6 +22,6 @@ describe('defineConfig test field typing', () => {
       },
       lint: {},
     });
-    void cfg;
+    expect(cfg.test).toMatchObject({ globals: true, environment: 'jsdom' });
   });
 });

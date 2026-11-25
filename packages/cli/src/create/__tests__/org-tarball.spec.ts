@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createTarGzip } from 'nanotar';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { OrgManifest } from '../org-manifest.js';
+import type { OrgManifest } from '../org-manifest.ts';
 import {
   cleanupStaleStagingDirs,
   ensureOrgPackageExtracted,
@@ -15,14 +15,14 @@ import {
   resolveBundledPath,
   resolveExtractionDir,
   sanitizeHostForPath,
-} from '../org-tarball.js';
+} from '../org-tarball.ts';
 
-const { mockGetVpDirs } = vi.hoisted(() => ({ mockGetVpDirs: vi.fn() }));
+const { mockGetVpDirs } = vi.hoisted(() => ({ mockGetVpDirs: vi.fn<() => { cache: string }>() }));
 
 vi.mock('../../../binding/index.js', () => ({ getVpDirs: mockGetVpDirs }));
 
 describe('resolveBundledPath', () => {
-  const scratchDirs: string[] = [];
+  const scratchDirs: Array<string> = [];
 
   afterEach(() => {
     for (const dir of scratchDirs.splice(0)) {
@@ -77,7 +77,7 @@ describe('normalizeEntryName', () => {
 
   it('normalizes leading `./` and backslashes to forward slashes', () => {
     expect(normalizeEntryName('./package/src/index.ts')).toBe('src/index.ts');
-    expect(normalizeEntryName('package\\src\\index.ts')).toBe('src/index.ts');
+    expect(normalizeEntryName(String.raw`package\src\index.ts`)).toBe('src/index.ts');
   });
 
   it('returns null for the root `package/` directory and empty names', () => {
@@ -187,7 +187,7 @@ describe('parseEntryMode', () => {
 });
 
 describe('cleanupStaleStagingDirs', () => {
-  const scratchDirs: string[] = [];
+  const scratchDirs: Array<string> = [];
 
   afterEach(() => {
     for (const dir of scratchDirs.splice(0)) {
@@ -195,7 +195,7 @@ describe('cleanupStaleStagingDirs', () => {
     }
   });
 
-  function tmpDestDir(): { destDir: string; parent: string; base: string } {
+  function tmpDestDir() {
     const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-org-cleanup-'));
     scratchDirs.push(parent);
     const base = 'create-1.0.0';
@@ -241,7 +241,7 @@ describe('cleanupStaleStagingDirs', () => {
 });
 
 describe('archive resource limits', () => {
-  const scratchDirs: string[] = [];
+  const scratchDirs: Array<string> = [];
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -273,9 +273,11 @@ describe('archive resource limits', () => {
     const dest = await ensureOrgPackageExtracted(manifest);
     expect(fs.readFileSync(path.join(dest, 'templates/run.sh'), 'utf8')).toBe('#!/bin/sh\n');
     expect(fs.readFileSync(path.join(dest, 'templates/empty.txt'), 'utf8')).toBe('');
-    if (process.platform !== 'win32') {
-      expect(fs.statSync(path.join(dest, 'templates/run.sh')).mode & 0o7777).toBe(0o755);
-    }
+    const posixMode =
+      process.platform === 'win32'
+        ? undefined
+        : fs.statSync(path.join(dest, 'templates/run.sh')).mode & 0o7777;
+    expect(posixMode).toBe(process.platform === 'win32' ? undefined : 0o755);
     expect(await ensureOrgPackageExtracted(manifest)).toBe(dest);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
@@ -296,10 +298,9 @@ describe('archive resource limits', () => {
         : ensureOrgPackageExtracted(manifest),
     ).rejects.toThrow(/decompressed.*limit/);
 
-    if (operation === 'extraction') {
-      const dest = resolveExtractionDir(path.join(cache, 'create-org'), manifest);
-      expect(fs.readdirSync(path.dirname(dest))).toEqual([]);
-    }
+    const parent = path.dirname(resolveExtractionDir(path.join(cache, 'create-org'), manifest));
+    const remaining = fs.existsSync(parent) ? fs.readdirSync(parent) : undefined;
+    expect(remaining).toEqual(operation === 'extraction' ? [] : undefined);
   });
 
   it('counts entries outside the package root during manifest probing', async () => {

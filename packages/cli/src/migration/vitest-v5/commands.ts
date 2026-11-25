@@ -3,12 +3,12 @@ import { getCommandStartIndex, SHELL_STATE_COMMANDS } from '../migrator/shared.t
 import type { RewriteResult, VitestV5Finding } from './ast.ts';
 
 /** Read test commands without evaluating shell state or directory changes. */
-export function literalTestCommands(command: string): string[][] | undefined {
+export function literalTestCommands(command: string): Array<Array<string>> | undefined {
   const commands = parseLiteralCommands(command, true);
   if (!commands) {
     return undefined;
   }
-  const result: string[][] = [];
+  const result: Array<Array<string>> = [];
   for (const tokens of commands) {
     const values = tokens.map(({ value }) => value);
     while (/^[A-Za-z_]\w*=/.test(values[0] ?? '')) {
@@ -23,7 +23,7 @@ export function literalTestCommands(command: string): string[][] | undefined {
 }
 
 /** Locate the runner's arguments after a supported package-manager wrapper. */
-export function vitestCommandArgsStart(values: readonly string[]): number {
+export function vitestCommandArgsStart(values: ReadonlyArray<string>): number {
   const start = getCommandStartIndex(values);
   if (values[start] === 'vitest') {
     return start + 1;
@@ -99,7 +99,7 @@ function migrateBenchmarkOutput(command: string): string {
       return command;
     }
   }
-  const reporters: string[] = [];
+  const reporters: Array<string> = [];
   for (const [index, { value }] of args.entries()) {
     if (/^--reporters?=/.test(value)) {
       reporters.push(value.slice(value.indexOf('=') + 1));
@@ -125,7 +125,7 @@ export function migrateVitestV5Command(
   line = 1,
   reviewV4 = preserveV4,
 ): RewriteResult {
-  const findings: VitestV5Finding[] = [];
+  const findings: Array<VitestV5Finding> = [];
   const report = (
     code: string,
     message: string,

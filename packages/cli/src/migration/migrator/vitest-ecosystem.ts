@@ -1,27 +1,36 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { YAMLMap } from 'yaml';
+import { isMap } from 'yaml';
 
-import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
+import type { PackageManager } from '../../types/index.ts';
+import type { WorkspacePackage } from '../../types/index.ts';
 import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
 } from '../../utils/constants.ts';
+import { isObjectValue } from '../../utils/json-value.ts';
+import type { JsonObject } from '../../utils/json.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { extractOverrideTargetName } from '../../utils/package-overrides.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { isAlignableVitestEcosystemPackage } from '../../utils/vitest-ecosystem.ts';
+import type { BootstrapPackageJson } from '../migrator.ts';
 import {
   bootstrapProjectPaths,
   getCatalogDependencySpec,
   hasNuxtTestUtilsDependency,
   sourceTreeReferencesRetainedVitestModule,
   usesVitestBrowserMode,
-  type BootstrapPackageJson,
 } from '../migrator.ts';
+import type {
+  ManagedOverrideKeyStyle,
+  PackageJsonDependencyField,
+  PnpmPeerDependencyRules,
+} from './shared.ts';
+import { lookupSetting } from './shared.ts';
 import {
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
   PROVIDER_OVERRIDE_DROP_NAMES,
@@ -31,9 +40,6 @@ import {
   isPlainRecord,
   pnpmOverrideKey,
   vitePeerDependencyRuleRequired,
-  type ManagedOverrideKeyStyle,
-  type PackageJsonDependencyField,
-  type PnpmPeerDependencyRules,
 } from './shared.ts';
 
 // Official packages that do not declare a required `vitest` peer. Keep them
@@ -58,7 +64,7 @@ export { isAlignableVitestEcosystemPackage } from '../../utils/vitest-ecosystem.
 // PROVIDER_OVERRIDE_DROP_NAMES). Shared by the JSON-object and YAMLMap
 // variants below.
 function isRemovePackageOverrideKey(key: string): boolean {
-  return (PROVIDER_OVERRIDE_DROP_NAMES as readonly string[]).includes(
+  return (PROVIDER_OVERRIDE_DROP_NAMES as ReadonlyArray<string>).includes(
     extractOverrideTargetName(key),
   );
 }
@@ -79,7 +85,7 @@ function stripSegmentVersion(segment: string): string {
 function parentGlobMatchesName(glob: string, name: string): boolean {
   const pattern = glob
     .split('*')
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .map((part) => part.replaceAll(/[.+?^${}()|[\]\\]/g, String.raw`\$&`))
     .join('.*');
   return new RegExp(`^${pattern}$`).test(name);
 }
@@ -99,7 +105,7 @@ function ancestorSegmentMatches(segment: string, name: string): boolean {
 // playwright) are deliberately NOT included — vite-plus no longer ships them, so
 // a `@vitest/browser-playwright>…` chain constrains the user's own provider
 // subtree, not vite-plus's (see the ACCEPTED EDGE note below).
-const OWNED_PROVIDER_ANCESTOR_NAMES = (REMOVE_PACKAGES as readonly string[]).filter((name) =>
+const OWNED_PROVIDER_ANCESTOR_NAMES = (REMOVE_PACKAGES as ReadonlyArray<string>).filter((name) =>
   name.startsWith('@vitest/'),
 );
 
@@ -118,7 +124,7 @@ const OWNED_PROVIDER_ANCESTOR_NAMES = (REMOVE_PACKAGES as readonly string[]).fil
 // `some-parent/**`, `some-parent/vite-*`, `some-app>@vitest/browser-playwright`)
 // constrains a different subtree and does NOT touch the root vite-plus provider,
 // so it is preserved. A chain of only `**` (`**`, `**/**`) is global and matches.
-function parentChainReachesVitePlus(segments: string[]): boolean {
+function parentChainReachesVitePlus(segments: Array<string>): boolean {
   const concrete = segments.filter((segment) => segment !== '**');
   let index = 0;
   if (concrete.length > 0 && ancestorSegmentMatches(concrete[0], VITE_PLUS_NAME)) {
@@ -148,12 +154,12 @@ function parentChainReachesVitePlus(segments: string[]): boolean {
 //     (scoped) segments; the remaining leading `/`-segments are the `from` chain,
 //     with scoped ancestors (`@scope/name`) rejoined.
 //   - bare/versioned names (`pkg`, `@scope/pkg`, `pkg@4`) have NO parent → `null`.
-export function extractOverrideParentSegments(key: string): string[] | null {
+export function extractOverrideParentSegments(key: string): Array<string> | null {
   let rest = key.trim();
   // Peel every pnpm `>` parent level. pnpm splits at a `>` whose preceding char
   // is NOT space, `|`, or `@` (its DELIMITER_REGEX), so semver comparators like
   // `pkg@>=4` are not mistaken for a parent selector.
-  const pnpmParents: string[] = [];
+  const pnpmParents: Array<string> = [];
   for (let delim = rest.search(/[^ |@]>/); delim !== -1; delim = rest.search(/[^ |@]>/)) {
     pnpmParents.push(stripSegmentVersion(rest.slice(0, delim + 1).trim()));
     rest = rest.slice(delim + 2).trim();
@@ -170,7 +176,7 @@ export function extractOverrideParentSegments(key: string): string[] | null {
   const segments = rest.split('/');
   // The trailing descriptor occupies the last 2 segments when it is a scoped
   // name (second-to-last segment starts with `@`), else the last 1.
-  const descriptorIsScoped = segments[segments.length - 2]?.startsWith('@') ?? false;
+  const descriptorIsScoped = segments.at(-2)?.startsWith('@') ?? false;
   const descriptorSegmentCount = descriptorIsScoped ? 2 : 1;
   const rawParents = segments.slice(0, segments.length - descriptorSegmentCount);
   if (rawParents.length === 0) {
@@ -178,7 +184,7 @@ export function extractOverrideParentSegments(key: string): string[] | null {
     return null;
   }
   // Rejoin scoped ancestors (`@scope` + `name`) and strip each segment's version.
-  const parents: string[] = [];
+  const parents: Array<string> = [];
   for (let i = 0; i < rawParents.length; i += 1) {
     const segment = rawParents[i];
     if (segment.startsWith('@') && i + 1 < rawParents.length) {
@@ -228,7 +234,7 @@ export function extractOverrideParentSegments(key: string): string[] | null {
 // PR #1588 this is left as a known, visible (the pin stays in the manifest)
 // limitation rather than risk over-deleting genuinely unrelated transitive
 // selectors (the behavior the posted P2 review asked us to keep).
-function providerKeyReachesVitePlus(key: string, ancestorChain: string[]): boolean {
+function providerKeyReachesVitePlus(key: string, ancestorChain: Array<string>): boolean {
   if (!isRemovePackageOverrideKey(key)) {
     return false;
   }
@@ -246,7 +252,7 @@ export function shouldDropProviderOverrideKey(key: string): boolean {
 // object value: the key's own embedded selector parents followed by its target
 // package name (version-stripped). For a plain npm/bun nested key (`a`) this is
 // just `[a]`, so the accumulated chain mirrors a flat pnpm/yarn parent chain.
-function childChainContribution(key: string): string[] {
+function childChainContribution(key: string): Array<string> {
   const parents = extractOverrideParentSegments(key) ?? [];
   return [...parents, extractOverrideTargetName(key)];
 }
@@ -272,8 +278,8 @@ function childChainContribution(key: string): string[] {
 // (pnpm/yarn override values are flat strings, so the recursion is inert for those
 // sinks.) Returns whether any key/pin was removed.
 export function dropRemovePackageOverrideKeys(
-  overrides: Record<string, unknown> | undefined,
-  ancestorChain: string[] = [],
+  overrides: JsonObject | undefined,
+  ancestorChain: Array<string> = [],
 ): boolean {
   if (!overrides) {
     return false;
@@ -281,10 +287,7 @@ export function dropRemovePackageOverrideKeys(
   let removed = false;
   for (const key of Object.keys(overrides)) {
     const value = overrides[key];
-    const child =
-      value !== null && typeof value === 'object' && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : undefined;
+    const child = isObjectValue(value) ? value : undefined;
     if (providerKeyReachesVitePlus(key, ancestorChain)) {
       if (child) {
         // Long-form provider override: drop the provider's own version pin (`.`)
@@ -354,6 +357,48 @@ export function managedOverridePackages(
   return usesWebdriverioProvider && VITEST_IS_MANAGED_OVERRIDE
     ? { ...managed, '@vitest/browser': VITEST_VERSION }
     : managed;
+}
+
+function removePackageJsonVitestPin(overrides: JsonObject): boolean {
+  const vitest = overrides.vitest;
+  if (!isPlainRecord(vitest)) {
+    return removeManagedVitestEntry(overrides);
+  }
+  if (!VITEST_IS_MANAGED_OVERRIDE || typeof vitest['.'] !== 'string') {
+    return false;
+  }
+  const children = { ...vitest };
+  delete children['.'];
+  if (Object.keys(children).length > 0) {
+    overrides.vitest = children;
+  } else {
+    delete overrides.vitest;
+  }
+  return true;
+}
+
+// In npm and Bun's object form, "." overrides the package itself. All other keys
+// constrain its children and must survive a change to the package's own pin.
+export function ensurePackageJsonOverrides(
+  overrides: JsonObject | undefined,
+  managed: Record<string, string>,
+  selectSpec?: (name: string, current: string | undefined, target: string) => string,
+) {
+  const next = { ...overrides };
+  let changed = !('vitest' in managed) && removePackageJsonVitestPin(next);
+
+  for (const [name, target] of Object.entries(managed)) {
+    const entry = next[name];
+    const nested = isPlainRecord(entry);
+    const current = nested ? entry['.'] : entry;
+    const spec =
+      selectSpec?.(name, typeof current === 'string' ? current : undefined, target) ?? target;
+    if (current !== spec) {
+      next[name] = nested ? { ...entry, '.': spec } : spec;
+      changed = true;
+    }
+  }
+  return { overrides: next, changed };
 }
 
 // True iff a dependency field lists a vitest ecosystem package — any name that
@@ -501,7 +546,7 @@ export function projectUsesVitestDirectly(
 // `bare`. npm also accepts a range in an override key, so a user-authored
 // `"vitest@*"` in npm `overrides` belongs to the user. Do not delete it.
 export function removeManagedVitestEntry(
-  record: Record<string, string> | undefined,
+  record: JsonObject | undefined,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
 ): boolean {
   if (!VITEST_IS_MANAGED_OVERRIDE || !record) {
@@ -525,7 +570,7 @@ export function removeYamlMapVitestEntry(
   map: unknown,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
 ): void {
-  if (!VITEST_IS_MANAGED_OVERRIDE || !(map instanceof YAMLMap)) {
+  if (!VITEST_IS_MANAGED_OVERRIDE || !isMap(map)) {
     return;
   }
   for (const key of managedVitestOverrideKeys(keyStyle)) {
@@ -537,16 +582,16 @@ export function removeYamlMapVitestEntry(
 // `vitest@*` in a pnpm override sink (see `pnpmOverrideKey`). Exact key
 // equality keeps selector-scoped keys such as `some-app>vitest` out, and, in
 // bare sinks, a user-authored ranged key too.
-function managedVitestOverrideKeys(keyStyle: ManagedOverrideKeyStyle): string[] {
+function managedVitestOverrideKeys(keyStyle: ManagedOverrideKeyStyle): Array<string> {
   return keyStyle === 'pnpm-ranged' ? ['vitest', pnpmOverrideKey('vitest')] : ['vitest'];
 }
 
 /** The pnpm peerDependencyRules keys for one migration step. */
 export interface PnpmPeerDependencyRuleKeys {
   /** Keys that migration writes to `allowAny` and `allowedVersions` as `'*'`. */
-  managed: string[];
+  managed: Array<string>;
   /** Keys that migration removes. */
-  stale: string[];
+  stale: Array<string>;
 }
 
 // The pnpm peerDependencyRules keys vite-plus manages and removes. The managed
@@ -569,7 +614,7 @@ export function pnpmPeerDependencyRuleKeys(
   const managed = Object.keys(managedOverridePackages(usesVitest)).filter(
     (key) => viteRuleRequired || key !== 'vite',
   );
-  const stale: string[] = [];
+  const stale: Array<string> = [];
   if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
     stale.push('vitest');
   }
@@ -591,10 +636,11 @@ export function isManagedAllowedVersion(key: string, value: unknown): boolean {
 // pnpm-workspace.yaml.
 export function peerDependencyRulesHaveStaleEntry(
   rules: { allowAny?: unknown; allowedVersions?: unknown } | null | undefined,
-  staleKeys: readonly string[],
+  staleKeys: ReadonlyArray<string>,
 ): boolean {
   return (
-    (Array.isArray(rules?.allowAny) && rules.allowAny.some((key) => staleKeys.includes(key))) ||
+    (Array.isArray(rules?.allowAny) &&
+      rules.allowAny.some((key: unknown) => typeof key === 'string' && staleKeys.includes(key))) ||
     (isPlainRecord(rules?.allowedVersions) &&
       Object.entries(rules.allowedVersions).some(
         ([key, value]) => staleKeys.includes(key) && isManagedAllowedVersion(key, value),
@@ -667,15 +713,15 @@ export function isLegacyWrapperSpec(value: unknown): boolean {
  * no `{}` is left behind. Flat maps (pnpm `overrides`, yarn `resolutions`,
  * catalogs) hold only string values, where the recursion is inert.
  */
-export function pruneLegacyWrapperAliases(record: Record<string, unknown> | undefined): boolean {
+export function pruneLegacyWrapperAliases(record: JsonObject | undefined): boolean {
   if (!record) {
     return false;
   }
   let mutated = false;
   for (const key of Object.keys(record)) {
     const value = record[key];
-    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-      if (pruneLegacyWrapperAliases(value as Record<string, unknown>)) {
+    if (isObjectValue(value)) {
+      if (pruneLegacyWrapperAliases(value)) {
         mutated = true;
         if (Object.keys(value).length === 0) {
           delete record[key];
@@ -684,7 +730,7 @@ export function pruneLegacyWrapperAliases(record: Record<string, unknown> | unde
       continue;
     }
     if (isLegacyWrapperSpec(value)) {
-      const fallback = LEGACY_WRAPPER_FALLBACK_VERSIONS[key];
+      const fallback = lookupSetting(LEGACY_WRAPPER_FALLBACK_VERSIONS, key);
       if (fallback !== undefined) {
         record[key] = fallback;
       } else {
@@ -792,7 +838,7 @@ export function vitestEcosystemCatalogReferencesPending(
 
 export function collectVitestEcosystemInstallDependencyNames(
   rootDir: string,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
 ): Set<string> {
   const names = new Set<string>();
   for (const packagePath of bootstrapProjectPaths(rootDir, packages)) {

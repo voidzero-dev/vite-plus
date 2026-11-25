@@ -29,7 +29,7 @@ import {
   isHooksUserDisabled,
   resolveHooksDir,
   status,
-} from '../hooks.js';
+} from '../hooks.ts';
 
 // Unmodified upstream dispatcher; retained to verify safe migration against real Husky output.
 const HUSKY_DISPATCHER = readFileSync(new URL('./fixtures/husky-9.1.7/h', import.meta.url), 'utf8');
@@ -37,7 +37,7 @@ const HUSKY_DISPATCHER = readFileSync(new URL('./fixtures/husky-9.1.7/h', import
 function runCommit(
   cwd: string,
   message = 'test',
-  ...gitOptions: string[]
+  ...gitOptions: Array<string>
 ): SpawnSyncReturns<string> {
   return spawnSync(
     'git',
@@ -221,7 +221,7 @@ describe('install', () => {
         writeFileSync(join(tmp, 'package.json'), manifest);
         const internal = join(tmp, '.husky', '_');
         mkdirSync(internal, { recursive: true });
-        const files: Record<string, string> = {
+        const files = {
           h: HUSKY_DISPATCHER.replaceAll('\n', newline),
           'husky.sh': readFileSync(
             new URL('./fixtures/husky-9.1.7/husky.sh', import.meta.url),
@@ -583,9 +583,13 @@ describe('install', () => {
       }
 
       expect(install().isError).toBe(false);
-      if (scenario !== 'disabled hooks') {
-        expect(enable(undefined, { replaceHusky: true }).message).toContain('skipping');
-      }
+      const enableMessage =
+        scenario === 'disabled hooks'
+          ? undefined
+          : enable(undefined, { replaceHusky: true }).message;
+      expect(enableMessage?.includes('skipping')).toBe(
+        scenario === 'disabled hooks' ? undefined : true,
+      );
       expect(
         execFileSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
       ).toBe(hooksPath);
@@ -807,7 +811,9 @@ describe('install', () => {
           isError: false,
         });
         expect(readFileSync(externalFile, 'utf8')).toBe('keep me\n');
-        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
       } finally {
         process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
@@ -833,7 +839,9 @@ describe('install', () => {
           isError: false,
         });
         expect(readFileSync(externalFile, 'utf8')).toBe('keep me\n');
-        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
       } finally {
         process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
@@ -890,7 +898,9 @@ describe('enable / disable / status', () => {
         expect(disabled.message).toContain('Git hooks disabled');
         expect(existsSync(join(tmp, hooksDir, '_'))).toBe(false);
         expect(existsSync(join(tmp, hooksDir, 'pre-commit'))).toBe(true);
-        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
         expect(isHooksUserDisabled()).toBe(true);
 
         // install (as vp config would) respects the preference
@@ -928,9 +938,9 @@ describe('enable / disable / status', () => {
 
         expect(enable().isError).toBe(false);
         expect(isHooksUserDisabled()).toBe(false);
-        expect(() =>
-          execSync('git config --local --get vp.hooks.disabled', { cwd: tmp }),
-        ).toThrow();
+        expect(() => execSync('git config --local --get vp.hooks.disabled', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
       } finally {
         process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
@@ -1094,7 +1104,9 @@ describe('enable / disable / status', () => {
         expect(result.isError).toBe(false);
         expect(result.message).toContain('unset core.hooksPath');
         expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
-        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
       } finally {
         process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
@@ -1130,7 +1142,9 @@ describe('enable / disable / status', () => {
         expect(result.message).toContain('unset core.hooksPath');
         expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
         expect(existsSync(join(tmp, 'pkg', '.vite-hooks'))).toBe(false);
-        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
         expect(isHooksUserDisabled()).toBe(true);
         expect(
           execSync('git config --local --get vp.hooks.prefix', { cwd: tmp }).toString().trim(),
@@ -1164,7 +1178,9 @@ describe('enable / disable / status', () => {
         expect(result.isError).toBe(false);
         expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
         expect(existsSync(join(tmp, 'pkg', '.vite-hooks'))).toBe(false);
-        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
         expect(isHooksUserDisabled()).toBe(true);
       } finally {
         process.chdir(originalCwd);
@@ -1193,7 +1209,9 @@ describe('enable / disable / status', () => {
         const result = disable();
         expect(result.isError).toBe(false);
         expect(existsSync(join(tmp, 'pkg', '.vite-hooks', '_'))).toBe(false);
-        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(() => execSync('git config --get core.hooksPath', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
       } finally {
         process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
@@ -1219,7 +1237,9 @@ describe('enable / disable / status', () => {
         expect(result.isError).toBe(false);
         expect(isHooksUserDisabled()).toBe(true);
         expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
-        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow();
+        expect(() => execSync('git config --local --get core.hooksPath', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
         expect(
           execSync('git config --worktree --get core.hooksPath', { cwd: tmp }).toString().trim(),
         ).toBe('.husky/_');
@@ -1255,9 +1275,9 @@ describe('enable / disable / status', () => {
         expect(
           execSync('git config --local --get core.hooksPath', { cwd: tmp }).toString().trim(),
         ).toBe('.husky/_');
-        expect(() =>
-          execSync('git config --worktree --get core.hooksPath', { cwd: tmp }),
-        ).toThrow();
+        expect(() => execSync('git config --worktree --get core.hooksPath', { cwd: tmp })).toThrow(
+          /Command failed: git config/,
+        );
         expect(execSync('git config --get core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
           '.husky/_',
         );
@@ -1329,14 +1349,14 @@ describe('hookScript', () => {
   });
 
   it.skipIf(process.platform !== 'win32')('should handle Windows separators in nested dirs', () => {
-    const withWindowsSeparators = hookScript('.config\\husky');
+    const withWindowsSeparators = hookScript(String.raw`.config\husky`);
     const withPosixSeparators = hookScript('.config/husky');
     expect(countDirnameCalls(withWindowsSeparators)).toBe(countDirnameCalls(withPosixSeparators));
     expect(countDirnameCalls(withWindowsSeparators)).toBe(4);
   });
 
   it.skipIf(process.platform === 'win32')('treats a backslash as a literal POSIX filename', () => {
-    expect(countDirnameCalls(hookScript('.config\\husky'))).toBe(3);
+    expect(countDirnameCalls(hookScript(String.raw`.config\husky`))).toBe(3);
   });
 
   it.skipIf(process.platform === 'win32').each([undefined, 'vp-home'])(

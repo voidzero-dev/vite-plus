@@ -164,3 +164,41 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 - run: vp check
 - run: vp test
 ```
+
+## Offline CI with a private registry
+
+You can install the [project-local CLI](/guide/local-cli) from a private npm registry such as Verdaccio without public internet access. If Node.js is already installed, you do not need a Node.js download mirror. If you also need `vp env`, see [Install from private mirrors](/guide/global-cli#install-from-private-mirrors).
+
+Set the registry in the project's `.npmrc`. Replace the example URL with your own.
+
+```ini [.npmrc]
+registry=https://npm.corp.example/
+```
+
+If you mirror packages by hand, run `pnpm list --lockfile-only --depth Infinity --json` to list the project's locked dependencies. Include dev dependencies and use the `os`, `cpu`, and `libc` fields in `pnpm-lock.yaml` to select optional native packages for your platform.
+
+::: tip Prevent package-manager downloads
+With `vite-plus` versions `1.6.x` and `1.7.x`, set `VP_ENV_FORBIDDEN=1` before running `vp` to prevent it from downloading the project's pinned package manager. In PowerShell, set it in the same session as the commands below.
+
+```powershell
+$env:VP_ENV_FORBIDDEN = '1'
+```
+
+This setting disables Vite+'s management of Node.js and package managers. Run `pnpm install` directly because `vp install` requires a managed package manager on these releases.
+
+Starting with `1.8.0`, you can omit the variable when you use only the project-local CLI. It uses the package manager on `PATH`.
+:::
+
+On Windows, run these commands in the package that declares `vite-plus`, with the project's pinned pnpm on `PATH` and a committed `pnpm-lock.yaml`.
+
+```powershell
+pnpm install --frozen-lockfile
+.\node_modules\.bin\vp.cmd check
+.\node_modules\.bin\vp.cmd test
+```
+
+### Which commands can use the network?
+
+- `vp lint`, `vp fmt --check`, `vp check`, and `vp test` use installed tools. Install any test environment, coverage provider, or browser binary your suite needs in advance. Project configuration, plugins, and tests can make their own requests.
+- `vp run` can replay a task from its local cache. On a cache miss the task runs its own command, which may use the network. A configured remote cache also needs network access.
+- `vp install`, `vp add`, and `vp dlx` can fetch packages. `vp migrate` can install dependencies. With `vp create`, the template determines the source. For example, `vite:application` uses `create-vite@latest` from the registry and `vite:library` downloads its template from GitHub.

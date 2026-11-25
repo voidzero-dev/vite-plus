@@ -1,4 +1,4 @@
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { log as promptLog } from '@voidzero-dev/vite-plus-prompts';
 
 import { displayRelative } from '../../utils/path.ts';
 import {
@@ -7,7 +7,7 @@ import {
   removeDeprecatedTsconfigFalseOption,
   rewriteTypesInTsconfig,
 } from '../../utils/tsconfig.ts';
-import { type MigrationReport } from '../report.ts';
+import type { MigrationReport } from '../report.ts';
 import { warnMigration } from './shared.ts';
 
 export function cleanupDeprecatedTsconfigOptions(
@@ -24,10 +24,10 @@ export function cleanupDeprecatedTsconfigOptions(
           report.removedConfigCount++;
         }
         if (!silent) {
-          prompts.log.success(`✔ Removed ${name}: false from ${displayRelative(filePath)}`);
+          promptLog.success(`✔ Removed ${name}: false from ${displayRelative(filePath)}`);
         }
         warnMigration(
-          `Removed \`"${name}": false\` from ${displayRelative(filePath)} — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529`,
+          `Removed \`"${name}": false\` from ${displayRelative(filePath)} — this option has been deprecated. See https://github.com/microsoft/TypeScript/issues/62529`,
           report,
         );
       }
@@ -49,7 +49,7 @@ export function rewriteTsconfigTypes(
         report.removedConfigCount++;
       }
       if (!silent) {
-        prompts.log.success(`✔ Rewrote types in ${displayRelative(filePath)}`);
+        promptLog.success(`✔ Rewrote types in ${displayRelative(filePath)}`);
       }
     }
   }

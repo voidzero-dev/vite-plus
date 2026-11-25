@@ -1,6 +1,6 @@
 import type { DefaultTheme } from 'vitepress';
 
-export const core: DefaultTheme.TeamMember[] = [
+export const core: Array<DefaultTheme.TeamMember> = [
   {
     avatar: 'https://github.com/fengmk2.png',
     name: 'MK',
@@ -136,4 +136,4 @@ export const core: DefaultTheme.TeamMember[] = [
   },
 ];
 
-export const emeriti: DefaultTheme.TeamMember[] = [];
+export const emeriti: Array<DefaultTheme.TeamMember> = [];

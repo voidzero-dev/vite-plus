@@ -16,7 +16,7 @@ export const stream = {
     const initialWidth = symbol ? 2 : 0;
     let lineWidth = initialWidth;
     for await (let chunk of iterable) {
-      chunk = chunk.replace(/\n/g, `\n${prefix}`);
+      chunk = chunk.replaceAll('\n', `\n${prefix}`);
       if (chunk.includes('\n')) {
         lineWidth = initialWidth + strip(chunk.slice(chunk.lastIndexOf('\n'))).length;
       }

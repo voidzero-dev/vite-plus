@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { CliParseError } from '../../binding/index.js';
 import {
-  type CliParseError,
   parseConfigArgs,
   parseCreateArgs,
   parseHooksArgs,

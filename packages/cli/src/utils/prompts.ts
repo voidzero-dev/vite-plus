@@ -1,10 +1,10 @@
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { cancel, confirm, isCancel, log, select } from '@voidzero-dev/vite-plus-prompts';
 import { coerce, isGreaterThanOrEqual } from 'verkit';
 
+import type { DownloadPackageManagerResult } from '../../binding/index.js';
 import {
   availablePackageManagers,
   downloadPackageManager as downloadPackageManagerBinding,
-  type DownloadPackageManagerResult,
 } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
@@ -22,7 +22,7 @@ export interface CommandRunSummary {
    * gated during the install. Only populated when `runViteInstall` is called
    * with `detectIgnoredBuilds`. See {@link runViteInstall}.
    */
-  pendingBuilds?: string[];
+  pendingBuilds?: Array<string>;
 }
 
 /**
@@ -48,7 +48,7 @@ export function shouldIgnoreScriptsForAutoInstall(
 }
 
 export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): never {
-  prompts.cancel(message);
+  cancel(message);
   process.exit(exitCode);
 }
 
@@ -75,7 +75,7 @@ export async function selectPackageManager(interactive?: boolean, silent = false
   }
 
   if (interactive) {
-    const selected = await prompts.select({
+    const selected = await select({
       message: 'Which package manager would you like to use?',
       options: [
         PackageManager.pnpm,
@@ -90,14 +90,14 @@ export async function selectPackageManager(interactive?: boolean, silent = false
       initialValue: defaultPackageManager,
     });
 
-    if (prompts.isCancel(selected)) {
+    if (isCancel(selected)) {
       cancelAndExit();
     }
 
     return selected;
   } else {
     if (!silent) {
-      prompts.log.info(
+      log.info(
         defaultPackageManager === PackageManager.pnpm
           ? `Using default package manager: ${accent(PackageManager.pnpm)}`
           : `${accent(PackageManager.pnpm)} is not installed, using ${accent(defaultPackageManager)}`,
@@ -132,7 +132,7 @@ export async function downloadPackageManager(
 export async function runViteInstall(
   cwd: string,
   interactive?: boolean,
-  extraArgs?: string[],
+  extraArgs?: Array<string>,
   options?: {
     silent?: boolean;
     packageManager?: PackageManager;
@@ -208,9 +208,9 @@ export async function runViteInstall(
     } satisfies CommandRunSummary;
   } else {
     spinner.stop(`Install failed`);
-    prompts.log.info(stdout.toString());
-    prompts.log.error(stderr.toString());
-    prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
+    log.info(stdout.toString());
+    log.error(stderr.toString());
+    log.info(`You may need to run "vp install" manually in ${cwd}`);
     return {
       durationMs: Date.now() - startTime,
       exitCode,
@@ -222,8 +222,8 @@ export async function runViteInstall(
 export async function runViteFmt(
   cwd: string,
   interactive?: boolean,
-  paths?: string[],
-  options?: { silent?: boolean; command?: string; commandArgs?: string[] },
+  paths?: Array<string>,
+  options?: { silent?: boolean; command?: string; commandArgs?: Array<string> },
 ) {
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
   const startTime = Date.now();
@@ -244,8 +244,8 @@ export async function runViteFmt(
     } satisfies CommandRunSummary;
   } else {
     spinner.stop(`Format failed`);
-    prompts.log.info(stdout.toString());
-    prompts.log.error(stderr.toString());
+    log.info(stdout.toString());
+    log.error(stderr.toString());
     // Migration can pass batches of thousands of paths; interpolating them all
     // would bury the formatter's diagnostic above under one enormous line.
     const joinedPaths = (paths ?? []).join(' ');
@@ -255,7 +255,7 @@ export async function runViteFmt(
         : joinedPaths.length <= 256
           ? `You may need to run "vp fmt ${joinedPaths}" manually in ${cwd}`
           : `You may need to run "vp fmt" manually on the ${paths?.length} changed files in ${cwd}`;
-    prompts.log.info(hint);
+    log.info(hint);
     return {
       durationMs: Date.now() - startTime,
       exitCode,
@@ -277,8 +277,8 @@ export async function upgradeYarn(cwd: string, interactive?: boolean, silent = f
     spinner.stop(`Yarn upgraded to stable version`);
   } else {
     spinner.stop(`yarn upgrade failed`);
-    prompts.log.info(stdout.toString());
-    prompts.log.error(stderr.toString());
+    log.info(stdout.toString());
+    log.error(stderr.toString());
   }
 }
 
@@ -294,13 +294,13 @@ export async function promptGitHooks(options: {
     return true;
   }
   if (options.interactive) {
-    const selected = await prompts.confirm({
+    const selected = await confirm({
       message:
         options.message ??
         'Set up pre-commit hooks to run formatting, linting, and type checking with auto-fixes?',
       initialValue: true,
     });
-    if (prompts.isCancel(selected)) {
+    if (isCancel(selected)) {
       cancelAndExit();
       return false;
     }
@@ -320,11 +320,11 @@ export async function promptGitInit(options: {
     return true;
   }
   if (options.interactive) {
-    const selected = await prompts.confirm({
+    const selected = await confirm({
       message: 'Initialize a git repository?',
       initialValue: true,
     });
-    if (prompts.isCancel(selected)) {
+    if (isCancel(selected)) {
       cancelAndExit();
       return false;
     }

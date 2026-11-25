@@ -4,9 +4,14 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { JsonObject } from '../../utils/json.ts';
 import { detectMigrationWarnings } from '../detector.ts';
 
-function writeProject(projectPath: string, packageJson: object, configFiles: string[] = []): void {
+function writeProject(
+  projectPath: string,
+  packageJson: JsonObject,
+  configFiles: Array<string> = [],
+): void {
   fs.mkdirSync(projectPath, { recursive: true });
   fs.writeFileSync(path.join(projectPath, 'package.json'), JSON.stringify(packageJson));
   for (const configFile of configFiles) {

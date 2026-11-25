@@ -3,10 +3,14 @@ use std::{borrow::Cow, process::Stdio, sync::Arc};
 use vp_error::Error;
 use vt::ExitStatus;
 use vt_path::AbsolutePathBuf;
+use vt_str::Str;
 
 use super::{
     resolver::SubcommandResolver,
-    types::{CapturedCommandOutput, EnvMap, SynthesizableSubcommand, exit_status_from},
+    types::{
+        CapturedCommandOutput, EnvMap, InProcessCommand, Outcome, ResolvedSubcommand,
+        SynthesizableSubcommand, exit_status_from,
+    },
 };
 
 /// Resolve a subcommand into a prepared `tokio::process::Command`.
@@ -17,7 +21,14 @@ async fn resolve_and_build_command(
     cwd: &AbsolutePathBuf,
 ) -> Result<tokio::process::Command, Error> {
     let resolved = resolver.resolve(subcommand, envs, cwd).await.map_err(Error::Anyhow)?;
+    build_resolved_command(&resolved, cwd)
+}
 
+/// Prepare a `tokio::process::Command` for a resolved subcommand.
+fn build_resolved_command(
+    resolved: &ResolvedSubcommand,
+    cwd: &AbsolutePathBuf,
+) -> Result<tokio::process::Command, Error> {
     // Resolve the program path using `which` to handle Windows .cmd/.bat files (PATHEXT)
     let program_path = vp_command::resolve_bin(
         resolved.program.as_ref().to_str().unwrap_or_default(),
@@ -32,19 +43,48 @@ async fn resolve_and_build_command(
     Ok(cmd)
 }
 
-/// Resolve a single subcommand and execute it, returning its exit status.
+/// Describe a resolved `node <entry> ...` command for the launcher to run in
+/// its own process. Returns `None` when a name or value is not UTF-8, so the
+/// caller starts a child process instead.
+///
+/// The resolved environment only adds to the launcher's environment, so the
+/// command carries the variables that differ and never removes one.
+fn in_process_command(
+    resolved: &ResolvedSubcommand,
+    cwd: &AbsolutePathBuf,
+) -> Option<InProcessCommand> {
+    let (entry, args) = resolved.args.split_first()?;
+    let mut env = Vec::new();
+    for (name, value) in resolved.envs.iter() {
+        if std::env::var_os(name.inner()).as_deref() != Some(&**value) {
+            env.push((Str::from(name.inner().to_str()?), Str::from(value.to_str()?)));
+        }
+    }
+    Some(InProcessCommand { entry: entry.clone(), args: args.to_vec(), cwd: cwd.clone(), env })
+}
+
+/// Resolve a single subcommand and execute it.
+///
+/// With `in_process_dev`, `vp dev` returns [`Outcome::InProcess`] and starts
+/// no process. The dev command runs `node <vite.js> dev`, and the launcher is
+/// already that Node.js.
 pub(super) async fn resolve_and_execute(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
     envs: &Arc<EnvMap>,
     cwd: &AbsolutePathBuf,
-) -> Result<ExitStatus, Error> {
-    let is_interactive = matches!(
-        subcommand,
-        SynthesizableSubcommand::Dev { .. } | SynthesizableSubcommand::Preview { .. }
-    );
-
-    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd).await?;
+    in_process_dev: bool,
+) -> Result<Outcome, Error> {
+    let is_dev = matches!(subcommand, SynthesizableSubcommand::Dev { .. });
+    let is_interactive = is_dev || matches!(subcommand, SynthesizableSubcommand::Preview { .. });
+    let resolved = resolver.resolve(subcommand, envs, cwd).await.map_err(Error::Anyhow)?;
+    if is_dev
+        && in_process_dev
+        && let Some(command) = in_process_command(&resolved, cwd)
+    {
+        return Ok(Outcome::InProcess(command));
+    }
+    let mut cmd = build_resolved_command(&resolved, cwd)?;
 
     // For interactive commands (dev, preview), use terminal guard to restore terminal state on exit
     let status = if is_interactive {
@@ -53,7 +93,7 @@ pub(super) async fn resolve_and_execute(
         let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
         child.wait().await.map_err(|e| Error::Anyhow(e.into()))?
     };
-    Ok(exit_status_from(status))
+    Ok(Outcome::Exit(exit_status_from(status)))
 }
 
 pub(super) enum FilterStream {

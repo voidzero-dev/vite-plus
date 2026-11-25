@@ -3,15 +3,8 @@ import module from 'node:module';
 import path from 'node:path';
 
 import { cac } from 'cac';
-import {
-  buildWithConfigs,
-  resolveUserConfig,
-  globalLogger,
-  enableDebug,
-  type InlineConfig,
-  type ResolvedConfig,
-  type TsdownHandle,
-} from 'vite/pack';
+import type { InlineConfig, ResolvedConfig, TsdownHandle } from 'vite/pack';
+import { buildWithConfigs, resolveUserConfig, globalLogger, enableDebug } from 'vite/pack';
 
 import { resolveViteConfig } from './resolve-vite-config.ts';
 
@@ -137,7 +130,7 @@ cli
   .option('--concurrency <count>', 'Maximum number of Rolldown builds to run in parallel')
   .option('-F, --filter <pattern>', 'Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name')
   .option('--exports', 'Generate export-related metadata for package.json (experimental)')
-  .action(async (input: string[], flags: InlineConfig) => {
+  .action(async (input: Array<string>, flags: InlineConfig) => {
     if (input.length > 0) {
       flags.entry = input;
     }
@@ -154,7 +147,7 @@ cli
         configDeps.add(path.normalize(viteConfig.configFile));
       }
 
-      const configs: ResolvedConfig[] = [];
+      const configs: Array<ResolvedConfig> = [];
       const packConfigs = Array.isArray(viteConfig?.pack)
         ? viteConfig.pack
         : [viteConfig?.pack ?? {}];
@@ -181,7 +174,14 @@ cli
 export async function runCLI(): Promise<void> {
   cli.parse(process.argv, { run: false });
 
-  enableDebug(cli.options.debug);
+  const debug: unknown = cli.options.debug;
+  if (
+    typeof debug === 'boolean' ||
+    typeof debug === 'string' ||
+    (Array.isArray(debug) && debug.every((feature: unknown) => typeof feature === 'string'))
+  ) {
+    enableDebug(debug);
+  }
 
   try {
     await cli.runMatchedCommand();

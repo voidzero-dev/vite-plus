@@ -134,7 +134,7 @@ trustPolicy: no-downgrade
 trustPolicyExclude:
   # Keep the project's existing exception.
   - testnpm2@1.0.0
-  - tsrs@7.1.0-beta.tsrs4
+  - tsrs@7.1.0-beta.tsrs5
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'
@@ -148,8 +148,6 @@ minimumReleaseAgeExclude:
   - '@voidzero-dev/*'
   - oxlint
   - '@oxlint/*'
-  - oxlint-tsgolint
-  - '@oxlint-tsgolint/*'
   - tsrs
   - '@tsrs/*'
   - oxfmt

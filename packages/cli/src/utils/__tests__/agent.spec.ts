@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
 
+// oxlint-disable-next-line import/no-namespace -- The spies replace individual exports on the prompt module.
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,14 +17,18 @@ import {
   selectAgentTargets,
   writeAgentInstructions,
   writeCopilotSetupWorkflow,
-} from '../agent.js';
-import { SETUP_VP_VERSION } from '../constants.js';
-import { pkgRoot } from '../path.js';
+} from '../agent.ts';
+import { SETUP_VP_VERSION } from '../constants.ts';
+import { pkgRoot } from '../path.ts';
 
 type MockNode =
   | { kind: 'dir' }
   | { kind: 'file'; content: string }
   | { kind: 'symlink'; target: string };
+
+function enoent(filePath: fs.PathLike) {
+  return Object.assign(new Error(`ENOENT: no such file "${String(filePath)}"`), { code: 'ENOENT' });
+}
 
 class InMemoryFs {
   private readonly nodes = new Map<string, MockNode>();
@@ -32,15 +37,21 @@ class InMemoryFs {
     this.ensureDirectory(path.parse(process.cwd()).root);
   }
 
+  // Like fs.existsSync, follows symlinks: a dangling symlink does not exist.
   existsSync(filePath: fs.PathLike): boolean {
-    return this.nodes.has(this.normalize(filePath));
+    try {
+      this.resolvePath(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   lstatSync(filePath: fs.PathLike): fs.Stats {
     const node = this.getNode(filePath);
-    return {
-      isSymbolicLink: () => node.kind === 'symlink',
-    } as fs.Stats;
+    const stats: fs.Stats = Object.create(fs.Stats.prototype);
+    stats.isSymbolicLink = () => node.kind === 'symlink';
+    return stats;
   }
 
   async lstat(filePath: fs.PathLike): Promise<fs.Stats> {
@@ -58,7 +69,7 @@ class InMemoryFs {
     const resolvedPath = this.resolvePath(filePath);
     const node = this.nodes.get(resolvedPath);
     if (!node || node.kind !== 'file') {
-      throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+      throw enoent(filePath);
     }
     return node.content;
   }
@@ -89,6 +100,11 @@ class InMemoryFs {
 
   async symlink(target: string, filePath: fs.PathLike): Promise<void> {
     const normalizedPath = this.normalize(filePath);
+    if (this.nodes.has(normalizedPath)) {
+      throw Object.assign(new Error(`EEXIST: file already exists "${String(filePath)}"`), {
+        code: 'EEXIST',
+      });
+    }
     this.ensureDirectory(path.dirname(normalizedPath));
     this.nodes.set(normalizedPath, { kind: 'symlink', target });
   }
@@ -104,7 +120,7 @@ class InMemoryFs {
   async unlink(filePath: fs.PathLike): Promise<void> {
     const normalizedPath = this.normalize(filePath);
     if (!this.nodes.has(normalizedPath)) {
-      throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+      throw enoent(filePath);
     }
     this.nodes.delete(normalizedPath);
   }
@@ -113,7 +129,7 @@ class InMemoryFs {
     const resolvedPath = this.resolvePath(filePath);
     const node = this.nodes.get(resolvedPath);
     if (!node || node.kind !== 'file') {
-      throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+      throw enoent(filePath);
     }
     return node.content;
   }
@@ -142,7 +158,7 @@ class InMemoryFs {
     const normalizedPath = this.normalize(filePath);
     const node = this.nodes.get(normalizedPath);
     if (!node) {
-      throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+      throw enoent(filePath);
     }
     return node;
   }
@@ -174,7 +190,7 @@ class InMemoryFs {
     while (true) {
       const node = this.nodes.get(current);
       if (!node) {
-        throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+        throw enoent(filePath);
       }
       if (node.kind !== 'symlink') {
         return current;
@@ -201,6 +217,13 @@ const AGENT_TEMPLATE = ['<!--VITE PLUS START-->', 'template block', '<!--VITE PL
   '\n',
 );
 
+function mockPath(value: fs.PathLike | number | { fd: number }): fs.PathLike {
+  if (typeof value === 'number' || (typeof value === 'object' && 'fd' in value)) {
+    throw new TypeError('The in-memory file system requires a path');
+  }
+  return value;
+}
+
 let mockFs: InMemoryFs;
 let projectIndex = 0;
 
@@ -213,19 +236,22 @@ beforeEach(async () => {
   vi.spyOn(fs, 'existsSync').mockImplementation((filePath) => mockFs.existsSync(filePath));
   vi.spyOn(fs, 'lstatSync').mockImplementation((filePath) => mockFs.lstatSync(filePath));
   vi.spyOn(fs, 'readFileSync').mockImplementation((filePath) =>
-    mockFs.readFileSync(filePath as fs.PathLike),
+    mockFs.readFileSync(mockPath(filePath)),
   );
 
   vi.spyOn(fsPromises, 'appendFile').mockImplementation(async (filePath, data) =>
-    mockFs.appendFile(filePath as fs.PathLike, String(data)),
+    mockFs.appendFile(mockPath(filePath), String(data)),
   );
   vi.spyOn(fsPromises, 'lstat').mockImplementation(async (filePath) => mockFs.lstat(filePath));
   vi.spyOn(fsPromises, 'mkdir').mockImplementation(async (filePath, options) => {
-    await mockFs.mkdir(filePath, options as { recursive: true });
+    if (!options || typeof options !== 'object' || options.recursive !== true) {
+      throw new TypeError('The in-memory file system requires recursive mkdir');
+    }
+    await mockFs.mkdir(filePath, { recursive: true });
     return undefined;
   });
   vi.spyOn(fsPromises, 'readFile').mockImplementation(async (filePath) =>
-    mockFs.readFile(filePath as fs.PathLike),
+    mockFs.readFile(mockPath(filePath)),
   );
   vi.spyOn(fsPromises, 'readlink').mockImplementation(async (filePath) =>
     mockFs.readlink(filePath),
@@ -240,7 +266,10 @@ beforeEach(async () => {
     await mockFs.unlink(filePath);
   });
   vi.spyOn(fsPromises, 'writeFile').mockImplementation(async (filePath, data) => {
-    await mockFs.writeFile(filePath as fs.PathLike, data as string);
+    if (typeof data !== 'string') {
+      throw new TypeError('The in-memory file system expects UTF-8 text');
+    }
+    await mockFs.writeFile(mockPath(filePath), data);
   });
 
   await mockFs.writeFile(path.join(pkgRoot, 'AGENTS.md'), AGENT_TEMPLATE);
@@ -307,7 +336,7 @@ describe('selectAgentTargets', () => {
       selectAgentTargets({
         interactive: false,
         agent: ['agents', 'copilot'],
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toMatchObject({
       targetPaths: ['AGENTS.md', '.github/copilot-instructions.md'],
@@ -319,7 +348,7 @@ describe('selectAgentTargets', () => {
     await expect(
       selectAgentTargets({
         interactive: false,
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toMatchObject({
       targetPaths: ['AGENTS.md'],
@@ -333,7 +362,7 @@ describe('selectAgentTargets', () => {
     await expect(
       selectAgentTargets({
         interactive: true,
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toMatchObject({
       targetPaths: ['AGENTS.md', '.github/copilot-instructions.md'],
@@ -349,7 +378,7 @@ describe('selectAgentTargetPaths', () => {
     await expect(
       selectAgentTargetPaths({
         interactive: true,
-        onCancel: vi.fn(),
+        onCancel: vi.fn<() => void>(),
       }),
     ).resolves.toEqual(['AGENTS.md', 'GEMINI.md']);
 
@@ -390,9 +419,10 @@ describe('detectExistingAgentTargetPaths', () => {
 
   it('ignores symlinked agent files', async () => {
     const dir = await createProjectDir();
+    await mockFs.writeFile(path.join(dir, 'AGENTS.md'), '# Agents');
     await mockFs.symlink('AGENTS.md', path.join(dir, 'CLAUDE.md'));
 
-    expect(detectExistingAgentTargetPaths(dir)).toBeUndefined();
+    expect(detectExistingAgentTargetPaths(dir)).toEqual(['AGENTS.md']);
   });
 });
 
@@ -477,6 +507,23 @@ describe('writeAgentInstructions symlink behavior', () => {
       path.join(dir, 'AGENTS.md'),
       path.join(dir, '.github', 'copilot-instructions.md'),
     );
+  });
+
+  it('relinks a dangling agent file symlink to AGENTS.md', async () => {
+    const dir = await createProjectDir();
+    const claudePath = path.join(dir, 'CLAUDE.md');
+    await mockFs.symlink(path.join('..', 'shared', 'CLAUDE.md'), claudePath);
+    expect(mockFs.existsSync(claudePath)).toBe(false);
+
+    await writeAgentInstructions({
+      projectRoot: dir,
+      targetPaths: ['AGENTS.md', 'CLAUDE.md'],
+      interactive: false,
+    });
+
+    expect(mockFs.isSymlink(claudePath)).toBe(true);
+    expect(mockFs.readlinkSync(claudePath)).toBe('AGENTS.md');
+    expect(await mockFs.readText(claudePath)).toContain('template block');
   });
 
   it('does not replace existing non-symlink files with symlinks', async () => {

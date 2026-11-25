@@ -10,3 +10,13 @@ steps = [
   { argv = ["vpt", "print-file", "vite.config.ts"], continue-on-failure = true },
   { argv = ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"], comment = "check .oxfmtrc.json is removed", continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_init_inline_config_chdir_script"
+vp = "local"
+comment = "An init command after vp -C in a task script merges its config into vite.config.ts like a direct call."
+steps = [
+  { argv = ["vp", "run", "fmt:init"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxfmtrc.json", "--assert-not", "file"], comment = "check .oxfmtrc.json is removed", continue-on-failure = true },
+]

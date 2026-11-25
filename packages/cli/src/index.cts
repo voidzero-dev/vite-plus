@@ -1,4 +1,8 @@
-const vite = require('vite');
+/* oxlint-disable typescript/no-require-imports -- This is the synchronous CommonJS entry for the require export condition. */
+import vite = require('vite');
+import vitestConfig = require('vitest/config');
+import vitePlusConfig = require('./define-config');
+/* oxlint-enable typescript/no-require-imports */
 
 const {
   configDefaults,
@@ -6,14 +10,9 @@ const {
   defaultBrowserPort,
   defaultExclude,
   defaultInclude,
-} = require('vitest/config');
+} = vitestConfig;
 
-const {
-  defineConfig,
-  defineProject,
-  lazyPlugins,
-  resolveConfigFromFile,
-} = require('./define-config');
+const { defineConfig, defineProject, lazyPlugins, resolveConfigFromFile } = vitePlusConfig;
 
 module.exports = {
   ...vite,

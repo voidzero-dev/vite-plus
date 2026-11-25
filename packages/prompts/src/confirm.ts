@@ -1,9 +1,8 @@
-import type { CANCEL_SYMBOL } from '@clack/core';
 import { ConfirmPrompt } from '@clack/core';
 import color from 'picocolors';
 
+import type { CommonOptions } from './common.js';
 import {
-  type CommonOptions,
   getGuide,
   promptTitle,
   S_BAR,
@@ -12,6 +11,7 @@ import {
   S_POINTER_INACTIVE,
 } from './common.js';
 import { promptMilestone } from './milestone.js';
+import { runPrompt } from './prompt-result.js';
 
 export interface ConfirmOptions extends CommonOptions {
   message: string;
@@ -23,7 +23,7 @@ export interface ConfirmOptions extends CommonOptions {
 export const confirm = (opts: ConfirmOptions) => {
   const active = opts.active ?? 'Yes';
   const inactive = opts.inactive ?? 'No';
-  return new ConfirmPrompt({
+  const prompt = new ConfirmPrompt({
     active,
     inactive,
     signal: opts.signal,
@@ -69,5 +69,6 @@ export const confirm = (opts: ConfirmOptions) => {
         }
       }
     },
-  }).prompt() as Promise<boolean | typeof CANCEL_SYMBOL>;
+  });
+  return runPrompt<boolean>(prompt);
 };

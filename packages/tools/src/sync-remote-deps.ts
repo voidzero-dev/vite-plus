@@ -3,8 +3,17 @@ import { existsSync, globSync, readFileSync, rmSync, writeFileSync } from 'node:
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import type { findMinimumForRange, isGreaterThan, normalize, normalizeRange } from 'verkit';
+import type { Pair, YAMLMap, isScalar, isMap, parse, parseDocument, stringify } from 'yaml';
+
+import type { JsonObject, JsonValue } from '../../cli/src/utils/json-value.ts';
+import { isObjectValue, isStringRecord } from '../../cli/src/utils/json-value.ts';
+import type { YamlMapping } from '../../cli/src/utils/yaml-value.ts';
+import { isYamlMapping } from '../../cli/src/utils/yaml-value.ts';
 import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
 import { parseCargoOxcVersions, replaceCargoCrateVersion } from './cargo-toml.ts';
+import type { PackageManifest as PackageJson } from './package-manifest.ts';
+import { dependencyFields, readPackageManifest } from './package-manifest.ts';
 import { OXC_NODE_DIR, patchOxcNode } from './patch-oxc-node.ts';
 import {
   alignVendoredVitestDependencies,
@@ -12,41 +21,77 @@ import {
   VITEST_EXACT_VERSION_PACKAGES,
 } from './vendored-vitest.ts';
 
-interface PnpmWorkspace {
-  packages?: string[];
+interface Verkit {
+  normalize: typeof normalize;
+  normalizeRange: typeof normalizeRange;
+  isGreaterThan: typeof isGreaterThan;
+  findMinimumForRange: typeof findMinimumForRange;
+}
+interface WorkspaceYaml {
+  isScalar: typeof isScalar;
+  isMap: typeof isMap;
+  parse: typeof parse;
+  parseDocument: typeof parseDocument;
+  stringify: typeof stringify;
+}
+
+// The first sync may need to install these packages before it can read the workspaces.
+async function loadWorkspaceTools(): Promise<{ yaml: WorkspaceYaml; verkit: Verkit }> {
+  return { yaml: await import('yaml'), verkit: await import('verkit') };
+}
+
+interface PnpmWorkspace extends YamlMapping {
+  packages?: Array<string>;
   catalog?: Record<string, string>;
   catalogMode?: string;
   minimumReleaseAge?: number;
-  minimumReleaseAgeExclude?: string[];
+  minimumReleaseAgeExclude?: Array<string>;
   patchedDependencies?: Record<string, string>;
   peerDependencyRules?: {
     allowedVersions?: Record<string, string>;
   };
-  packageExtensions?: Record<string, unknown>;
+  packageExtensions?: YamlMapping;
   overrides?: Record<string, string>;
   ignoreScripts?: boolean;
-  [key: string]: unknown;
 }
 
-interface PackageJson {
-  name?: string;
-  version?: string;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  optionalDependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-  exports?: Record<string, unknown>;
-  [key: string]: unknown;
+function workspaceFromYaml(value: unknown): PnpmWorkspace {
+  if (value === null || value === undefined) {
+    return {};
+  }
+  if (!isYamlMapping(value) || !isWorkspace(value)) {
+    throw new Error('Invalid pnpm workspace configuration');
+  }
+  return value;
 }
 
-type ExportValue = string | { [condition: string]: string | ExportValue } | null;
+function isWorkspace(value: YamlMapping): value is PnpmWorkspace {
+  const peers = value.peerDependencyRules;
+  return (
+    [value.packages, value.minimumReleaseAgeExclude].every(
+      (items) =>
+        items === undefined ||
+        (Array.isArray(items) && items.every((item) => typeof item === 'string')),
+    ) &&
+    [value.catalog, value.patchedDependencies, value.overrides].every(
+      (section) => section === undefined || isStringRecord(section),
+    ) &&
+    (peers === undefined ||
+      (isYamlMapping(peers) &&
+        (peers.allowedVersions === undefined || isStringRecord(peers.allowedVersions)))) &&
+    (value.packageExtensions === undefined || isYamlMapping(value.packageExtensions)) &&
+    (value.catalogMode === undefined || typeof value.catalogMode === 'string') &&
+    (value.minimumReleaseAge === undefined || typeof value.minimumReleaseAge === 'number') &&
+    (value.ignoreScripts === undefined || typeof value.ignoreScripts === 'boolean')
+  );
+}
 
 const ROLLDOWN_DIR = 'rolldown';
 const VITE_DIR = 'vite';
 const CORE_PACKAGE_PATH = 'packages/core';
 const VITE_DEVTOOLS_PACKAGE = '@vitejs/devtools';
 
-function workspacePackages(packages: string[] = []): string[] {
+function workspacePackages(packages: Array<string> = []): Array<string> {
   // Keep upstream build roots and the packages we bundle. Broad globs also
   // install upstream benchmarks, test servers, and unrelated published tools.
   return [
@@ -60,7 +105,7 @@ function workspacePackages(packages: string[] = []): string[] {
 
 export function collectWorkspaceCatalogReferences(
   rootDir: string,
-  packages: string[],
+  packages: Array<string>,
 ): Set<string> {
   const patterns = workspacePackages(packages);
   const files = globSync(
@@ -79,13 +124,8 @@ export function collectWorkspaceCatalogReferences(
   );
   const references = new Set<string>();
   for (const file of new Set(['package.json', ...files])) {
-    const pkg: PackageJson = JSON.parse(readFileSync(join(rootDir, file), 'utf8'));
-    for (const field of [
-      'dependencies',
-      'devDependencies',
-      'optionalDependencies',
-      'peerDependencies',
-    ] as const) {
+    const pkg = readPackageManifest(join(rootDir, file));
+    for (const field of dependencyFields) {
       for (const [name, version] of Object.entries(pkg[field] ?? {})) {
         if (version === 'catalog:' || version === 'catalog:default') {
           references.add(name);
@@ -107,14 +147,14 @@ function error(message: string): never {
 
 const getMajor = (range: string): number | null => {
   const match = range.match(/(\d+)\./);
-  return match ? parseInt(match[1], 10) : null;
+  return match ? Number.parseInt(match[1], 10) : null;
 };
 
 function execCommand(command: string, cwd?: string): string {
   try {
     return execSync(command, {
       cwd,
-      encoding: 'utf-8',
+      encoding: 'utf8',
       stdio: 'pipe',
     }).trim();
   } catch (error) {
@@ -152,7 +192,7 @@ export function cloneOrResetRepo(
       // Check if it's a valid git repo
       const result = spawnSync('git', ['rev-parse', '--git-dir'], {
         cwd: dir,
-        encoding: 'utf-8',
+        encoding: 'utf8',
       });
 
       if (result.status !== 0) {
@@ -177,17 +217,17 @@ export function cloneOrResetRepo(
       if (hash) {
         // Reset to specific hash
         fetchPinnedCommit(dir, hash);
-        log(`Resetting ${dir} to pinned hash ${hash.substring(0, 8)}...`);
+        log(`Resetting ${dir} to pinned hash ${hash.slice(0, 8)}...`);
         execCommand(`git checkout ${branch}`, dir);
         execCommand(`git reset --hard ${hash}`, dir);
-        log(`${dir} reset to ${hash.substring(0, 8)}`);
+        log(`${dir} reset to ${hash.slice(0, 8)}`);
       } else {
         // Reset to latest - check if branch is a tag or a branch
         log(`Resetting ${dir} to latest ${branch}...`);
         const isTag =
           spawnSync('git', ['tag', '-l', branch], {
             cwd: dir,
-            encoding: 'utf-8',
+            encoding: 'utf8',
           }).stdout.trim() === branch;
 
         if (isTag) {
@@ -218,16 +258,16 @@ function cloneRepo(repoUrl: string, dir: string, branch: string, hash?: string) 
   execCommand(`git clone --branch ${branch} ${repoUrl} ${dir}`);
   if (hash) {
     fetchPinnedCommit(dir, hash);
-    log(`Checking out pinned hash ${hash.substring(0, 8)}...`);
+    log(`Checking out pinned hash ${hash.slice(0, 8)}...`);
     execCommand(`git reset --hard ${hash}`, dir);
-    log(`${dir} cloned and reset to ${hash.substring(0, 8)}`);
+    log(`${dir} cloned and reset to ${hash.slice(0, 8)}`);
   } else {
     log(`${dir} cloned successfully`);
   }
 }
 
 function createExportTransformer(exportPathPrefix: string, distPathPrefix: string) {
-  return (exportPath: string, exportValue: unknown): [string, ExportValue] => {
+  return (exportPath: string, exportValue: JsonValue | undefined): [string, JsonValue] => {
     if (exportPath === './package.json') {
       return ['', null];
     }
@@ -235,7 +275,7 @@ function createExportTransformer(exportPathPrefix: string, distPathPrefix: strin
     const newExportPath =
       exportPath === '.' ? exportPathPrefix : `${exportPathPrefix}${exportPath.slice(1)}`;
 
-    const transformValue = (value: unknown): ExportValue => {
+    const transformValue = (value: JsonValue | undefined): JsonValue => {
       if (typeof value === 'string') {
         if (value.startsWith('./src/')) {
           return null;
@@ -244,7 +284,7 @@ function createExportTransformer(exportPathPrefix: string, distPathPrefix: strin
       }
 
       if (value && typeof value === 'object') {
-        const result: Record<string, unknown> = {};
+        const result: JsonObject = {};
         for (const [key, val] of Object.entries(value)) {
           if (key === 'dev') {
             continue;
@@ -254,10 +294,10 @@ function createExportTransformer(exportPathPrefix: string, distPathPrefix: strin
             result[key] = transformed;
           }
         }
-        return Object.keys(result).length > 0 ? (result as ExportValue) : null;
+        return Object.keys(result).length > 0 ? result : null;
       }
 
-      return value as ExportValue;
+      return value ?? null;
     };
 
     const newValue = transformValue(exportValue);
@@ -283,11 +323,9 @@ function createExportTransformer(exportPathPrefix: string, distPathPrefix: strin
       return [newExportPath, newValue];
     }
 
-    if (newValue && typeof newValue === 'object') {
-      const importPath = ('import' in newValue ? newValue.import : newValue.default) as
-        | string
-        | undefined;
-      if (importPath && !('types' in newValue)) {
+    if (isObjectValue(newValue)) {
+      const importPath = 'import' in newValue ? newValue.import : newValue.default;
+      if (typeof importPath === 'string' && importPath && !('types' in newValue)) {
         if (importPath.endsWith('.mjs')) {
           newValue.types = importPath.replace(/\.mjs$/, '.d.mts');
         } else if (importPath.endsWith('.js')) {
@@ -306,7 +344,10 @@ const transformPluginutilsExport = createExportTransformer(
   './dist/pluginutils/',
 );
 
-function transformViteExport(exportPath: string, exportValue: unknown): [string, ExportValue] {
+function transformViteExport(
+  exportPath: string,
+  exportValue: JsonValue | undefined,
+): [string, JsonValue] {
   // Skip package.json
   if (exportPath === './package.json') {
     return ['', null];
@@ -316,7 +357,7 @@ function transformViteExport(exportPath: string, exportValue: unknown): [string,
   const newExportPath = exportPath;
 
   // Transform paths in values
-  const transformValue = (value: unknown): ExportValue => {
+  const transformValue = (value: JsonValue | undefined): JsonValue => {
     if (typeof value === 'string') {
       // Transform types paths
       if (value.startsWith('./types/')) {
@@ -329,25 +370,23 @@ function transformViteExport(exportPath: string, exportValue: unknown): [string,
     }
 
     if (value && typeof value === 'object') {
-      const result: Record<string, unknown> = {};
+      const result: JsonObject = {};
       for (const [key, val] of Object.entries(value)) {
         const transformed = transformValue(val);
         if (transformed !== null) {
           result[key] = transformed;
         }
       }
-      return Object.keys(result).length > 0 ? (result as ExportValue) : null;
+      return Object.keys(result).length > 0 ? result : null;
     }
 
-    return value as ExportValue;
+    return value ?? null;
   };
 
   const newValue = transformValue(exportValue);
 
-  if (newValue && typeof newValue === 'object') {
-    const importPath = ('import' in newValue ? newValue.import : newValue.default) as
-      | string
-      | undefined;
+  if (isObjectValue(newValue)) {
+    const importPath = 'import' in newValue ? newValue.import : newValue.default;
     if (importPath && !('types' in newValue) && typeof importPath === 'string') {
       if (importPath.endsWith('.js')) {
         newValue.types = importPath.replace(/\.js$/, '.d.ts');
@@ -363,55 +402,37 @@ function mergePackageExports(
   rolldownPkg: PackageJson,
   rolldownVitePkg: PackageJson,
   pluginutilsPkg: PackageJson,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+): JsonObject {
+  const result: JsonObject = {};
 
-  if (corePkg.exports) {
+  if (isObjectValue(corePkg.exports)) {
     for (const [path, value] of Object.entries(corePkg.exports)) {
       result[path] = value;
     }
   }
 
-  // Add rolldown exports
-  if (rolldownPkg.exports) {
-    for (const [path, value] of Object.entries(rolldownPkg.exports)) {
-      const [newPath, newValue] = transformRolldownExport(path, value);
+  const sources = [
+    [rolldownPkg, transformRolldownExport],
+    [pluginutilsPkg, transformPluginutilsExport],
+    [rolldownVitePkg, transformViteExport],
+  ] as const;
+  for (const [pkg, transform] of sources) {
+    if (!isObjectValue(pkg.exports)) {
+      continue;
+    }
+    for (const [path, value] of Object.entries(pkg.exports)) {
+      const [newPath, newValue] = transform(path, value);
       if (newPath && newValue !== null) {
         result[newPath] = newValue;
       }
     }
   }
 
-  // Add pluginutils exports
-  if (pluginutilsPkg.exports) {
-    for (const [path, value] of Object.entries(pluginutilsPkg.exports)) {
-      const [newPath, newValue] = transformPluginutilsExport(path, value);
-      if (newPath && newValue !== null) {
-        result[newPath] = newValue;
-      }
-    }
-  }
-
-  // Add vite exports
-  if (rolldownVitePkg.exports) {
-    for (const [path, value] of Object.entries(rolldownVitePkg.exports)) {
-      const [newPath, newValue] = transformViteExport(path, value);
-      if (newPath && newValue !== null) {
-        result[newPath] = newValue;
-      }
-    }
-  }
-
-  // Sort exports by key
-  return Object.keys(result)
-    .toSorted()
-    .reduce(
-      (sorted, key) => {
-        sorted[key] = result[key];
-        return sorted;
-      },
-      {} as Record<string, unknown>,
-    );
+  return Object.fromEntries(
+    Object.keys(result)
+      .toSorted()
+      .map((key) => [key, result[key]]),
+  );
 }
 
 export function syncViteDevtoolsDependencies(corePkg: PackageJson, vitePkg: PackageJson): void {
@@ -440,7 +461,6 @@ const OXC_PACKAGE_PREFIXES = [
   '@oxc-resolver/',
   '@oxc-transform/',
   '@oxfmt/',
-  '@oxlint-tsgolint/',
 ];
 const SYNCED_PACKAGES = new Set([
   '@napi-rs/cli',
@@ -449,7 +469,6 @@ const SYNCED_PACKAGES = new Set([
   'oxc-transform',
   'oxfmt',
   'oxlint',
-  'oxlint-tsgolint',
   'tinybench',
 ]);
 // These packages should always use the highest version
@@ -460,12 +479,7 @@ function syncedPackages(packageName: string): boolean {
   );
 }
 
-function mergeSemverVersions(
-  v1: string,
-  v2: string,
-  packageName: string,
-  verkit: typeof import('verkit'),
-): string {
+function mergeSemverVersions(v1: string, v2: string, packageName: string, verkit: Verkit): string {
   // Handle special cases
   if (v1 === v2) {
     return v1;
@@ -549,7 +563,7 @@ function mergeSemverVersions(
 // its package name and optional version. The version separator is the LAST `@`
 // whose index is > 0, so a scoped name's leading `@` is never split on:
 // `@oxc-project/runtime@0.134.0` -> name `@oxc-project/runtime`, version `0.134.0`.
-function parseExcludeEntry(entry: string): { name: string; version?: string } {
+function parseExcludeEntry(entry: string) {
   const at = entry.lastIndexOf('@');
   if (at > 0) {
     return { name: entry.slice(0, at), version: entry.slice(at + 1) };
@@ -563,7 +577,7 @@ function parseExcludeEntry(entry: string): { name: string; version?: string } {
 // loaded via dynamic import before the yaml/verkit install fallback runs, so a
 // top-level dependency import could fail on a clean clone.
 function globToRegExp(pattern: string): RegExp {
-  const escaped = pattern.replaceAll(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*');
+  const escaped = pattern.replaceAll(/[.+?^${}()|[\]\\]/g, String.raw`\$&`).replaceAll('*', '.*');
   return new RegExp(`^${escaped}$`);
 }
 
@@ -573,7 +587,7 @@ function globToRegExp(pattern: string): RegExp {
 // - Drop versioned entries (`name@version`) whose package name is already
 //   covered by a version-less pattern anywhere in the merged set, since pnpm
 //   excludes every version under the broader rule.
-function mergeMinimumReleaseAgeExclude(entries: string[]): string[] {
+function mergeMinimumReleaseAgeExclude(entries: Array<string>): Array<string> {
   // Dedupe exact-string duplicates (Set preserves insertion order) and parse
   // each entry once.
   const parsed = Array.from(new Set(entries), (entry) => {
@@ -598,7 +612,7 @@ export function mergePnpmWorkspaces(
   rolldown: PnpmWorkspace,
   rolldownVite: PnpmWorkspace,
   vitePackage: PackageJson,
-  verkit: typeof import('verkit'),
+  verkit: Verkit,
   catalogReferences?: ReadonlySet<string>,
 ): PnpmWorkspace {
   const result: PnpmWorkspace = { ...main };
@@ -616,7 +630,7 @@ export function mergePnpmWorkspaces(
   if (!typescriptRange || !verkit.normalizeRange(typescriptRange)) {
     throw new Error('Vite must declare a valid TypeScript devDependency range');
   }
-  const catalog: Record<string, string> = { typescript: typescriptRange };
+  const catalog: NonNullable<PnpmWorkspace['catalog']> = { typescript: typescriptRange };
   const upstreamCatalogPackages = new Set<string>();
   for (const workspace of [main, rolldown, rolldownVite]) {
     for (const [pkg, version] of Object.entries(workspace.catalog || {})) {
@@ -739,14 +753,11 @@ export function mergePnpmWorkspaces(
   return result;
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 // Read the string key of a `Pair`. Keys parsed from source are `Scalar` nodes
 // (`key.value`); keys added via `map.set(name, ...)` are plain strings.
-function pairKey(pair: import('yaml').Pair, yaml: typeof import('yaml')): unknown {
-  return yaml.isScalar(pair.key) ? pair.key.value : pair.key;
+function pairKey(pair: Pair, yaml: WorkspaceYaml) {
+  const key: unknown = yaml.isScalar(pair.key) ? pair.key.value : pair.key;
+  return typeof key === 'string' ? key : undefined;
 }
 
 // Reconcile a plain `value` object back INTO an existing `YAMLMap` node so that
@@ -757,16 +768,12 @@ function pairKey(pair: import('yaml').Pair, yaml: typeof import('yaml')): unknow
 // order (the merge sorts `catalog` alphabetically), which also drops any key that
 // no longer exists in the merged value, while keeping the existing `Pair` objects
 // so comments stay attached.
-function reconcileMap(
-  mapNode: import('yaml').YAMLMap,
-  value: Record<string, unknown>,
-  yaml: typeof import('yaml'),
-): void {
+function reconcileMap(mapNode: YAMLMap, value: YamlMapping, yaml: WorkspaceYaml): void {
   const keys = Object.keys(value);
   for (const key of keys) {
     const existing = mapNode.get(key, true);
     const next = value[key];
-    if (yaml.isMap(existing) && isPlainObject(next)) {
+    if (yaml.isMap(existing) && isYamlMapping(next)) {
       // Recurse so nested comments survive instead of replacing the whole node.
       reconcileMap(existing, next, yaml);
     } else {
@@ -791,18 +798,18 @@ export function mergeWorkspaceYaml(
   rolldownSrc: string,
   rolldownViteSrc: string,
   vitePackage: PackageJson,
-  yaml: typeof import('yaml'),
-  verkit: typeof import('verkit'),
+  yaml: WorkspaceYaml,
+  verkit: Verkit,
   catalogReferences?: ReadonlySet<string>,
 ): string {
   const mainDoc = yaml.parseDocument(mainSrc);
-  const rolldown = yaml.parse(rolldownSrc) as PnpmWorkspace | null;
-  const rolldownVite = yaml.parse(rolldownViteSrc) as PnpmWorkspace | null;
+  const rolldown = workspaceFromYaml(yaml.parse(rolldownSrc));
+  const rolldownVite = workspaceFromYaml(yaml.parse(rolldownViteSrc));
 
   const merged = mergePnpmWorkspaces(
-    (mainDoc.toJSON() as PnpmWorkspace) ?? {},
-    rolldown ?? {},
-    rolldownVite ?? {},
+    workspaceFromYaml(mainDoc.toJSON()),
+    rolldown,
+    rolldownVite,
     vitePackage,
     verkit,
     catalogReferences,
@@ -837,11 +844,8 @@ export interface CargoOxcChange {
 // `oxc` version. Crates with an independent pin rolldown does not declare are
 // left untouched. Only the `[workspace.dependencies]` section is edited so that
 // `[patch.*]` overrides are never rewritten.
-export function syncCargoOxcVersions(
-  mainCargoSrc: string,
-  rolldownCargoSrc: string,
-): { content: string; changes: CargoOxcChange[] } {
-  const changes: CargoOxcChange[] = [];
+export function syncCargoOxcVersions(mainCargoSrc: string, rolldownCargoSrc: string) {
+  const changes: Array<CargoOxcChange> = [];
 
   const header = '[workspace.dependencies]';
   const headerIdx = mainCargoSrc.indexOf(header);
@@ -892,15 +896,15 @@ function syncCargoOxcWithRolldown(rootDir: string): void {
   }
 
   const { content, changes } = syncCargoOxcVersions(
-    readFileSync(mainCargoPath, 'utf-8'),
-    readFileSync(rolldownCargoPath, 'utf-8'),
+    readFileSync(mainCargoPath, 'utf8'),
+    readFileSync(rolldownCargoPath, 'utf8'),
   );
   if (changes.length === 0) {
     log('✓ Cargo.toml oxc versions already in sync');
     return;
   }
 
-  writeFileSync(mainCargoPath, content, 'utf-8');
+  writeFileSync(mainCargoPath, content, 'utf8');
   for (const change of changes) {
     log(`  ${change.key}: ${change.from} -> ${change.to}`);
   }
@@ -951,21 +955,12 @@ export async function syncRemote() {
     cloneOrResetRepo(repo, join(rootDir, dir), branch, hash);
   }
 
-  // Dynamically import dependencies after git clone. Capture the whole `yaml`
-  // module (we need `yaml.parseDocument` to preserve comments).
-  let yaml: typeof import('yaml');
-  let verkit: typeof import('verkit');
-
-  try {
-    yaml = await import('yaml');
-    verkit = await import('verkit');
-  } catch {
+  const { yaml, verkit } = await loadWorkspaceTools().catch(() => {
     log('Dependencies not found, running pnpm install...');
     execCommand('pnpm install --no-frozen-lockfile', rootDir);
     log('Retrying imports...');
-    yaml = await import('yaml');
-    verkit = await import('verkit');
-  }
+    return loadWorkspaceTools();
+  });
 
   log('Reading pnpm-workspace.yaml files...');
 
@@ -973,13 +968,11 @@ export async function syncRemote() {
   const rolldownWorkspacePath = join(rootDir, ROLLDOWN_DIR, 'pnpm-workspace.yaml');
   const rolldownViteWorkspacePath = join(rootDir, VITE_DIR, 'pnpm-workspace.yaml');
 
-  const mainSrc = readFileSync(mainWorkspacePath, 'utf-8');
-  const rolldownSrc = readFileSync(rolldownWorkspacePath, 'utf-8');
-  const rolldownViteSrc = readFileSync(rolldownViteWorkspacePath, 'utf-8');
-  const viteRootPackage = JSON.parse(
-    readFileSync(join(rootDir, VITE_DIR, 'package.json'), 'utf-8'),
-  ) as PackageJson;
-  const mainWorkspace = yaml.parse(mainSrc) as PnpmWorkspace;
+  const mainSrc = readFileSync(mainWorkspacePath, 'utf8');
+  const rolldownSrc = readFileSync(rolldownWorkspacePath, 'utf8');
+  const rolldownViteSrc = readFileSync(rolldownViteWorkspacePath, 'utf8');
+  const viteRootPackage = readPackageManifest(join(rootDir, VITE_DIR, 'package.json'));
+  const mainWorkspace = workspaceFromYaml(yaml.parse(mainSrc));
   const catalogReferences = collectWorkspaceCatalogReferences(
     rootDir,
     mainWorkspace.packages ?? [],
@@ -998,24 +991,22 @@ export async function syncRemote() {
     catalogReferences,
   );
 
-  const vitestVersion = (yaml.parse(yamlContent) as PnpmWorkspace).catalog?.vitest;
+  const vitestVersion = workspaceFromYaml(yaml.parse(yamlContent)).catalog?.vitest;
   if (!vitestVersion || !verkit.normalize(vitestVersion)) {
     throw new Error('The Vitest catalog entry must be an exact version');
   }
-  writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');
+  writeFileSync(mainWorkspacePath, yamlContent, 'utf8');
   alignVendoredVitestDependencies(rootDir, vitestVersion);
 
   log('✓ pnpm-workspace.yaml updated successfully!');
 
   const corePackagePath = join(rootDir, CORE_PACKAGE_PATH, 'package.json');
   const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
-  const corePackage = JSON.parse(readFileSync(corePackagePath, 'utf-8')) as PackageJson;
-  const rolldownVitePackage = JSON.parse(
-    readFileSync(rolldownVitePackagePath, 'utf-8'),
-  ) as PackageJson;
+  const corePackage = readPackageManifest(corePackagePath);
+  const rolldownVitePackage = readPackageManifest(rolldownVitePackagePath);
 
   syncViteDevtoolsDependencies(corePackage, rolldownVitePackage);
-  writeFileSync(corePackagePath, JSON.stringify(corePackage, null, 2) + '\n', 'utf-8');
+  writeFileSync(corePackagePath, JSON.stringify(corePackage, null, 2) + '\n', 'utf8');
   log('✓ package.json Vite DevTools ranges updated successfully!');
 
   execCommand('pnpm install --no-frozen-lockfile', rootDir);
@@ -1043,10 +1034,8 @@ export async function syncRemote() {
     'package.json',
   );
 
-  const rolldownPackage = JSON.parse(readFileSync(rolldownPackagePath, 'utf-8')) as PackageJson;
-  const pluginutilsPackage = JSON.parse(
-    readFileSync(pluginutilsPackagePath, 'utf-8'),
-  ) as PackageJson;
+  const rolldownPackage = readPackageManifest(rolldownPackagePath);
+  const pluginutilsPackage = readPackageManifest(pluginutilsPackagePath);
 
   const mergedExports = mergePackageExports(
     corePackage,
@@ -1064,7 +1053,7 @@ export async function syncRemote() {
   // Update CLI package.json with merged exports
   corePackage.exports = mergedExports;
 
-  writeFileSync(corePackagePath, JSON.stringify(corePackage, null, 2) + '\n', 'utf-8');
+  writeFileSync(corePackagePath, JSON.stringify(corePackage, null, 2) + '\n', 'utf8');
 
   log('✓ package.json exports updated successfully!');
 

@@ -30,7 +30,11 @@ export async function runCommandAndDetectProjectDir(
   const result = await runCommandWithFspy({
     binName: options.command,
     args: options.args,
-    envs: options.envs as Record<string, string>,
+    envs: Object.fromEntries(
+      Object.entries(options.envs).filter(
+        (entry): entry is [string, string] => entry[1] !== undefined,
+      ),
+    ),
     cwd,
   });
 

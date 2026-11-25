@@ -5,23 +5,54 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-interface Metadata {
+import type { JsonObject } from '../../cli/src/utils/json-value.ts';
+import { isObjectValue, parseJsonObject, isStringRecord } from '../../cli/src/utils/json-value.ts';
+
+interface Metadata extends JsonObject {
   versions: Record<string, { dist: { tarball: string; integrity: string } }>;
   'dist-tags': Record<string, string>;
   time?: Record<string, string>;
 }
 
+function isMetadata(value: JsonObject): value is Metadata {
+  return (
+    isStringRecord(value['dist-tags']) &&
+    (value.time === undefined || isStringRecord(value.time)) &&
+    isObjectValue(value.versions) &&
+    Object.values(value.versions).every(
+      (entry) =>
+        isObjectValue(entry) &&
+        isObjectValue(entry.dist) &&
+        typeof entry.dist.tarball === 'string' &&
+        typeof entry.dist.integrity === 'string',
+    )
+  );
+}
+
+function parseMetadata(value: JsonObject, name: string): Metadata {
+  if (!isMetadata(value)) {
+    throw new Error(`Invalid registry metadata for ${name}`);
+  }
+  return value;
+}
+
 // Keep the initial versions, update targets, and an out-of-range latest version.
-const selectedVersions: Record<string, string[]> = {
-  'is-number': ['6.0.0', '7.0.0'],
-  'yocto-queue': ['0.1.0', '1.0.0', '1.2.2'],
-};
+const selectedVersions = new Map([
+  ['is-number', ['6.0.0', '7.0.0']],
+  ['yocto-queue', ['0.1.0', '1.0.0', '1.2.2']],
+]);
 
 const directory = fileURLToPath(
   new URL('../../../crates/vp_cli_snapshots/tests/cli_snapshots/registry/', import.meta.url),
 );
 const manifestPath = path.join(directory, 'manifest.json');
-const previous = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, Metadata>;
+const previous: Record<string, Metadata> = {};
+for (const [name, value] of Object.entries(parseJsonObject(await readFile(manifestPath, 'utf8')))) {
+  if (!isObjectValue(value)) {
+    throw new Error(`Invalid recorded package ${name}`);
+  }
+  previous[name] = parseMetadata(value, name);
+}
 const manifest = { ...previous };
 const requested = process.argv.slice(2);
 const names = requested.length ? requested : Object.keys(previous);
@@ -34,8 +65,8 @@ for (const name of names.toSorted()) {
   if (!response.ok) {
     throw new Error(`Cannot record ${name}: HTTP ${response.status}`);
   }
-  const metadata = (await response.json()) as Metadata;
-  const selected = selectedVersions[name];
+  const metadata = parseMetadata(parseJsonObject(await response.text()), name);
+  const selected = selectedVersions.get(name);
   if (selected) {
     if (!selected.includes(metadata['dist-tags'].latest)) {
       throw new Error(

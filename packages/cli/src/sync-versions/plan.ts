@@ -1,13 +1,18 @@
 import path from 'node:path';
 
-import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser';
+import type { ParseError } from 'jsonc-parser';
+import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
 import { normalizeRange } from 'verkit';
 import { isScalar, parseDocument, Scalar } from 'yaml';
 import { z } from 'zod';
 
+import type { JsonObject } from '../utils/json-value.ts';
+import { isJsonObject, isObjectValue } from '../utils/json-value.ts';
 import { detectFormattingOptions } from '../utils/json.ts';
 import { extractOverrideTargetName } from '../utils/package-overrides.ts';
 import { isAlignableVitestEcosystemPackage } from '../utils/vitest-ecosystem.ts';
+import type { YamlMapping } from '../utils/yaml-value.ts';
+import { isYamlMapping } from '../utils/yaml-value.ts';
 
 const MAX_MANIFESTS = 256;
 const MAX_MANIFEST_BYTES = 1024 * 1024;
@@ -107,7 +112,7 @@ export interface SyncVersionsPlanV1 {
     version: string;
   };
   workspace: '.';
-  replacements: SyncVersionsReplacementV1[];
+  replacements: Array<SyncVersionsReplacementV1>;
 }
 
 interface TextEdit {
@@ -126,17 +131,13 @@ export function parseSyncVersionsRequest(input: unknown): SyncVersionsRequestV1 
   return syncVersionsRequestSchema.parse(input);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parsePackageJson(contents: string): Record<string, unknown> {
-  const errors: ParseError[] = [];
+function parsePackageJson(contents: string): JsonObject {
+  const errors: Array<ParseError> = [];
   const parsed: unknown = parseJsonc(contents, errors, {
     allowTrailingComma: true,
     disallowComments: false,
   });
-  if (errors.length > 0 || !isRecord(parsed)) {
+  if (errors.length > 0 || !isJsonObject(parsed)) {
     throw new Error('Invalid package.json manifest');
   }
   return parsed;
@@ -192,7 +193,11 @@ function alignedSpec(name: string, current: string, toolchain: SyncVersionsToolc
   return target;
 }
 
-function replaceJsonValue(contents: string, location: readonly string[], value: string): string {
+function replaceJsonValue(
+  contents: string,
+  location: ReadonlyArray<string>,
+  value: string,
+): string {
   const edits = modify(contents, [...location], value, {
     formattingOptions: detectFormattingOptions(contents),
   });
@@ -201,8 +206,8 @@ function replaceJsonValue(contents: string, location: readonly string[], value: 
 
 function alignJsonStringMap(
   contents: string,
-  source: Record<string, unknown>,
-  location: readonly string[],
+  source: JsonObject,
+  location: ReadonlyArray<string>,
   toolchain: SyncVersionsToolchain,
   packageNameForKey: (key: string) => string = (key) => key,
 ): string {
@@ -221,8 +226,8 @@ function alignJsonStringMap(
 
 function alignJsonOverrideMap(
   contents: string,
-  source: Record<string, unknown>,
-  location: readonly string[],
+  source: JsonObject,
+  location: ReadonlyArray<string>,
   toolchain: SyncVersionsToolchain,
   parentPackageName?: string,
 ): string {
@@ -234,7 +239,7 @@ function alignJsonOverrideMap(
       if (aligned !== value) {
         output = replaceJsonValue(output, [...location, selector], aligned);
       }
-    } else if (isRecord(value)) {
+    } else if (isObjectValue(value)) {
       output = alignJsonOverrideMap(output, value, [...location, selector], toolchain, packageName);
     }
   }
@@ -243,13 +248,13 @@ function alignJsonOverrideMap(
 
 function alignJsonCatalogs(
   contents: string,
-  source: Record<string, unknown>,
-  location: readonly string[],
+  source: JsonObject,
+  location: ReadonlyArray<string>,
   toolchain: SyncVersionsToolchain,
 ): string {
   let output = contents;
   for (const [catalogName, entries] of Object.entries(source)) {
-    if (isRecord(entries)) {
+    if (isObjectValue(entries)) {
       output = alignJsonStringMap(output, entries, [...location, catalogName], toolchain);
     }
   }
@@ -262,18 +267,18 @@ function planPackageJson(contents: string, toolchain: SyncVersionsToolchain): st
 
   for (const field of INSTALL_DEPENDENCY_FIELDS) {
     const dependencies = pkg[field];
-    if (isRecord(dependencies)) {
+    if (isObjectValue(dependencies)) {
       output = alignJsonStringMap(output, dependencies, [field], toolchain);
     }
   }
 
   const overrides = pkg.overrides;
-  if (isRecord(overrides)) {
+  if (isObjectValue(overrides)) {
     output = alignJsonOverrideMap(output, overrides, ['overrides'], toolchain);
   }
 
   const resolutions = pkg.resolutions;
-  if (isRecord(resolutions)) {
+  if (isObjectValue(resolutions)) {
     output = alignJsonStringMap(
       output,
       resolutions,
@@ -284,7 +289,7 @@ function planPackageJson(contents: string, toolchain: SyncVersionsToolchain): st
   }
 
   const pnpm = pkg.pnpm;
-  if (isRecord(pnpm) && isRecord(pnpm.overrides)) {
+  if (isObjectValue(pnpm) && isObjectValue(pnpm.overrides)) {
     output = alignJsonStringMap(
       output,
       pnpm.overrides,
@@ -295,21 +300,21 @@ function planPackageJson(contents: string, toolchain: SyncVersionsToolchain): st
   }
 
   const catalog = pkg.catalog;
-  if (isRecord(catalog)) {
+  if (isObjectValue(catalog)) {
     output = alignJsonStringMap(output, catalog, ['catalog'], toolchain);
   }
 
   const catalogs = pkg.catalogs;
-  if (isRecord(catalogs)) {
+  if (isObjectValue(catalogs)) {
     output = alignJsonCatalogs(output, catalogs, ['catalogs'], toolchain);
   }
 
   const workspaces = pkg.workspaces;
-  if (isRecord(workspaces)) {
-    if (isRecord(workspaces.catalog)) {
+  if (isObjectValue(workspaces)) {
+    if (isObjectValue(workspaces.catalog)) {
       output = alignJsonStringMap(output, workspaces.catalog, ['workspaces', 'catalog'], toolchain);
     }
-    if (isRecord(workspaces.catalogs)) {
+    if (isObjectValue(workspaces.catalogs)) {
       output = alignJsonCatalogs(
         output,
         workspaces.catalogs,
@@ -325,12 +330,12 @@ function planPackageJson(contents: string, toolchain: SyncVersionsToolchain): st
 function alignYamlStringMap(
   document: ReturnType<typeof parseDocument>,
   source: unknown,
-  location: readonly string[],
+  location: ReadonlyArray<string>,
   toolchain: SyncVersionsToolchain,
-  edits: TextEdit[],
+  edits: Array<TextEdit>,
   packageNameForKey: (key: string) => string = (key) => key,
 ): void {
-  if (!isRecord(source)) {
+  if (!isYamlMapping(source)) {
     return;
   }
   for (const [name, value] of Object.entries(source)) {
@@ -341,7 +346,7 @@ function alignYamlStringMap(
     if (aligned === value) {
       continue;
     }
-    const node = document.getIn([...location, name], true);
+    const node: unknown = document.getIn([...location, name], true);
     if (!isScalar(node) || typeof node.value !== 'string') {
       throw new Error(`Expected a string scalar at ${[...location, name].join('.')}`);
     }
@@ -367,7 +372,7 @@ function alignYamlStringMap(
   }
 }
 
-function applyTextEdits(contents: string, edits: TextEdit[]): string {
+function applyTextEdits(contents: string, edits: Array<TextEdit>): string {
   let output = contents;
   let previousStart = contents.length;
   for (const edit of edits.toSorted((left, right) => right.start - left.start)) {
@@ -380,19 +385,13 @@ function applyTextEdits(contents: string, edits: TextEdit[]): string {
   return output;
 }
 
-function parseYamlManifest(
-  contents: string,
-  fileName: 'pnpm-workspace.yaml' | '.yarnrc.yml',
-): {
-  document: ReturnType<typeof parseDocument>;
-  manifest: Record<string, unknown>;
-} {
+function parseYamlManifest(contents: string, fileName: 'pnpm-workspace.yaml' | '.yarnrc.yml') {
   const document = parseDocument(contents);
   if (document.errors.length > 0) {
     throw new Error(`Invalid ${fileName} manifest`);
   }
   const manifest: unknown = document.toJS();
-  if (!isRecord(manifest)) {
+  if (!isYamlMapping(manifest)) {
     throw new Error(`Invalid ${fileName} manifest`);
   }
   return { document, manifest };
@@ -400,12 +399,12 @@ function parseYamlManifest(
 
 function alignYamlCatalogs(
   document: ReturnType<typeof parseDocument>,
-  manifest: Record<string, unknown>,
+  manifest: YamlMapping,
   toolchain: SyncVersionsToolchain,
-  edits: TextEdit[],
+  edits: Array<TextEdit>,
 ): void {
   alignYamlStringMap(document, manifest.catalog, ['catalog'], toolchain, edits);
-  if (isRecord(manifest.catalogs)) {
+  if (isYamlMapping(manifest.catalogs)) {
     for (const [catalogName, entries] of Object.entries(manifest.catalogs)) {
       alignYamlStringMap(document, entries, ['catalogs', catalogName], toolchain, edits);
     }
@@ -414,7 +413,7 @@ function alignYamlCatalogs(
 
 function planPnpmWorkspace(contents: string, toolchain: SyncVersionsToolchain): string {
   const { document, manifest } = parseYamlManifest(contents, 'pnpm-workspace.yaml');
-  const edits: TextEdit[] = [];
+  const edits: Array<TextEdit> = [];
   alignYamlCatalogs(document, manifest, toolchain, edits);
   alignYamlStringMap(
     document,
@@ -430,7 +429,7 @@ function planPnpmWorkspace(contents: string, toolchain: SyncVersionsToolchain): 
 
 function planYarnRc(contents: string, toolchain: SyncVersionsToolchain): string {
   const { document, manifest } = parseYamlManifest(contents, '.yarnrc.yml');
-  const edits: TextEdit[] = [];
+  const edits: Array<TextEdit> = [];
   alignYamlCatalogs(document, manifest, toolchain, edits);
   return applyTextEdits(contents, edits);
 }
@@ -457,7 +456,7 @@ export function planSyncVersions(
   request: SyncVersionsRequestV1,
   toolchain: SyncVersionsToolchain,
 ): SyncVersionsPlanV1 {
-  const replacements: SyncVersionsReplacementV1[] = [];
+  const replacements: Array<SyncVersionsReplacementV1> = [];
   for (const manifest of request.manifests) {
     const after = planManifest(manifest, toolchain);
     if (after !== manifest.contents) {

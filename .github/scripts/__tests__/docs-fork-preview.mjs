@@ -160,7 +160,7 @@ await test('uses the package preview build and protected deployment pattern', as
     deploy,
     /workflow_run:\n\s+workflows: \['Build Docs Fork Preview'\]\n\s+types: \[completed\]/,
   );
-  assert.doesNotMatch(deploy, /\n  approve:/);
+  assert.doesNotMatch(deploy, /\n {2}approve:/);
   const authorize = deploy.split('\n  authorize:\n')[1].split('\n  deploy:\n')[0];
   assert.doesNotMatch(authorize, /environment:|secrets\.|: write/);
   const job = deploy.split('\n  deploy:\n')[1];
@@ -373,7 +373,7 @@ await test('pins an artifact to the triggering build attempt', async () => {
 });
 
 await test('validates build identities before making requests', async () => {
-  for (const value of [undefined, 0, -1, 1.5, NaN, '123', Number.MAX_SAFE_INTEGER + 1]) {
+  for (const value of [undefined, 0, -1, 1.5, Number.NaN, '123', Number.MAX_SAFE_INTEGER + 1]) {
     for (const [runId, attempt] of [
       [value, 1],
       [123, value],
@@ -888,7 +888,7 @@ await test('rejects invalid PR numbers before using them in URLs or requests', a
     0,
     -1,
     1.5,
-    NaN,
+    Number.NaN,
     Number.MAX_SAFE_INTEGER + 1,
     '2684',
     '2684\nother-output=true',

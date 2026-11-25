@@ -34,7 +34,7 @@ interface MovedViteInstall {
 // installed package while it sits inside node_modules during the reinstall.
 const STALE_VITE_BACKUP_NAME = '.vite-plus-migrate-stale-vite';
 
-function removeStaleInstalledVite(packagePath: string, moved: MovedViteInstall[]): boolean {
+function removeStaleInstalledVite(packagePath: string, moved: Array<MovedViteInstall>): boolean {
   const packageJsonPath = path.join(packagePath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return false;
@@ -85,10 +85,10 @@ export interface NpmViteAliasReinstallPreparation {
  */
 export function prepareNpmViteAliasReinstall(
   rootDir: string,
-  projectPaths: string[] = [rootDir],
+  projectPaths: Array<string> = [rootDir],
 ): NpmViteAliasReinstallPreparation {
   const packageLockPath = path.join(rootDir, 'package-lock.json');
-  const moved: MovedViteInstall[] = [];
+  const moved: Array<MovedViteInstall> = [];
   let changed = false;
 
   if (fs.existsSync(packageLockPath)) {
@@ -117,7 +117,7 @@ export function prepareNpmViteAliasReinstall(
       }
 
       if (lockChanged) {
-        writeJsonFile(packageLockPath, packageLock as unknown as Record<string, unknown>);
+        writeJsonFile(packageLockPath, packageLock);
         changed = true;
       }
     } catch {

@@ -18,6 +18,8 @@ import {
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
 } from '../../utils/constants.ts';
+import type { JsonObject } from '../../utils/json-value.ts';
+import { isObjectValue } from '../../utils/json-value.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { readYamlFile } from '../../utils/yaml.ts';
 import { ensureCreateCatalogEntries } from '../utils.ts';
@@ -245,14 +247,20 @@ it('uses the same named default catalog when migrating Yarn settings', () => {
   const file = path.join(root, '.yarnrc.yml');
   fs.writeFileSync(
     file,
-    stringify({
-      catalog: { react: '^19.0.0' },
-      catalogs: { default: { 'vite-plus': '0.3.2' } },
-    }),
+    `catalog:
+  react: ^19.0.0
+catalogs:
+  default:
+    vite-plus: 0.3.2
+customMetadata: &metadata
+  timestamp: !!timestamp 2026-01-01
+  self: *metadata
+`,
   );
   rewriteYarnrcYml(root, false, new Set(), new Set(), true, false);
   const config = readYamlFile(file);
-  expect(config.catalog).toEqual({ react: '^19.0.0' });
+  expect(config?.catalog).toEqual({ react: '^19.0.0' });
+  expect(config?.customMetadata).toHaveProperty('self', config?.customMetadata);
   expect(config).toMatchObject({
     catalogs: {
       default: { 'vite-plus': VITE_PLUS_VERSION, vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
@@ -267,6 +275,14 @@ describe.each(['root', 'nested'])('Bun %s shared default catalog', (location) =>
     catalogs: { default: { react: '^19.0.0' } },
   };
   let file: string;
+
+  function activeCatalogs(contents: JsonObject) {
+    const active = location === 'nested' ? contents.workspaces : contents;
+    if (!isObjectValue(active)) {
+      throw new Error('Missing workspace config');
+    }
+    return active;
+  }
 
   beforeEach(() => {
     file = path.join(root, 'package.json');
@@ -300,7 +316,7 @@ describe.each(['root', 'nested'])('Bun %s shared default catalog', (location) =>
       );
       ensureCreateCatalogEntries(root, project, PackageManager.bun);
       const result = readJsonFile(file);
-      const active = (location === 'nested' ? result.workspaces : result) as typeof config;
+      const active = activeCatalogs(result);
       expect(active.catalog).toEqual(config.catalog);
       expect(active.catalogs).toEqual({
         default: { react: '^19.0.0', '@vitest/utils': VITEST_VERSION },
@@ -315,7 +331,7 @@ describe.each(['root', 'nested'])('Bun %s shared default catalog', (location) =>
     const ecosystem = new Set(['@vitest/spy', '@vitest/utils']);
     rewriteBunCatalog(root, false, ecosystem);
     const result = readJsonFile(file);
-    const active = (location === 'nested' ? result.workspaces : result) as typeof config;
+    const active = activeCatalogs(result);
     expect(active.catalog).toEqual({
       vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
       'vite-plus': VITE_PLUS_VERSION,
@@ -345,22 +361,14 @@ describe.each(['root', 'nested'])('Bun %s shared default catalog', (location) =>
     );
     rewriteBunCatalog(root, false, new Set());
     const result = readJsonFile(file);
-    const active = (location === 'nested' ? result.workspaces : result) as {
-      catalog?: Record<string, string>;
-      catalogs: Record<string, Record<string, string>>;
-    };
+    const active = activeCatalogs(result);
     expect(active.catalog).toEqual(
-      catalog && {
-        ...catalog,
-        ...(catalog.vite ? { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } : {}),
-      },
+      catalog?.vite ? { ...catalog, vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } : catalog,
     );
-    expect(active.catalogs).toEqual({
-      default: {
-        'vite-plus': VITE_PLUS_VERSION,
-        ...(!catalog?.vite ? { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } : {}),
-      },
-    });
+    const expectedDefault = catalog?.vite
+      ? { 'vite-plus': VITE_PLUS_VERSION }
+      : { 'vite-plus': VITE_PLUS_VERSION, vite: VITE_PLUS_OVERRIDE_PACKAGES.vite };
+    expect(active.catalogs).toEqual({ default: expectedDefault });
     const before = fs.readFileSync(file, 'utf8');
     rewriteBunCatalog(root, false, new Set());
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
@@ -368,8 +376,15 @@ describe.each(['root', 'nested'])('Bun %s shared default catalog', (location) =>
 
   it('updates pre-existing duplicate entries in place without removing either', () => {
     const contents = readJsonFile(file);
-    const active = (location === 'nested' ? contents.workspaces : contents) as typeof config;
-    Object.assign(active.catalogs.default, { vite: active.catalog.vite });
+    const active = activeCatalogs(contents);
+    if (
+      !isObjectValue(active.catalog) ||
+      !isObjectValue(active.catalogs) ||
+      !isObjectValue(active.catalogs.default)
+    ) {
+      throw new Error('Missing test catalogs');
+    }
+    active.catalogs.default.vite = active.catalog.vite;
     fs.writeFileSync(file, JSON.stringify(contents));
     rewriteBunCatalog(root, false, new Set());
     const result = readJsonFile(file);
@@ -442,10 +457,9 @@ it.each(['1.2.14', '1.3.14', '1.4.0'])(
       private: true,
       workspaces: {
         packages: ['apps/*'],
-        catalog: {
-          vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
-          ...(merged ? {} : { 'vite-plus': VITE_PLUS_VERSION }),
-        },
+        catalog: merged
+          ? { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite }
+          : { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite, 'vite-plus': VITE_PLUS_VERSION },
         catalogs: {
           default: {
             react: '^19.0.0',

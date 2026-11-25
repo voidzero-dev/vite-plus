@@ -2,22 +2,20 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { Program } from '@oxc-project/types';
-import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
+import type { ParseError } from 'jsonc-parser';
+import { parse as parseJsonc } from 'jsonc-parser';
 import type { OxlintConfig } from 'oxlint';
 
 import { analyzeMigrationSource, ResolverFactory } from '../../../binding/index.js';
+import { isJsonObject, isObjectValue } from '../../utils/json-value.ts';
+import type { JsonValue, JsonObject } from '../../utils/json.ts';
 import { detectConfigs } from '../detector.ts';
 import { ensureSvelteRuneGlobals } from '../migrator.ts';
-import {
-  OXLINT_OWNER_CONFIG_KEYS,
-  type OxlintConfigFile,
-  type OxlintModulePlan,
-  type PreparedOxlintConfigs,
-} from './shared.ts';
+import type { OxlintConfigFile, OxlintModulePlan, PreparedOxlintConfigs } from './shared.ts';
+import { OXLINT_OWNER_CONFIG_KEYS } from './shared.ts';
 
 interface OxlintConfigCache {
-  sources: Map<string, Record<string, unknown>>;
+  sources: Map<string, JsonObject>;
   files: Map<string, OxlintConfigFile>;
 }
 
@@ -32,7 +30,7 @@ function createConfigCache(): OxlintConfigCache {
 export function resolveOxlintConfigExtends(
   configPath: string,
   cache = createConfigCache(),
-  stack: string[] = [],
+  stack: Array<string> = [],
 ): OxlintConfigFile {
   // Windows collapses parent components before following directory junctions.
   // POSIX follows the directory link first, so its physical parent is the context.
@@ -48,13 +46,14 @@ export function resolveOxlintConfigExtends(
   }
   let source = cache.sources.get(sourcePath);
   if (!source) {
-    const errors: ParseError[] = [];
-    source = parseJsonc(fs.readFileSync(sourcePath, 'utf8'), errors, {
+    const errors: Array<ParseError> = [];
+    const parsed: unknown = parseJsonc(fs.readFileSync(sourcePath, 'utf8'), errors, {
       allowTrailingComma: true,
-    }) as Record<string, unknown>;
-    if (errors.length > 0 || !source || typeof source !== 'object' || Array.isArray(source)) {
+    });
+    if (errors.length > 0 || !isJsonObject(parsed)) {
       throw new Error(`Invalid Oxlint JSON config: ${filename}`);
     }
+    source = parsed;
     cache.sources.set(sourcePath, source);
   }
   // Parsing is shared by source identity, but relative paths belong to each declaring config.
@@ -63,11 +62,11 @@ export function resolveOxlintConfigExtends(
   const inherited = config.extends;
   if (
     inherited !== undefined &&
-    (!Array.isArray(inherited) || inherited.some((entry) => typeof entry !== 'string'))
+    (!Array.isArray(inherited) || !inherited.every((entry) => typeof entry === 'string'))
   ) {
     throw new Error(`Expected an array of file paths in ${filename}: extends`);
   }
-  const extendsPaths = ((inherited ?? []) as string[]).map((entry) =>
+  const extendsPaths = (inherited ?? []).map((entry) =>
     path.resolve(path.dirname(filename), entry),
   );
   const children = extendsPaths.map((childPath) => {
@@ -75,12 +74,12 @@ export function resolveOxlintConfigExtends(
     child.shared = true;
     return child;
   });
-  if (inherited !== undefined) {
-    config.extends = children.map((child) => child.config);
-  }
   const file: OxlintConfigFile = {
     filename,
-    config,
+    config:
+      inherited === undefined
+        ? config
+        : { ...config, extends: children.map((child) => child.config) },
     extends: children,
     extendsPaths,
   };
@@ -88,7 +87,7 @@ export function resolveOxlintConfigExtends(
   return file;
 }
 
-export function prepareOxlintConfigs(projectPaths: string[]): PreparedOxlintConfigs {
+export function prepareOxlintConfigs(projectPaths: Array<string>): PreparedOxlintConfigs {
   const configs: PreparedOxlintConfigs = new Map();
   const cache = createConfigCache();
   for (const projectPath of projectPaths) {
@@ -105,9 +104,9 @@ export function prepareOxlintConfigs(projectPaths: string[]): PreparedOxlintConf
   }
   // An owner must also import its source when another consumer reaches it through an alias.
   const sharedSources = new Set(
-    [...cache.files.values()]
-      .filter((file) => file.shared)
-      .map((file) => fs.realpathSync(file.filename)),
+    [...cache.files.values()].flatMap((file) =>
+      file.shared ? [fs.realpathSync(file.filename)] : [],
+    ),
   );
   // An unreadable consumer can still refer to any workspace's own config.
   // Keep those owners in modules so a later repair cannot create an inline copy.
@@ -147,14 +146,14 @@ export function oxlintMigrationMarker(
   }
   const files = new Set<OxlintConfigFile>();
   collectConfigFiles(root, files);
-  const inputs: unknown[] = [relative(filename)];
+  const inputs: Array<unknown> = [relative(filename)];
   for (const file of files) {
     const config = { ...file.config };
     delete config.extends;
     inputs.push([relative(file.filename), config, file.extendsPaths.map(relative)]);
   }
-  const serialized = JSON.stringify(inputs, (_key, value) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
+  const serialized = JSON.stringify(inputs, (_key, value: JsonValue) => {
+    if (isObjectValue(value)) {
       return Object.fromEntries(
         Object.keys(value)
           .toSorted()
@@ -270,7 +269,7 @@ function relativeImport(from: string, to: string): string {
 
 function printConfig(
   config: OxlintConfig,
-  inheritedNames: string[],
+  inheritedNames: Array<string>,
   {
     pluginExpression,
     ownerConfigName,
@@ -343,15 +342,23 @@ export function prepareOxlintConfigModules(
   const viteConfigDir = path.dirname(viteConfigPath);
   const source = fs.readFileSync(viteConfigPath, 'utf8');
   const names = new Set<string>();
-  const { ast } = JSON.parse(analyzeMigrationSource(viteConfigPath, source), (key, value) => {
-    if (key === 'name' && typeof value === 'string') {
-      names.add(value);
-    }
-    return value;
-  }) as { ast: { node: Program } };
+  const analysis: unknown = JSON.parse(
+    analyzeMigrationSource(viteConfigPath, source),
+    (key, value: unknown) => {
+      if (key === 'name' && typeof value === 'string') {
+        names.add(value);
+      }
+      return value;
+    },
+  );
+  const ast =
+    isJsonObject(analysis) && isObjectValue(analysis.ast) && isObjectValue(analysis.ast.node)
+      ? analysis.ast.node
+      : undefined;
   if (
     /\.c[jt]s$/.test(viteConfigPath) ||
-    !ast.node.body.some((node) => node.type === 'ExportDefaultDeclaration')
+    !Array.isArray(ast?.body) ||
+    !ast.body.some((node) => isObjectValue(node) && node.type === 'ExportDefaultDeclaration')
   ) {
     throw new Error('Shared Oxlint configs require a Vite config with an ESM default export');
   }
@@ -428,7 +435,7 @@ export function prepareOxlintConfigModules(
     const inherited = file.extends.map((child, index) => {
       const name = `oxlintConfig${index + 1}`;
       imports.push(
-        `import ${name} from ${JSON.stringify(relativeImport(filename, generate(child, sourceConfig.extends![index])))};`,
+        `import ${name} from ${JSON.stringify(relativeImport(filename, generate(child, sourceConfig.extends?.[index] ?? child.config)))};`,
       );
       return name;
     });
@@ -454,7 +461,7 @@ export function prepareOxlintConfigModules(
     return filename;
   }
 
-  const imports: string[] = [];
+  const imports: Array<string> = [];
   let nextName = 1;
   const inherited = importedFiles.map((file, index) => {
     let name: string;
@@ -463,7 +470,7 @@ export function prepareOxlintConfigModules(
     } while (names.has(name));
     names.add(name);
     imports.push(
-      `import ${name} from ${JSON.stringify(relativeImport(viteConfigPath, generate(file, config.extends![index])))};`,
+      `import ${name} from ${JSON.stringify(relativeImport(viteConfigPath, generate(file, config.extends?.[index] ?? file.config)))};`,
     );
     return name;
   });

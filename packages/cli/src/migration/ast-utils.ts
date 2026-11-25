@@ -1,32 +1,41 @@
-import type * as t from '@oxc-project/types';
+import type {
+  BooleanLiteral,
+  Node,
+  ObjectExpression,
+  ObjectProperty,
+  Program,
+  RegExpLiteral,
+  Span,
+  StringLiteral,
+} from '@oxc-project/types';
 
 import { analyzeMigrationSource } from '../../binding/index.js';
 
 interface SourceAnalysis {
-  ast: { node: t.Program };
-  comments: t.Span[];
-  bindings: Array<{ start: number; references: number[]; constant: boolean }>;
+  ast: { node: Program };
+  comments: Array<Span>;
+  bindings: Array<{ start: number; references: Array<number>; constant: boolean }>;
 }
 
 interface ParsedSource {
-  program: t.Program;
+  program: Program;
   bindings: SourceAnalysis['bindings'];
-  comments: t.Span[];
+  comments: Array<Span>;
 }
 
-export function isString(node: t.Node | null | undefined): node is t.StringLiteral {
+export function isString(node: Node | null | undefined): node is StringLiteral {
   return node?.type === 'Literal' && typeof node.value === 'string';
 }
 
-export function isBoolean(node: t.Node | null | undefined): node is t.BooleanLiteral {
+export function isBoolean(node: Node | null | undefined): node is BooleanLiteral {
   return node?.type === 'Literal' && typeof node.value === 'boolean';
 }
 
-export function isRegExp(node: t.Node | null | undefined): node is t.RegExpLiteral {
+export function isRegExp(node: Node | null | undefined): node is RegExpLiteral {
   return node?.type === 'Literal' && 'regex' in node;
 }
 
-export function propertyName(node: t.Node | null | undefined): string | undefined {
+export function propertyName(node: Node | null | undefined): string | undefined {
   if (node?.type === 'Identifier') {
     return node.name;
   }
@@ -36,7 +45,7 @@ export function propertyName(node: t.Node | null | undefined): string | undefine
   return undefined;
 }
 
-export function memberName(node: t.Node | null | undefined): string | undefined {
+export function memberName(node: Node | null | undefined): string | undefined {
   if (node?.type !== 'MemberExpression') {
     return undefined;
   }
@@ -46,12 +55,9 @@ export function memberName(node: t.Node | null | undefined): string | undefined 
   return propertyName(node.property);
 }
 
-export function objectProperty(
-  object: t.ObjectExpression,
-  key: string,
-): t.ObjectProperty | undefined {
+export function objectProperty(object: ObjectExpression, key: string): ObjectProperty | undefined {
   return object.properties.find(
-    (prop): prop is t.ObjectProperty =>
+    (prop): prop is ObjectProperty =>
       prop.type === 'Property' &&
       prop.kind === 'init' &&
       !prop.computed &&
@@ -60,9 +66,9 @@ export function objectProperty(
 }
 
 export function staticObject(
-  node: t.Node | null | undefined,
+  node: Node | null | undefined,
   allowMethods = false,
-): node is t.ObjectExpression {
+): node is ObjectExpression {
   if (node?.type !== 'ObjectExpression') {
     return false;
   }
@@ -87,7 +93,7 @@ export function staticObject(
 
 /** Compare data literals without evaluating config code or invoking getters.
  * Property order and spelling do not change the value of a plain config object. */
-export function sameStaticValue(left: t.Node, right: t.Node): boolean {
+export function sameStaticValue(left: Node, right: Node): boolean {
   if (left.type === 'Literal' && right.type === 'Literal') {
     return (
       !('regex' in left || 'regex' in right || 'bigint' in left || 'bigint' in right) &&
@@ -116,9 +122,12 @@ export function sameStaticValue(left: t.Node, right: t.Node): boolean {
     return (
       left.properties.length === right.properties.length &&
       left.properties.every((property) => {
-        const prop = property as t.ObjectProperty;
-        const other = objectProperty(right, propertyName(prop.key)!);
-        return !!other && sameStaticValue(prop.value, other.value);
+        if (property.type !== 'Property') {
+          return false;
+        }
+        const key = propertyName(property.key);
+        const other = key === undefined ? undefined : objectProperty(right, key);
+        return !!other && sameStaticValue(property.value, other.value);
       })
     );
   }
@@ -128,9 +137,11 @@ export function sameStaticValue(left: t.Node, right: t.Node): boolean {
 export function parseSource(file: string, source: string): ParsedSource {
   // Native errors (including unsupported Flow) reach the existing preflight
   // diagnostic path, which preserves the original file for manual review.
-  const { ast, bindings, comments } = JSON.parse(
+  // The native migration binding serializes exactly SourceAnalysis.
+  // oxlint-disable-next-line typescript/no-unsafe-assignment
+  const { ast, bindings, comments }: SourceAnalysis = JSON.parse(
     analyzeMigrationSource(file, source),
-  ) as SourceAnalysis;
+  );
   // Migration uses source spelling and regex metadata, not the JS-only fixes
   // that reconstruct RegExp/BigInt values in Oxc's serialized AST.
   return { program: ast.node, bindings, comments };

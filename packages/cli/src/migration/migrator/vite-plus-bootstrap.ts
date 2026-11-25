@@ -1,11 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
-import {
-  readBunCatalogDependencyResolver,
-  type CatalogDependencyResolver,
-} from '../../utils/catalog.ts';
+import type { WorkspaceInfo, WorkspacePackage } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_NAME,
@@ -13,9 +11,12 @@ import {
   VITE_PLUS_VERSION,
   isForceOverrideMode,
 } from '../../utils/constants.ts';
+import type { JsonObject } from '../../utils/json.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
-import { type NpmWorkspaces } from '../../utils/workspace.ts';
-import { editYamlFile, readYamlFile, type YamlDocument } from '../../utils/yaml.ts';
+import type { NpmWorkspaces } from '../../utils/workspace.ts';
+import type { YamlDocument } from '../../utils/yaml.ts';
+import { editYamlFile, readYamlFile } from '../../utils/yaml.ts';
+import type { PnpmPeerDependencyRuleKeys } from '../migrator.ts';
 import {
   alignVitestEcosystemPackages,
   applyBuildAllowanceToPackageJsonPnpm,
@@ -23,6 +24,7 @@ import {
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
+  ensurePackageJsonOverrides,
   ensurePnpmWorkspacePackages,
   findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
@@ -33,7 +35,6 @@ import {
   isProtocolPinnedSpec,
   managedOverridePackages,
   mergeManagedPnpmPeerDependencyRules,
-  type PnpmPeerDependencyRuleKeys,
   peerDependencyRulesHaveStaleEntry,
   migratePnpmSettingsToWorkspaceYaml,
   normalizeVitestPeerCatalogSpec,
@@ -63,7 +64,12 @@ import {
   yarnrcSatisfiesVitePlus,
   yarnSupportsPreapprovedPackages,
 } from '../migrator.ts';
-import { type DependencyVersionChange, type MigrationReport } from '../report.ts';
+import type { DependencyVersionChange, MigrationReport } from '../report.ts';
+import type {
+  RetainedImportDependencies,
+  ManagedOverrideKeyStyle,
+  PnpmPackageJsonSettings,
+} from './shared.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
   hasProviderPeerDependency,
@@ -72,18 +78,16 @@ import {
   OXLINT_PLUGIN_API_PACKAGES,
   packageOwnsOxlintApi,
   bundledPackagesToRemove,
-  type RetainedImportDependencies,
   VITEST_IS_MANAGED_OVERRIDE,
   managedOverrideKey,
   pinnedPackageManagerVersion,
   pnpmMajor,
   pnpmOverrideKey,
-  type ManagedOverrideKeyStyle,
-  type PnpmPackageJsonSettings,
 } from './shared.ts';
 
 export type BootstrapPackageJson = {
-  overrides?: Record<string, string>;
+  workspaces?: NpmWorkspaces;
+  overrides?: JsonObject;
   resolutions?: Record<string, string>;
   devDependencies?: Record<string, string>;
   dependencies?: Record<string, string>;
@@ -91,7 +95,7 @@ export type BootstrapPackageJson = {
   optionalDependencies?: Record<string, string>;
   pnpm?: PnpmPackageJsonSettings;
   packageManager?: string;
-  devEngines?: { packageManager?: unknown; [key: string]: unknown };
+  devEngines?: JsonObject;
 };
 
 export type VitePlusBootstrapResult = {
@@ -124,10 +128,10 @@ function isSemanticVitePlusOverrideSpec(dependencyName: string, spec: string | u
 
 function overrideSpecSatisfiesVitePlus(
   dependencyName: string,
-  spec: string | undefined,
+  spec: unknown,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
-  if (!spec) {
+  if (typeof spec !== 'string') {
     return false;
   }
   if (isSemanticVitePlusOverrideSpec(dependencyName, spec)) {
@@ -143,7 +147,7 @@ function overrideSpecSatisfiesVitePlus(
 }
 
 export function overridesSatisfyVitePlus(
-  overrides: Record<string, string> | undefined,
+  overrides: JsonObject | undefined,
   usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
@@ -204,7 +208,7 @@ function catalogVitePlusDependencyPending(
 
 function pnpmPeerDependencyRulesSatisfyVitePlus(
   peerDependencyRules:
-    | { allowAny?: string[]; allowedVersions?: Record<string, string> }
+    | { allowAny?: Array<string>; allowedVersions?: Record<string, string> }
     | undefined,
   { managed, stale }: PnpmPeerDependencyRuleKeys,
 ): boolean {
@@ -256,7 +260,7 @@ function pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath: string): boolea
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
     return false;
   }
-  const doc = readYamlFile(pnpmWorkspaceYamlPath) as { blockExoticSubdeps?: boolean } | null;
+  const doc = readYamlFile(pnpmWorkspaceYamlPath);
   return doc?.blockExoticSubdeps === false;
 }
 
@@ -399,7 +403,7 @@ function reconcileVitePlusBootstrapPackage(
         ownsOxlintApi &&
         dependencies !== undefined &&
         dependencies === pkg.dependencies &&
-        (OXLINT_PLUGIN_API_PACKAGES as readonly string[]).includes(bundledPackage)
+        (OXLINT_PLUGIN_API_PACKAGES as ReadonlyArray<string>).includes(bundledPackage)
       ) {
         // A published plugin keeps the runtime dependency that supplies its
         // upstream imports, as the fresh path does. Its `catalog:` reference
@@ -496,15 +500,15 @@ function reconcileVitePlusBootstrapPackage(
 
 export function bootstrapProjectPaths(
   rootDir: string,
-  packages: WorkspacePackage[] | undefined,
-): string[] {
+  packages: Array<WorkspacePackage> | undefined,
+): Array<string> {
   return getWorkspaceProjectPaths({ rootDir, packages });
 }
 
 /** Catalog entries needed for retained browser imports and newly installed providers. */
 export function collectBrowserCatalogAdditions(
   rootDir: string,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
   retainedBrowserPackages?: RetainedImportDependencies['browser'],
   // Optional precomputed provider source-scan results keyed by absolute package
   // path. Lets a caller that already scanned a path reuse the result instead of
@@ -544,7 +548,7 @@ export function collectBrowserCatalogAdditions(
 // resolves to the target version, not just the root manifest's.
 function someBootstrapProjectPackageJson(
   rootDir: string,
-  packages: WorkspacePackage[] | undefined,
+  packages: Array<WorkspacePackage> | undefined,
   predicate: (pkg: BootstrapPackageJson) => boolean,
 ): boolean {
   return bootstrapProjectPaths(rootDir, packages).some((packagePath) => {
@@ -558,7 +562,7 @@ function someBootstrapProjectPackageJson(
 
 function workspaceVitestEcosystemCatalogReferencesPending(
   rootDir: string,
-  packages: WorkspacePackage[] | undefined,
+  packages: Array<WorkspacePackage> | undefined,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
   return someBootstrapProjectPackageJson(rootDir, packages, (pkg) =>
@@ -571,7 +575,7 @@ function workspaceVitestEcosystemCatalogReferencesPending(
 // stale workspace slip through the "already on Vite+" early exit.
 function workspaceCatalogVitePlusDependencyPending(
   rootDir: string,
-  packages: WorkspacePackage[] | undefined,
+  packages: Array<WorkspacePackage> | undefined,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
   return someBootstrapProjectPackageJson(rootDir, packages, (pkg) =>
@@ -591,7 +595,7 @@ function workspaceCatalogVitePlusDependencyPending(
 function yarnWorkspaceHoistingOptOutPending(
   rootDir: string,
   packageManager: PackageManager,
-  packages: WorkspacePackage[] | undefined,
+  packages: Array<WorkspacePackage> | undefined,
 ): boolean {
   if (packageManager !== PackageManager.yarn || !packages?.length) {
     return false;
@@ -622,7 +626,7 @@ function yarnWorkspaceHoistingOptOutPending(
 export function detectVitePlusBootstrapPending(
   projectPath: string,
   packageManager: PackageManager | undefined,
-  packages?: WorkspacePackage[],
+  packages?: Array<WorkspacePackage>,
   packageManagerVersion?: string,
   retainedImportDependencies?: RetainedImportDependencies,
 ): boolean {
@@ -630,11 +634,7 @@ export function detectVitePlusBootstrapPending(
   if (!fs.existsSync(packageJsonPath)) {
     return false;
   }
-  const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson & {
-    workspaces?: NpmWorkspaces;
-    catalog?: Record<string, string>;
-    catalogs?: Record<string, Record<string, string>>;
-  };
+  const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
 
   // vite-plus counts as installed when it's a direct dependency/devDependency,
   // so a project that declares it in `dependencies` isn't reported as pending a
@@ -700,7 +700,7 @@ export function detectVitePlusBootstrapPending(
       continue;
     }
     const childPkg = readJsonFile(childPackageJsonPath) as BootstrapPackageJson;
-    const candidate = JSON.parse(JSON.stringify(childPkg)) as BootstrapPackageJson;
+    const candidate = structuredClone(childPkg);
     if (
       reconcileVitePlusBootstrapPackage(
         packagePath,
@@ -743,30 +743,30 @@ export function detectVitePlusBootstrapPending(
   if (packageManager === PackageManager.npm) {
     return (
       vitePlusDependencyNeedsConcreteVersion(pkg) ||
-      !overridesSatisfyVitePlus(pkg.overrides, usesVitest, undefined, 'bare', usesWebdriverio) ||
+      ensurePackageJsonOverrides(
+        pkg.overrides,
+        managedOverridePackages(usesVitest, usesWebdriverio),
+      ).changed ||
       npmVitePlusManagedDependenciesPending(pkg, usesVitest)
     );
   }
   if (packageManager === PackageManager.bun) {
-    // A standalone bun project (`supportCatalog === false`) cannot resolve
-    // `catalog:` references, so the catalog resolver must NOT be consulted —
-    // otherwise a dangling `catalog:` override resolves through the dead catalog
-    // field and is mistaken for satisfied, masking the pending rewrite.
-    const bunCatalogResolver = supportCatalog
-      ? readBunCatalogDependencyResolver(pkg, resolvedPackageManagerVersion)
-      : undefined;
-    // A `catalog:` vite-plus spec looks current, so judge its catalog value too.
-    return (
-      (supportCatalog &&
-        workspaceCatalogVitePlusDependencyPending(projectPath, packages, bunCatalogResolver)) ||
-      !overridesSatisfyVitePlus(
-        pkg.overrides,
-        usesVitest,
-        bunCatalogResolver,
-        'bare',
-        usesWebdriverio,
-      )
-    );
+    if (
+      supportCatalog &&
+      workspaceCatalogVitePlusDependencyPending(projectPath, packages, catalogDependencyResolver)
+    ) {
+      return true;
+    }
+    // Only a Bun workspace can satisfy an override through its catalog.
+    const bunCatalogResolver = supportCatalog ? catalogDependencyResolver : undefined;
+    return ensurePackageJsonOverrides(
+      pkg.overrides,
+      managedOverridePackages(usesVitest, usesWebdriverio),
+      (name, current, target) =>
+        current && overrideSpecSatisfiesVitePlus(name, current, bunCatalogResolver)
+          ? current
+          : target,
+    ).changed;
   }
   if (packageManager === PackageManager.pnpm) {
     if (!pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath)) {
@@ -906,7 +906,7 @@ function ensureVitePlusDependencySpecs(
 // Raw file contents, or undefined if the file does not exist. Used for
 // byte-level before/after change detection on pnpm-workspace.yaml / .yarnrc.yml.
 function readTextFileIfExists(filePath: string): string | undefined {
-  return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : undefined;
+  return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : undefined;
 }
 
 function ensureOverrideEntries(
@@ -915,7 +915,7 @@ function ensureOverrideEntries(
   catalogDependencyResolver?: CatalogDependencyResolver,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
   usesWebdriverioProvider = false,
-): { overrides: Record<string, string>; changed: boolean } {
+) {
   const next = { ...overrides };
   let changed = false;
   // Common case: drop a lingering managed `vitest` override.
@@ -1040,7 +1040,7 @@ export function ensureVitePlusBootstrap(
     workspaceInfo.packages,
     retainedImportDependencies?.browser,
   );
-  let movedPnpmSettings: Record<string, unknown> | undefined;
+  let movedPnpmSettings: JsonObject | undefined;
 
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   // Below pnpm 10.6.2 the pnpm settings (overrides) stay in package.json, so the
@@ -1073,13 +1073,7 @@ export function ensureVitePlusBootstrap(
     }
   }
 
-  editJsonFile<
-    BootstrapPackageJson & {
-      workspaces?: NpmWorkspaces;
-      catalog?: Record<string, string>;
-      catalogs?: Record<string, Record<string, string>>;
-    }
-  >(packageJsonPath, (pkg) => {
+  editJsonFile<BootstrapPackageJson>(packageJsonPath, (pkg) => {
     let packageJsonChanged = reconcileVitePlusBootstrapPackage(
       projectPath,
       pkg,
@@ -1104,31 +1098,13 @@ export function ensureVitePlusBootstrap(
         pkg.resolutions = ensured.overrides;
         packageJsonChanged = true;
       }
-    } else if (workspaceInfo.packageManager === PackageManager.npm) {
-      const ensured = ensureOverrideEntries(
+    } else if (
+      workspaceInfo.packageManager === PackageManager.npm ||
+      (workspaceInfo.packageManager === PackageManager.bun && !isBunWorkspace)
+    ) {
+      const ensured = ensurePackageJsonOverrides(
         pkg.overrides,
-        usesVitest,
-        undefined,
-        'bare',
-        usesWebdriverio,
-      );
-      if (ensured.changed) {
-        pkg.overrides = ensured.overrides;
-        packageJsonChanged = true;
-      }
-    } else if (workspaceInfo.packageManager === PackageManager.bun) {
-      // Standalone bun (`supportCatalog === false`) has no catalog support, so a
-      // `catalog:` override must be rewritten to the concrete core alias rather
-      // than left dangling — the catalog resolver is only consulted for a real
-      // bun workspace where `rewriteBunCatalog` maintains the catalog field.
-      const ensured = ensureOverrideEntries(
-        pkg.overrides,
-        usesVitest,
-        supportCatalog
-          ? readBunCatalogDependencyResolver(pkg, workspaceInfo.downloadPackageManager.version)
-          : undefined,
-        'bare',
-        usesWebdriverio,
+        managedOverridePackages(usesVitest, usesWebdriverio),
       );
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;
@@ -1297,13 +1273,10 @@ export function ensureVitePlusBootstrap(
       supportCatalog,
       yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
-    const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
+    const after = fs.readFileSync(yarnrcYmlPath, 'utf8');
     result.packageManagerConfig = before !== after;
   } else if (isBunWorkspace) {
-    // Only a bun WORKSPACE writes a catalog (matching the fresh path, where
-    // rewriteBunCatalog runs only on monorepo roots). A standalone bun project
-    // keeps the concrete overrides set by `ensureOverrideEntries` above.
-    const before = fs.readFileSync(packageJsonPath, 'utf-8');
+    const before = fs.readFileSync(packageJsonPath, 'utf8');
     rewriteBunCatalog(
       projectPath,
       usesVitest,
@@ -1312,7 +1285,7 @@ export function ensureVitePlusBootstrap(
       workspaceInfo.downloadPackageManager.version,
       browserCatalogAdditions,
     );
-    const after = fs.readFileSync(packageJsonPath, 'utf-8');
+    const after = fs.readFileSync(packageJsonPath, 'utf8');
     result.packageJson = result.packageJson || before !== after;
   }
 
@@ -1410,7 +1383,7 @@ function readInstalledRawViteVersion(projectPath: string): string | undefined {
 export async function collectToolchainVersionChanges(
   projectPath: string,
   hasProtectedVitestImports = false,
-): Promise<DependencyVersionChange[]> {
+): Promise<Array<DependencyVersionChange>> {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return [];
@@ -1420,9 +1393,8 @@ export async function collectToolchainVersionChanges(
   // The bundled raw Vite version is imported from `./versions.js` (dist root):
   // the tsdown `fix-versions-path` plugin rewrites this specifier and
   // versions.spec.ts guards that it resolves. Mirror migrator/eslint.ts EXACTLY.
-  // @ts-expect-error — resolved at runtime from dist/ -> dist/versions.js
   const { versions } = await import('../versions.js');
-  const rawViteVersion = versions.vite as string | undefined;
+  const rawViteVersion = versions.vite;
 
   const catalogDependencyResolver =
     readPnpmWorkspaceCatalogDependencyResolver(projectPath) ??
@@ -1437,7 +1409,7 @@ export async function collectToolchainVersionChanges(
     return resolveDisplayFromSpec(spec, dependencyName, catalogDependencyResolver);
   };
 
-  const changes: DependencyVersionChange[] = [];
+  const changes: Array<DependencyVersionChange> = [];
   const pushChange = (name: string, to: string | undefined, from: string | undefined): void => {
     if (to === undefined || (from !== undefined && from === to)) {
       return;

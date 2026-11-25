@@ -35,7 +35,7 @@ function isWorkflowProgress(message: string): boolean {
 export function createStagedLogger(logger: Logger = { ...console, log }): Logger {
   return {
     ...logger,
-    log(message, ...args) {
+    log(message: unknown, ...args: Array<unknown>) {
       if (typeof message === 'string' && args.length === 0 && isWorkflowProgress(message)) {
         return;
       }

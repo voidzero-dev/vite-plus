@@ -2,13 +2,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
-import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { confirm, isCancel, log } from '@voidzero-dev/vite-plus-prompts';
 import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
 
 import vitestV5EntryPoints from '../vitest-v5-entry-points.json' with { type: 'json' };
 import { getVpCommand, runCommandSilently } from './command.ts';
 import { BASEURL_TSCONFIG_FIX_PACKAGE, createBaseUrlTsconfigFixArgs } from './constants.ts';
+import type { JsonObject } from './json-value.ts';
+import { isJsonObject, isObjectValue } from './json-value.ts';
+import { hasOwnKey } from './object.ts';
 import { cancelAndExit } from './prompts.ts';
+
+function parseCompilerOptions(text: string): JsonObject | undefined {
+  const parsed: unknown = parseJsonc(text);
+  return isJsonObject(parsed) && isObjectValue(parsed.compilerOptions)
+    ? parsed.compilerOptions
+    : undefined;
+}
 
 export type BaseUrlFixStatus = 'not-needed' | 'fixed' | 'declined' | 'failed';
 
@@ -19,10 +29,8 @@ export type BaseUrlFixStatus = 'not-needed' | 'fixed' | 'declined' | 'failed';
  */
 export function hasBaseUrlInTsconfigFile(filePath: string): boolean {
   try {
-    const tsconfig = parseJsonc(fs.readFileSync(filePath, 'utf-8')) as {
-      compilerOptions?: { baseUrl?: string | null };
-    };
-    return tsconfig?.compilerOptions?.baseUrl != null;
+    const options = parseCompilerOptions(fs.readFileSync(filePath, 'utf8'));
+    return options?.baseUrl !== undefined && options.baseUrl !== null;
   } catch {
     return false;
   }
@@ -30,7 +38,7 @@ export function hasBaseUrlInTsconfigFile(filePath: string): boolean {
 
 const TSCONFIG_FILE_RE = /^tsconfig(\.[\w-]+)?\.json$/i;
 
-export function findTsconfigFiles(projectPath: string): string[] {
+export function findTsconfigFiles(projectPath: string): Array<string> {
   try {
     const entries = fs.readdirSync(projectPath);
     return entries
@@ -45,7 +53,7 @@ export function hasBaseUrlInTsconfig(projectPath: string): boolean {
   return findTsconfigFiles(projectPath).some((filePath) => hasBaseUrlInTsconfigFile(filePath));
 }
 
-export function findTsconfigFilesWithBaseUrl(projectPath: string): string[] {
+export function findTsconfigFilesWithBaseUrl(projectPath: string): Array<string> {
   return findTsconfigFiles(projectPath).filter((filePath) => hasBaseUrlInTsconfigFile(filePath));
 }
 
@@ -58,7 +66,7 @@ export async function confirmBaseUrlFix(interactive: boolean): Promise<boolean> 
     BASEURL_TSCONFIG_FIX_PACKAGE,
     ...createBaseUrlTsconfigFixArgs('<tsconfig path>'),
   ].join(' ');
-  const confirmed = await prompts.confirm({
+  const confirmed = await confirm({
     message:
       'Your tsconfig contains `baseUrl`, which prevents enabling type-aware linting.\n  ' +
       styleText(
@@ -69,7 +77,7 @@ export async function confirmBaseUrlFix(interactive: boolean): Promise<boolean> 
       styleText('gray', `Equivalent command: \`vp dlx ${command}\``),
     initialValue: true,
   });
-  if (prompts.isCancel(confirmed)) {
+  if (isCancel(confirmed)) {
     cancelAndExit();
   }
   return confirmed;
@@ -100,7 +108,7 @@ export async function fixBaseUrlInTsconfig(
       const target = path.relative(projectPath, filePath) || filePath;
       const fixArgs = createBaseUrlTsconfigFixArgs(target);
       if (!options?.silent) {
-        prompts.log.info(`Running vp dlx ${BASEURL_TSCONFIG_FIX_PACKAGE} ${fixArgs.join(' ')}`);
+        log.info(`Running vp dlx ${BASEURL_TSCONFIG_FIX_PACKAGE} ${fixArgs.join(' ')}`);
       }
       const result = await runCommandSilently({
         ...getVpCommand(['dlx', BASEURL_TSCONFIG_FIX_PACKAGE, ...fixArgs]),
@@ -112,7 +120,7 @@ export async function fixBaseUrlInTsconfig(
         if (!options?.silent) {
           const output = `${result.stdout.toString()}${result.stderr.toString()}`.trim();
           if (output) {
-            prompts.log.warn(output);
+            log.warn(output);
           }
         }
         options?.onStatus?.('failed', projectPath);
@@ -122,14 +130,14 @@ export async function fixBaseUrlInTsconfig(
 
     if (hasBaseUrlInTsconfig(projectPath)) {
       if (!options?.silent) {
-        prompts.log.warn('tsconfig still contains baseUrl after running the fixer.');
+        log.warn('tsconfig still contains baseUrl after running the fixer.');
       }
       options?.onStatus?.('failed', projectPath);
       return 'failed';
     }
   } catch (error) {
     if (!options?.silent && error instanceof Error) {
-      prompts.log.warn(error.message);
+      log.warn(error.message);
     }
     options?.onStatus?.('failed', projectPath);
     return 'failed';
@@ -139,22 +147,16 @@ export async function fixBaseUrlInTsconfig(
   return 'fixed';
 }
 
-// jsonc-parser is in dependencies (not devDependencies) so it's available at
-// runtime for tsc-compiled code (init-config.ts imports this file).
-// TODO: move back to devDependencies once the bundle refactoring lands
-// https://github.com/voidzero-dev/vite-plus/issues/744
 export function removeDeprecatedTsconfigFalseOption(filePath: string, optionName: string): boolean {
   let text: string;
   try {
-    text = fs.readFileSync(filePath, 'utf-8');
+    text = fs.readFileSync(filePath, 'utf8');
   } catch {
     return false;
   }
 
-  const parsed = parseJsonc(text) as {
-    compilerOptions?: Record<string, unknown>;
-  } | null;
-  if (parsed?.compilerOptions?.[optionName] !== false) {
+  const options = parseCompilerOptions(text);
+  if (options?.[optionName] !== false) {
     return false;
   }
 
@@ -173,7 +175,7 @@ export function removeDeprecatedTsconfigFalseOption(filePath: string, optionName
 // files (a tsconfig is not a `vite.config.*`), and `vite/client` still resolves
 // through the `@voidzero-dev/vite-plus-core` alias. Only `tsdown/client` is
 // rewritten here (tsdown is not part of the vite scoping).
-const TSCONFIG_TYPE_REPLACEMENTS: Record<string, string> = {
+const TSCONFIG_TYPE_REPLACEMENTS = {
   'tsdown/client': 'vite-plus/pack/client',
   // Removed Vite+ exports must also migrate in type-only entry lists.
   ...Object.fromEntries(
@@ -184,35 +186,29 @@ const TSCONFIG_TYPE_REPLACEMENTS: Record<string, string> = {
 export function hasTypesToRewriteInTsconfig(filePath: string): boolean {
   let text: string;
   try {
-    text = fs.readFileSync(filePath, 'utf-8');
+    text = fs.readFileSync(filePath, 'utf8');
   } catch {
     return false;
   }
 
-  const parsed = parseJsonc(text) as {
-    compilerOptions?: { types?: unknown[] };
-  } | null;
-
-  const types = parsed?.compilerOptions?.types;
+  const options = parseCompilerOptions(text);
+  const types = options?.types;
   return (
     Array.isArray(types) &&
-    types.some((t) => typeof t === 'string' && t in TSCONFIG_TYPE_REPLACEMENTS)
+    types.some((t) => typeof t === 'string' && hasOwnKey(TSCONFIG_TYPE_REPLACEMENTS, t))
   );
 }
 
 export function hasVitestTypesInTsconfig(filePath: string): boolean {
   let text: string;
   try {
-    text = fs.readFileSync(filePath, 'utf-8');
+    text = fs.readFileSync(filePath, 'utf8');
   } catch {
     return false;
   }
 
-  const parsed = parseJsonc(text) as {
-    compilerOptions?: { types?: unknown[] };
-  } | null;
-
-  const types = parsed?.compilerOptions?.types;
+  const options = parseCompilerOptions(text);
+  const types = options?.types;
   return (
     Array.isArray(types) &&
     types.some((type) =>
@@ -224,23 +220,20 @@ export function hasVitestTypesInTsconfig(filePath: string): boolean {
 export function rewriteTypesInTsconfig(filePath: string): boolean {
   let text: string;
   try {
-    text = fs.readFileSync(filePath, 'utf-8');
+    text = fs.readFileSync(filePath, 'utf8');
   } catch {
     return false;
   }
 
-  const parsed = parseJsonc(text) as {
-    compilerOptions?: { types?: unknown[] };
-  } | null;
-
-  const types = parsed?.compilerOptions?.types;
+  const options = parseCompilerOptions(text);
+  const types = options?.types;
   if (!Array.isArray(types)) {
     return false;
   }
 
   const toReplace = types
     .map((t, i) =>
-      typeof t === 'string' && t in TSCONFIG_TYPE_REPLACEMENTS
+      typeof t === 'string' && hasOwnKey(TSCONFIG_TYPE_REPLACEMENTS, t)
         ? { i, newVal: TSCONFIG_TYPE_REPLACEMENTS[t] }
         : null,
     )

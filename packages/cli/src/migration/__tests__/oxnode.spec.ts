@@ -2,10 +2,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { log as promptLog } from '@voidzero-dev/vite-plus-prompts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { JsonObject } from '../../utils/json.ts';
+import { readJsonFile } from '../../utils/json.ts';
+
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
-  log: { info: vi.fn(), success: vi.fn(), warn: vi.fn() },
+  log: {
+    info: vi.fn<typeof promptLog.info>(),
+    success: vi.fn<typeof promptLog.success>(),
+    warn: vi.fn<typeof promptLog.warn>(),
+  },
 }));
 
 import {
@@ -262,13 +270,13 @@ describe('oxnode inline code', () => {
 
 describe('oxnode migration', () => {
   let root: string;
-  const write = (file: string, content: string | object) => {
+  const write = (file: string, content: string | JsonObject) => {
     const target = path.join(root, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, typeof content === 'string' ? content : JSON.stringify(content));
   };
   const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
-  const readJson = (file: string) => JSON.parse(read(file));
+  const readJson = (file: string) => readJsonFile(path.join(root, file));
 
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-oxnode-'));
@@ -368,7 +376,7 @@ describe('oxnode migration', () => {
     const report = createMigrationReport();
 
     expect(migrateOxnodeToVpx(root, undefined, report).dependencyRemoved).toBe(false);
-    expect(readJson('package.json').scripts.build).toBe('vpx ./build.ts');
+    expect(readJson('package.json')).toHaveProperty(['scripts', 'build'], 'vpx ./build.ts');
     expect(readJson('package.json').devDependencies).toEqual({
       '@oxc-node/cli': '^1.0.0',
       '@oxc-node/core': '^1.0.0',
@@ -450,7 +458,8 @@ describe('oxnode migration', () => {
     );
 
     expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: true });
-    expect(readJson('package.json').scripts.release).toBe(
+    expect(readJson('package.json')).toHaveProperty(
+      ['scripts', 'release'],
       'node --import vite-plus/register scripts/release.ts',
     );
     expect(read('scripts/release.ts')).toBe(
@@ -571,7 +580,7 @@ describe('oxnode migration', () => {
       const report = createMigrationReport();
       expect(detectOxnodeProject(root)).toBe(true);
       expect(migrateOxnodeToVpx(root, undefined, report).changed).toBe(false);
-      expect(readJson('package.json').scripts.start).toBe('oxnode a.ts');
+      expect(readJson('package.json')).toHaveProperty(['scripts', 'start'], 'oxnode a.ts');
       expect(report.warnings).toContainEqual(expect.stringContaining('listed in dependencies'));
     },
   );
@@ -595,7 +604,8 @@ describe('oxnode migration', () => {
     });
     expect(detectOxnodeProject(root)).toBe(true);
     expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: true });
-    expect(readJson('package.json').scripts.build).toBe(
+    expect(readJson('package.json')).toHaveProperty(
+      ['scripts', 'build'],
       'node --import vite-plus/register build.ts',
     );
   });
@@ -633,9 +643,18 @@ describe('oxnode migration', () => {
       { name: 'b', path: 'packages/b' },
     ];
     expect(migrateOxnodeToVpx(root, packages).dependencyRemoved).toBe(false);
-    expect(readJson('packages/a/package.json').scripts.build).toBe('vpx build.ts');
-    expect(readJson('packages/b/package.json').scripts.build).toBe('oxnode --watch build.ts');
-    expect(readJson('package.json').devDependencies['@oxc-node/core']).toBe('^1.0.0');
+    expect(readJson('packages/a/package.json')).toHaveProperty(
+      ['scripts', 'build'],
+      'vpx build.ts',
+    );
+    expect(readJson('packages/b/package.json')).toHaveProperty(
+      ['scripts', 'build'],
+      'oxnode --watch build.ts',
+    );
+    expect(readJson('package.json')).toHaveProperty(
+      ['devDependencies', '@oxc-node/core'],
+      '^1.0.0',
+    );
   });
 
   it('retains the loader referenced by an env file of a separate Node.js command', () => {
@@ -649,7 +668,10 @@ describe('oxnode migration', () => {
       build: 'vpx build.ts',
       run: 'node --env-file=.env.local run.ts',
     });
-    expect(readJson('package.json').devDependencies['@oxc-node/core']).toBe('^1.0.0');
+    expect(readJson('package.json')).toHaveProperty(
+      ['devDependencies', '@oxc-node/core'],
+      '^1.0.0',
+    );
   });
 
   it.each([

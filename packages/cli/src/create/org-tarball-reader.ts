@@ -1,7 +1,10 @@
 import { promisify } from 'node:util';
 import { gunzip } from 'node:zlib';
 
-import { parseTar, type ParsedTarFileItem } from 'nanotar';
+import type { ParsedTarFileItem } from 'nanotar';
+import { parseTar } from 'nanotar';
+
+import { errorCode } from '../utils/error.ts';
 
 const decompress = promisify(gunzip);
 const TAR_BLOCK_BYTES = 512;
@@ -83,7 +86,7 @@ function validateTarRecords(tar: Buffer, limits: typeof ORG_TARBALL_LIMITS): voi
 export async function parseOrgTarball(
   bytes: Uint8Array,
   limits = ORG_TARBALL_LIMITS,
-): Promise<ParsedTarFileItem[]> {
+): Promise<Array<ParsedTarFileItem>> {
   const expandedLimit = Math.min(
     limits.expandedBytes,
     Math.max(limits.ratioAllowanceBytes, bytes.byteLength * limits.compressionRatio),
@@ -93,7 +96,7 @@ export async function parseOrgTarball(
     // Node stops decompression as soon as its output exceeds maxOutputLength.
     tar = await decompress(bytes, { maxOutputLength: expandedLimit });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') {
+    if (errorCode(error) === 'ERR_BUFFER_TOO_LARGE') {
       throw new Error(`tarball exceeds ${expandedLimit} byte decompressed size limit`, {
         cause: error,
       });
@@ -105,9 +108,12 @@ export async function parseOrgTarball(
   const data = new Uint8Array(tar);
   return parseTar(data, {
     filter(entry) {
-      const attrs = entry.attrs as Record<string, unknown> | undefined;
+      const attrs: unknown = entry.attrs;
+      const path = attrs && typeof attrs === 'object' && 'path' in attrs ? attrs.path : undefined;
+      const link =
+        attrs && typeof attrs === 'object' && 'linkpath' in attrs ? attrs.linkpath : undefined;
       // Also check stored extended names, before path normalization can shorten them.
-      for (const name of [entry.name, attrs?.path, attrs?.linkpath]) {
+      for (const name of [entry.name, path, link]) {
         if (typeof name === 'string' && Buffer.byteLength(name) > limits.pathBytes) {
           throw new Error(`tarball entry exceeds ${limits.pathBytes} byte path length limit`);
         }

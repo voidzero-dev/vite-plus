@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { applyEdits, findNodeAtLocation, parse as parseJsonc, parseTree } from 'jsonc-parser';
+import type { SemVer } from 'verkit';
 import {
-  type SemVer,
   compare,
   findMinimumForRange,
   getMajor,
@@ -19,9 +19,14 @@ import { isScalar, parseDocument, visit } from 'yaml';
 
 import { isDirectoryGitignored } from '../../../binding/index.js';
 import cliPackage from '../../../package.json' with { type: 'json' };
-import { PackageManager, type WorkspaceInfoOptional } from '../../types/index.ts';
+import type { WorkspaceInfoOptional } from '../../types/index.ts';
+import { PackageManager } from '../../types/index.ts';
 import { findGitRoot } from '../../utils/git.ts';
+import { parseJsonObject, isObjectValue } from '../../utils/json-value.ts';
+import type { JsonObject } from '../../utils/json.ts';
+import { isJsonObject } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
+import { isYamlMapping } from '../../utils/yaml.ts';
 import { createCatalogDependencyResolver } from '../migrator.ts';
 import type { RewriteResult, SourceOptions, VitestV5Finding } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
@@ -31,16 +36,10 @@ import {
   migrateVitestV5Config,
 } from '../vitest-v5/config.ts';
 import { vitestV5Documentation } from '../vitest-v5/documentation.ts';
-import {
-  createLockfileReader,
-  lockedVitestVersion,
-  type LockfileReader,
-} from '../vitest-v5/lockfile.ts';
-import {
-  findVitestV5ConfigEntries,
-  resolveVitestV5TestModes,
-  type VitestV5TestMode,
-} from '../vitest-v5/scopes.ts';
+import type { LockfileReader } from '../vitest-v5/lockfile.ts';
+import { createLockfileReader, lockedVitestVersion } from '../vitest-v5/lockfile.ts';
+import type { VitestV5TestMode } from '../vitest-v5/scopes.ts';
+import { findVitestV5ConfigEntries, resolveVitestV5TestModes } from '../vitest-v5/scopes.ts';
 import { hasVitestV5SourceUsage, migrateVitestV5Source } from '../vitest-v5/source.ts';
 import { migrateWebdriverioDependencies } from '../vitest-v5/webdriverio.ts';
 
@@ -75,7 +74,7 @@ interface ProjectPlan {
   options: SourceOptions;
   configFiles: Set<string>;
   // Retain deferred findings only through the current invocation's final scan.
-  pendingSourceReviews?: Record<string, string[]>;
+  pendingSourceReviews?: Record<string, Array<string>>;
 }
 
 const DEFERRED_SOURCE_REVIEWS = new Set(['resolve-config', 'overlapping-edits', 'unsafe-syntax']);
@@ -87,9 +86,9 @@ interface FileChange {
 export interface VitestV5MigrationPlan {
   rootDir: string;
   packageManager?: PackageManager;
-  projects: ProjectPlan[];
-  findings: VitestV5Finding[];
-  changes: FileChange[];
+  projects: Array<ProjectPlan>;
+  findings: Array<VitestV5Finding>;
+  changes: Array<FileChange>;
   inputs: ReadonlyMap<string, string | null>;
 }
 
@@ -107,18 +106,16 @@ function workspaceFromPlan(plan: VitestV5MigrationPlan): MigrationWorkspace {
   };
 }
 
-function readJson(file: string): Record<string, unknown> {
+function readJson(file: string): JsonObject {
   return parseJson(fs.readFileSync(file, 'utf8'));
 }
 function parseJson(source: string) {
-  return JSON.parse(source.replace(/^\uFEFF/, ''));
+  return parseJsonObject(source.replace(/^\uFEFF/, ''));
 }
-function record(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+function record(value: unknown) {
+  return isYamlMapping(value) ? value : undefined;
 }
-function dependency(pkg: Record<string, unknown>, name: string): string | undefined {
+function dependency(pkg: JsonObject, name: string): string | undefined {
   for (const field of [
     'dependencies',
     'devDependencies',
@@ -133,8 +130,8 @@ function dependency(pkg: Record<string, unknown>, name: string): string | undefi
   return undefined;
 }
 
-function filesInProject(directory: string): string[] {
-  const files: string[] = [];
+function filesInProject(directory: string): Array<string> {
+  const files: Array<string> = [];
   const walk = (current: string) => {
     if (current !== directory && fs.existsSync(path.join(current, 'package.json'))) {
       return;
@@ -183,7 +180,7 @@ function finding(
 function lockedSourceVersion(
   directory: string,
   root: string,
-  pkg: Record<string, unknown>,
+  pkg: JsonObject,
   readLockfile: LockfileReader,
   manager?: PackageManager,
   expectedRunnerPackage?: string,
@@ -195,7 +192,7 @@ function lockedSourceVersion(
       : undefined;
   }
   try {
-    const lock = readLockfile(path.join(root, 'pnpm-lock.yaml'), (source) => {
+    const lock = readLockfile.manifest(path.join(root, 'pnpm-lock.yaml'), (source) => {
       const document = parseDocument(source);
       return document.errors.length ? undefined : record(document.toJS());
     });
@@ -290,12 +287,13 @@ function installedSourceVersion(
   if (
     expectedRange &&
     normalizeRange(expectedRange) &&
-    !satisfies(installed.version, expectedRange, { includePrerelease: true })
+    (!installed.version ||
+      !satisfies(installed.version, expectedRange, { includePrerelease: true }))
   ) {
     return undefined;
   }
   if (installed.name === 'vitest') {
-    return normalize(installed.version) ?? undefined;
+    return installed.version ? (normalize(installed.version) ?? undefined) : undefined;
   }
   const pkg = readJson(path.join(installed.path, 'package.json'));
   if (installed.name === LEGACY_RUNNER) {
@@ -326,7 +324,7 @@ function installedSourceVersion(
 function sourceVersion(
   directory: string,
   root: string,
-  pkg: Record<string, unknown>,
+  pkg: JsonObject,
   readLockfile: LockfileReader,
   manager?: PackageManager,
 ): string | undefined {
@@ -413,7 +411,7 @@ function checkNodeRange(
   file: string,
   value: string,
   label: string,
-  findings: VitestV5Finding[],
+  findings: Array<VitestV5Finding>,
   publicContract = false,
 ): string | undefined {
   // At the v5 upgrade baseline, both the latest LTS and Current Node releases
@@ -468,7 +466,7 @@ function checkNodeRange(
   return undefined;
 }
 
-function migrateNode(file: string, source: string, findings: VitestV5Finding[]): string {
+function migrateNode(file: string, source: string, findings: Array<VitestV5Finding>): string {
   // Limit compatibility checks to project runtime declarations. Inferring
   // runtimes from CI workflows, containers, or other files is out of scope.
   const base = path.basename(file);
@@ -496,12 +494,12 @@ function migrateNode(file: string, source: string, findings: VitestV5Finding[]):
         edits.push({ offset: node.offset, length: node.length, content: JSON.stringify(upgrade) });
       }
     };
-    if (typeof pkg.engines?.node === 'string') {
+    if (isObjectValue(pkg.engines) && typeof pkg.engines.node === 'string') {
       checkNodeRange(file, pkg.engines.node, 'engines.node', findings, true);
     }
-    const runtime = pkg.devEngines?.runtime;
+    const runtime = record(pkg.devEngines)?.runtime;
     for (const [index, entry] of (Array.isArray(runtime) ? runtime : [runtime]).entries()) {
-      if (entry?.name === 'node' && typeof entry.version === 'string') {
+      if (isJsonObject(entry) && entry.name === 'node' && typeof entry.version === 'string') {
         checkRuntime(entry.version, 'devEngines.runtime', [
           'devEngines',
           'runtime',
@@ -513,7 +511,8 @@ function migrateNode(file: string, source: string, findings: VitestV5Finding[]):
     // The existing setup migration uses Volta only when neither pin file
     // exists. Check that future .node-version before any project edits.
     if (
-      typeof pkg.volta?.node === 'string' &&
+      isObjectValue(pkg.volta) &&
+      typeof pkg.volta.node === 'string' &&
       !['.node-version', '.nvmrc'].some((name) =>
         fs.existsSync(path.join(path.dirname(file), name)),
       )
@@ -532,7 +531,7 @@ function scanAndRewriteFile(
   testMode: VitestV5TestMode,
   mergedConfig: boolean,
 ): RewriteResult {
-  const findings: VitestV5Finding[] = [];
+  const findings: Array<VitestV5Finding> = [];
   if (!project.active) {
     return { content: migrateNode(file, source, findings), findings };
   }
@@ -700,12 +699,12 @@ export function planVitestV5Migration(
   originalProjects?: ReadonlyMap<string, ProjectPlan>,
 ): VitestV5MigrationPlan {
   const readLockfile = createLockfileReader();
-  const findings: VitestV5Finding[] = [];
+  const findings: Array<VitestV5Finding> = [];
   const directories = [
     workspace.rootDir,
     ...(workspace.packages ?? []).map((pkg) => path.resolve(workspace.rootDir, pkg.path)),
   ];
-  const projects: ProjectPlan[] = [];
+  const projects: Array<ProjectPlan> = [];
   const projectSources = new Map(
     Array.from(new Set(directories), (directory) => [
       directory,
@@ -815,11 +814,13 @@ export function planVitestV5Migration(
         file,
         source,
         project,
-        { ...testModes.modes.get(file), ...(browserCliOverride ? { browser: undefined } : {}) },
+        {
+          ...testModes.modes.get(file),
+          ...(browserCliOverride ? { browser: undefined } : undefined),
+        },
         mergedConfigs.has(file),
       );
-      findings.push(...testModes.findings.filter((item) => item.file === file));
-      findings.push(...result.findings);
+      findings.push(...testModes.findings.filter((item) => item.file === file), ...result.findings);
       if (source !== result.content) {
         rewrittenSources.set(file, result.content);
       }
@@ -834,8 +835,8 @@ export function planVitestV5Migration(
     projects,
     findings,
     changes: [...rewrittenSources].flatMap(([file, after]) => {
-      const before = allSources.get(file)!;
-      return before !== after ? [{ file, before, after }] : [];
+      const before = allSources.get(file);
+      return before !== undefined && before !== after ? [{ file, before, after }] : [];
     }),
     inputs,
   };
@@ -896,7 +897,7 @@ export function applyVitestV5Migration(plan: VitestV5MigrationPlan): number {
 /** Upgrade runtime declarations before installers or tool migrators start.
  * Keep source/config edits deferred until the tool version gates pass. */
 export function applyVitestV5NodeMigration(plan: VitestV5MigrationPlan): number {
-  const changes: FileChange[] = [];
+  const changes: Array<FileChange> = [];
   for (const [file, before] of plan.inputs) {
     if (
       before === null ||
@@ -933,7 +934,7 @@ export function vitestV5NeedsMigration(plan: VitestV5MigrationPlan): boolean {
   );
 }
 
-function currentProjectConfigs(plan: VitestV5MigrationPlan): Map<string, string[]> {
+function currentProjectConfigs(plan: VitestV5MigrationPlan): Map<string, Array<string>> {
   const filesByProject = new Map(
     plan.projects.map((project) => [project.directory, filesInProject(project.directory)]),
   );
@@ -955,8 +956,8 @@ function currentProjectConfigs(plan: VitestV5MigrationPlan): Map<string, string[
 
 /** Run after other migration steps create or merge configs. Keep the source
  * version and deferred reviews in memory until the final report; no state file. */
-export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Finding[] {
-  const findings: VitestV5Finding[] = [];
+export function finishVitestV5Migration(plan: VitestV5MigrationPlan): Array<VitestV5Finding> {
+  const findings: Array<VitestV5Finding> = [];
   const completedProjects = new Map<string, ProjectPlan>();
   const projectConfigs = currentProjectConfigs(plan);
   const configSources = new Map(
@@ -967,7 +968,7 @@ export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Fi
     if (!project.active || !project.sourceVersion) {
       continue;
     }
-    const configs = projectConfigs.get(project.directory)!;
+    const configs = projectConfigs.get(project.directory) ?? [];
     for (const file of configs) {
       const before = fs.readFileSync(file, 'utf8');
       try {
@@ -1004,7 +1005,7 @@ export function finishVitestV5Migration(plan: VitestV5MigrationPlan): VitestV5Fi
         `${ignored}${ignored && !ignored.endsWith('\n') ? '\n' : ''}.vitest/\n`,
       );
     }
-    const pendingSourceReviews: Record<string, string[]> = {};
+    const pendingSourceReviews: Record<string, Array<string>> = {};
     for (const item of plan.findings) {
       if (
         !DEFERRED_SOURCE_REVIEWS.has(item.code) ||
