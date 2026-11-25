@@ -6,7 +6,6 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
     boolean_flags: &[
         "--cache",
         "--no-eslintrc",
-        "--no-error-on-unmatched-pattern",
         "--debug",
         "--no-inline-config",
         "--no-config-lookup",
@@ -74,9 +73,10 @@ mod tests {
         assert_eq!(rewrite_eslint_script("eslint --cache --fix ."), "vp lint --fix .");
         assert_eq!(rewrite_eslint_script("eslint --no-eslintrc --fix ."), "vp lint --fix .");
         assert_eq!(rewrite_eslint_script("eslint --debug ."), "vp lint .");
+        // Oxlint supports this flag with the same meaning, so it is kept
         assert_eq!(
             rewrite_eslint_script("eslint --no-error-on-unmatched-pattern --fix ."),
-            "vp lint --fix ."
+            "vp lint --no-error-on-unmatched-pattern --fix ."
         );
         assert_eq!(rewrite_eslint_script("eslint --no-inline-config ."), "vp lint .");
         assert_eq!(rewrite_eslint_script("eslint --no-color --stats --fix ."), "vp lint --fix .");
