@@ -122,7 +122,9 @@ if (project === 'rollipop') {
 
 if (project === 'vinext') {
   // Vite 8.4 checks file access per environment. Stack frames returned over
-  // HTTP must use the client environment's file access rules.
+  // HTTP must use the client environment's file access rules. Vite 8.4 also
+  // keeps a load hook's watch file in the module graph, so a `?raw` module now
+  // imports its source file.
   execFileSync('git', ['apply', join(import.meta.dirname, 'vinext-vite-8.4.patch')], {
     cwd: repoRoot,
   });
