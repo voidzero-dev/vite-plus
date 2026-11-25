@@ -7,6 +7,7 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -135,6 +136,9 @@ describe('install', () => {
         expect(install('.vite-hooks').isError).toBe(false);
         expect(statSync(dispatcherPath).ino).not.toBe(firstInode);
         expect(statSync(dispatcherPath).mode & 0o777).toBe(0o755);
+        expect(
+          readdirSync(join(tmp, '.vite-hooks', '_')).filter((name) => name.endsWith('.tmp')),
+        ).toEqual([]);
       } finally {
         process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
@@ -147,6 +151,7 @@ describe('install', () => {
     async () => {
       const tmp = mkdtempSync(join(tmpdir(), 'hooks-replace-old-'));
       const originalCwd = process.cwd();
+      let waitForHook: Promise<Array<unknown>> | undefined;
       try {
         execSync('git init', { cwd: tmp, stdio: 'ignore' });
         process.chdir(tmp);
@@ -183,6 +188,7 @@ describe('install', () => {
           stderr += chunk;
         });
         const closed = once(checkout, 'close');
+        waitForHook = closed;
         const deadline = Date.now() + 10_000;
         while (!existsSync(join(tmp, '.git', 'hook-started')) && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 20));
@@ -196,6 +202,11 @@ describe('install', () => {
         expect(stderr).not.toMatch(/error|illegal/i);
         expect(code).toBe(0);
       } finally {
+        if (waitForHook) {
+          // When an assertion fails before the release, end the hook before the cleanup.
+          writeFileSync(join(tmp, '.git', 'hook-release'), '');
+          await waitForHook;
+        }
         process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
       }

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import {
   chmodSync,
   existsSync,
@@ -233,19 +234,21 @@ function describeUnsafeHookInstallPath(unsafePath: UnsafeHookInstallPath): strin
  * the target.
  */
 function writeGeneratedHookFile(filePath: string, content: string): void {
-  const tempPath = `${filePath}.${process.pid}.tmp`;
-  let tempCreated = false;
+  // A random name cannot match a temp file from a crashed run, or from a run in
+  // another container that has the same pid.
+  const tempPath = `${filePath}.${randomBytes(6).toString('hex')}.tmp`;
   try {
     // `wx` refuses an existing path, so the write never follows a link at the
     // temp path. `findUnsafeHookInstallPath` checks only the final names.
     writeFileSync(tempPath, content, { flag: 'wx', mode: 0o755 });
-    tempCreated = true;
     chmodSync(tempPath, 0o755);
     renameSync(tempPath, filePath);
     return;
   } catch {
-    if (tempCreated) {
+    try {
       rmSync(tempPath, { force: true });
+    } catch {
+      // A temp file that Windows still locks stays behind. The fallback still runs.
     }
   }
   writeFileSync(filePath, content, { mode: 0o755 });
