@@ -4,14 +4,16 @@ import path from 'node:path';
 import url from 'node:url';
 
 import type { SgNode } from '@ast-grep/napi';
-import type { Plugin } from '@voidzero-dev/vite-plus-core';
 import { Lang, parse as parseAst } from '@ast-grep/napi';
+import type { Plugin } from '@voidzero-dev/vite-plus-core';
 import { transformWithOxc } from '@voidzero-dev/vite-plus-core';
 import { build } from '@voidzero-dev/vite-plus-core/rolldown';
 import { init, parse } from 'es-module-lexer';
 import { glob } from 'tinyglobby';
 import { satisfies } from 'verkit';
 import { describe, expect, it } from 'vite-plus/test';
+
+import corePkg from '../package.json' with { type: 'json' };
 
 const coreDir = path.resolve(import.meta.dirname, '..');
 const distDir = path.join(coreDir, 'dist');
@@ -207,10 +209,10 @@ describe('build artifacts', () => {
   });
 
   it('accepts the native TypeScript beta and existing stable compilers as peers', () => {
-    const require = createRequire(import.meta.url);
-    const { peerDependencies } = require('../package.json');
+    const range = corePkg.peerDependencies.typescript;
     for (const version of ['5.9.3', '6.0.3', '7.0.2', '7.1.0-beta']) {
-      expect(satisfies(version, peerDependencies.typescript), version).toBe(true);
+      expect(satisfies(version, range)).toBe(true);
     }
+    expect(satisfies('7.2.0-beta', range)).toBe(false);
   });
 });

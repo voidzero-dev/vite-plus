@@ -6,13 +6,15 @@ import { getMajor, isRangeSubset, normalizeRange, satisfies } from 'verkit';
 import { classifyNativePreviewPackConfig } from '../../../binding/index.js';
 import type { WorkspaceInfoOptional } from '../../types/index.ts';
 import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
+import { isObjectValue, parseJsonObject } from '../../utils/json-value.ts';
 import { writeJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { detectConfigs } from '../detector.ts';
 import type { MigrationReport } from '../report.ts';
 import { createCatalogDependencyResolver } from './catalog.ts';
-import { readPackageJsonIfExists, type DependencyBag } from './shared.ts';
+import type { DependencyBag } from './shared.ts';
+import { readPackageJsonIfExists } from './shared.ts';
 import { getWorkspaceProjectPaths, sourceTreeMatches } from './source-scan.ts';
 
 const PREVIEW = '@typescript/native-preview';
@@ -67,7 +69,11 @@ function usesClassicCompiler(
     return false;
   }
   const installed = detectPackageMetadata(dir, 'typescript');
-  if (installed?.name === 'typescript' && satisfies(installed.version, range, options)) {
+  if (
+    installed?.name === 'typescript' &&
+    installed.version !== undefined &&
+    satisfies(installed.version, range, options)
+  ) {
     return getMajor(installed.version) < 7;
   }
   return undefined;
@@ -89,8 +95,13 @@ function hasOtherPreviewUses(dir: string): boolean {
         return true;
       }
       if (name === 'package.json') {
-        const { scripts } = JSON.parse(source) as { scripts?: Record<string, string> };
-        return Object.values(scripts ?? {}).some((script) => /\btsgo\b/.test(script));
+        const { scripts } = parseJsonObject(source);
+        return (
+          isObjectValue(scripts) &&
+          Object.values(scripts).some(
+            (script) => typeof script === 'string' && /\btsgo\b/.test(script),
+          )
+        );
       }
       return (
         /(?:^|[\s"'`])tsgo(?:\s+-|\s*$)/m.test(source) ||
@@ -109,7 +120,11 @@ function hasOtherPreviewUses(dir: string): boolean {
 
 // A shared TypeScript install can also supply a library's peer or an existing
 // build script that imports the classic compiler API. TypeScript 7 drops that API.
-function classicCompilerConsumer(compiler: Project, root: Project, projects: Project[]) {
+function classicCompilerConsumer(
+  compiler: Project,
+  root: Project,
+  projects: ReadonlyArray<Project>,
+) {
   return projects.find(({ dir, pkg }) => {
     if (dir !== compiler.dir && (compiler !== root || installField(pkg, 'typescript'))) {
       return false;
@@ -133,8 +148,8 @@ export function migrateNativePreviewPack(
     'rootDir' | 'packages' | 'packageManager' | 'packageManagerVersion'
   >,
   report: MigrationReport,
-): { changed: boolean; warnings: string[] } {
-  const warnings: string[] = [];
+) {
+  const warnings: Array<string> = [];
   let changed = false;
   let resolveCatalog: CatalogDependencyResolver | undefined;
   const projects = getWorkspaceProjectPaths(workspace).flatMap((dir) => {

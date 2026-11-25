@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
+import type { JsonObject } from '../../utils/json.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { migrateNativePreviewPack } from '../migrator/native-preview.ts';
 import { createMigrationReport } from '../report.ts';
@@ -23,14 +24,14 @@ describe('native-preview declaration migration', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  function write(file: string, content: string | object) {
+  function write(file: string, content: string | JsonObject) {
     const target = path.join(root, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, typeof content === 'string' ? content : JSON.stringify(content));
     return target;
   }
 
-  function migrate(...members: string[]) {
+  function migrate(...members: Array<string>) {
     return migrateNativePreviewPack(
       {
         rootDir: root,

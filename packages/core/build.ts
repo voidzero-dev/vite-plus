@@ -21,6 +21,7 @@ import { findMinimumForRange, isRangeSubset } from 'verkit';
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
 import cliPkgJson from '../cli/package.json' with { type: 'json' };
+import type { PackageManifest } from '../tools/src/package-manifest.ts';
 import { readPackageManifest } from '../tools/src/package-manifest.ts';
 import { assertViteConfigPatched } from '../tools/src/patch-vite-config.ts';
 import { buildCjsDeps } from './build-support/build-cjs-deps.js';
@@ -746,6 +747,14 @@ async function wireBundledTsdownExtensions() {
   }
 }
 
+function requireTypeScriptPeerRange(pkg: PackageManifest, name: string): string {
+  const range = pkg.peerDependencies?.typescript;
+  if (!range?.trim()) {
+    throw new Error(`Missing peerDependencies.typescript in ${name}/package.json`);
+  }
+  return range;
+}
+
 async function mergePackageJson() {
   const tsdownPkgPath = join(tsdownSourceDir, 'package.json');
   const rolldownPkgPath = join(rolldownSourceDir, 'package.json');
@@ -765,8 +774,8 @@ async function mergePackageJson() {
   );
   // tsdown declares stable TypeScript peers. Its declaration plugin also accepts
   // prereleases that provide the native declaration emit API.
-  const typescriptRange = tsdownPkg.peerDependencies.typescript;
-  const compilerPrereleases = (dtsPkg.peerDependencies.typescript as string)
+  const typescriptRange = requireTypeScriptPeerRange(tsdownPkg, 'tsdown');
+  const compilerPrereleases = requireTypeScriptPeerRange(dtsPkg, 'rolldown-plugin-dts')
     .split(/\s*\|\|\s*/)
     .filter(
       (range) =>

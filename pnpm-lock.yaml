@@ -690,7 +690,7 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs4)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs5)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
       rollup:
         specifier: 'catalog:'
         version: 4.63.1
@@ -708,10 +708,10 @@ importers:
         version: 1.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.7(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.7)(@tsdown/exe@0.23.7)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs4)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.7(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.7)(@tsdown/exe@0.23.7)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs5)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       tsrs:
         specifier: 'catalog:'
-        version: 7.1.0-beta.tsrs4
+        version: 7.1.0-beta.tsrs5
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
