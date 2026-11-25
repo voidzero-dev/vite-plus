@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import {
   chmodSync,
   existsSync,
@@ -6,6 +7,7 @@ import {
   mkdirSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -51,6 +53,13 @@ function nestedDirname(depth: number): string {
 
 // The shell script that dispatches to user-defined hooks in <dir>/
 // `depth` = number of path segments in `dir` + 2 (for `_` subdir + hook filename)
+//
+// A hook can run `vp config` (for example `pnpm install` with `prepare: vp config`
+// in post-checkout), and vite-plus 1.8.0 and earlier rewrite this file in place.
+// dash and BusyBox ash read a sourced file in blocks of 1–8 KiB and read the next
+// block only when they need it, so they can parse bytes of the new file after the
+// hook (#3567). The brace group makes the shell parse the whole script before the
+// hook runs.
 export function hookScript(dir: string): string {
   // Count segments: ".vite-hooks" → 1, ".config/husky" → 2
   // Git accepts forward slashes on every platform; Windows also accepts its
@@ -60,6 +69,8 @@ export function hookScript(dir: string): string {
   const depth = segments + 2; // +2 for _ subdir and hook filename
   const rootExpr = nestedDirname(depth);
   return `#!/usr/bin/env sh
+# Read the whole file before the hook runs. A hook that runs vp config can rewrite it.
+{
 { [ "$HUSKY" = "2" ] || [ "$VP_GIT_HOOKS" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
 n=$(basename "$0")
 s=$(dirname "$(dirname "$0")")/$n
@@ -92,11 +103,13 @@ c=$?
 
 [ $c != 0 ] && echo "VITE+ - $n script failed (code $c)"
 [ $c = 127 ] && echo "VITE+ - command not found in PATH=$PATH"
-exit $c`;
+exit $c
+}
+`;
 }
 
 /** The per-hook stub written to `<dir>/_/<hook>`; it sources the `h` dispatcher. */
-export const HOOK_STUB_SCRIPT = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"';
+export const HOOK_STUB_SCRIPT = '#!/usr/bin/env sh\n. "$(dirname "$0")/h"\n';
 
 export interface InstallResult {
   message: string;
@@ -210,6 +223,36 @@ function describeUnsafeHookInstallPath(unsafePath: UnsafeHookInstallPath): strin
     return `hook path "${unsafePath.relativePath}" is not a directory`;
   }
   return `hook path "${unsafePath.relativePath}" is not a file`;
+}
+
+/**
+ * Replace a generated hook file with a new file. A hook shell that sourced an
+ * older dispatcher keeps that file open and can read more of it after the hook
+ * runs `vp config` (#3567). An in-place write would give that shell bytes of the
+ * new file. A rename leaves the shell on the old file. Fall back to an in-place
+ * write when the temp file or the rename fails, for example when Windows locks
+ * the target.
+ */
+function writeGeneratedHookFile(filePath: string, content: string): void {
+  // A random name cannot match a temp file from a crashed run, or from a run in
+  // another container that has the same pid.
+  const tempPath = `${filePath}.${randomBytes(6).toString('hex')}.tmp`;
+  try {
+    // `wx` refuses an existing path, so the write never follows a link at the
+    // temp path. `findUnsafeHookInstallPath` checks only the final names.
+    writeFileSync(tempPath, content, { flag: 'wx', mode: 0o755 });
+    chmodSync(tempPath, 0o755);
+    renameSync(tempPath, filePath);
+    return;
+  } catch {
+    try {
+      rmSync(tempPath, { force: true });
+    } catch {
+      // A temp file that Windows still locks stays behind. The fallback still runs.
+    }
+  }
+  writeFileSync(filePath, content, { mode: 0o755 });
+  chmodSync(filePath, 0o755);
 }
 
 function gitConfigGet(key: string, options?: { local?: boolean; bool?: boolean }): string | null {
@@ -765,11 +808,9 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
   rmSync(internal('husky.sh'), { force: true });
   mkdirSync(internal(), { recursive: true });
   writeFileSync(internal('.gitignore'), '*');
-  writeFileSync(internal('h'), hookScript(location.dir), { mode: 0o755 });
-  chmodSync(internal('h'), 0o755);
+  writeGeneratedHookFile(internal('h'), hookScript(location.dir));
   for (const hook of SUPPORTED_GIT_HOOK_NAMES) {
-    writeFileSync(internal(hook), HOOK_STUB_SCRIPT, { mode: 0o755 });
-    chmodSync(internal(hook), 0o755);
+    writeGeneratedHookFile(internal(hook), HOOK_STUB_SCRIPT);
   }
   const storeHooksPath = gitConfigSet('core.hooksPath', location.target);
   if (!storeHooksPath.ok) {
