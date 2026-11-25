@@ -6,12 +6,15 @@ use console::style;
 use futures::future::try_join_all;
 use serde::Serialize;
 use vp_js_runtime::{LtsInfo, NodeProvider, NodeVersionEntry, find_absolute_latest_version};
-use vp_pm_cli::{fetch_package_manager_versions_for_cwd, resolve_package_manager_version_for_cwd};
+use vp_pm_cli::fetch_package_manager_versions_for_cwd;
 use vt_path::AbsolutePathBuf;
 
 use super::{
     config,
-    list::{list_complete_package_manager_versions, list_installed_versions, use_color},
+    list::{
+        list_complete_package_manager_versions, list_installed_versions, resolve_default_versions,
+        use_color,
+    },
     package_manager,
     spec::EnvScope,
 };
@@ -107,25 +110,7 @@ pub async fn execute(
     } else {
         None
     };
-    let default_node = if scope.includes_node() {
-        match config.default_node_version.as_deref() {
-            Some(selector) => Some(config::resolve_version_alias(selector, &provider).await?),
-            None => None,
-        }
-    } else {
-        None
-    };
-    let mut default_package_manager_versions = BTreeMap::new();
-    if scope.includes_package_managers() {
-        for kind in package_manager::selected(scope) {
-            let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)?
-            else {
-                continue;
-            };
-            let version = resolve_package_manager_version_for_cwd(&cwd, kind, &selector).await?;
-            default_package_manager_versions.insert(kind.to_string(), version.to_string());
-        }
-    }
+    let defaults = resolve_default_versions(&config, scope, &cwd, &provider).await?;
     let home = vp_shared::EnvConfig::get().dirs.data.clone();
 
     let node = node_versions.map(|versions| {
@@ -136,7 +121,7 @@ pub async fn execute(
             show_all,
             &sort,
             current_node.as_deref(),
-            default_node.as_deref(),
+            defaults.node.as_deref(),
             &list_installed_versions(home.join("js_runtime").join("node").as_path()),
         )
     });
@@ -154,7 +139,7 @@ pub async fn execute(
                     current_pm.as_ref().and_then(|current| {
                         (current.package_manager_type == kind).then_some(current.version.as_str())
                     }),
-                    default_package_manager_versions.get(&kind.to_string()).map(String::as_str),
+                    defaults.package_managers.get(&kind.to_string()).map(String::as_str),
                 );
                 (kind.to_string(), entries)
             })

@@ -6,10 +6,12 @@ use std::{
 
 use console::style;
 use serde::Serialize;
+use vp_js_runtime::NodeProvider;
 use vp_pm_cli::{
-    PackageManagerType, VERIFIED_NAMESPACE, installed_package_manager_dir, package_manager_bin_path,
+    PackageManagerType, VERIFIED_NAMESPACE, installed_package_manager_dir,
+    package_manager_bin_path, resolve_package_manager_version_for_cwd,
 };
-use vt_path::AbsolutePathBuf;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use super::{config, package_manager, spec::EnvScope};
 use crate::error::Error;
@@ -45,6 +47,42 @@ pub(super) fn list_installed_versions(directory: &std::path::Path) -> Vec<String
     versions
 }
 
+/// Configured defaults resolved to the versions they currently select.
+pub(super) struct DefaultVersions {
+    pub(super) node: Option<String>,
+    pub(super) package_managers: BTreeMap<String, String>,
+}
+
+/// Resolve configured defaults such as `lts` or `pnpm@latest` to concrete versions.
+/// A default that cannot be resolved has no marker, so listing still works offline.
+pub(super) async fn resolve_default_versions(
+    config: &config::Config,
+    scope: EnvScope,
+    cwd: &AbsolutePath,
+    provider: &NodeProvider,
+) -> Result<DefaultVersions, Error> {
+    let node = match config.default_node_version.as_deref() {
+        Some(selector) if scope.includes_node() => {
+            config::resolve_version_alias(selector, provider).await.ok()
+        }
+        _ => None,
+    };
+    let mut package_managers = BTreeMap::new();
+    if scope.includes_package_managers() {
+        for kind in package_manager::selected(scope) {
+            let Some((_, selector, _)) = package_manager::configured_default_for(config, kind)?
+            else {
+                continue;
+            };
+            if let Ok(version) = resolve_package_manager_version_for_cwd(cwd, kind, &selector).await
+            {
+                package_managers.insert(kind.to_string(), version.to_string());
+            }
+        }
+    }
+    Ok(DefaultVersions { node, package_managers })
+}
+
 pub async fn execute(
     cwd: AbsolutePathBuf,
     scope: Option<String>,
@@ -74,24 +112,14 @@ pub async fn execute(
     } else {
         None
     };
-    let default_node = scope.includes_node().then(|| config.default_node_version.clone()).flatten();
-    let mut default_package_manager_versions = BTreeMap::new();
-    if scope.includes_package_managers() {
-        for kind in package_manager::selected(scope) {
-            let Some((_, selector, _)) = package_manager::configured_default_for(&config, kind)?
-            else {
-                continue;
-            };
-            default_package_manager_versions.insert(kind.to_string(), selector);
-        }
-    }
+    let defaults = resolve_default_versions(&config, scope, &cwd, &NodeProvider::new()).await?;
 
     let node = scope.includes_node().then(|| {
         list_installed_versions(home.join("js_runtime").join("node").as_path())
             .into_iter()
             .map(|version| InstalledVersionJson {
                 current: current_node.as_deref() == Some(version.as_str()),
-                default: default_node.as_deref() == Some(version.as_str()),
+                default: defaults.node.as_deref() == Some(version.as_str()),
                 version,
             })
             .collect::<Vec<_>>()
@@ -110,7 +138,7 @@ pub async fn execute(
                                 current.package_manager_type == kind
                                     && current.version.as_str() == version
                             }),
-                            default: default_package_manager_versions.get(&kind.to_string())
+                            default: defaults.package_managers.get(&kind.to_string())
                                 == Some(&version),
                             version,
                         })

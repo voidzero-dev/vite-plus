@@ -44,6 +44,14 @@ Default Node.js version: lts
   Set via: <home>/.vite-plus/config.json
 ```
 
+## `node -e 'const {execFileSync}=require('\''node:child_process'\''); const {node}=JSON.parse(execFileSync('\''vp'\'',['\''env'\'','\''list'\'','\''node'\'','\''--json'\''],{encoding:'\''utf8'\''})); console.log('\''default marked:'\'', node.some(v=>v.default));'`
+
+Installed Node.js entries resolve the `lts` default alias like list-remote does
+
+```
+default marked: true
+```
+
 ## `vp env default pnpm@10.18.0`
 
 Package-manager default updates identify the selected family and version
