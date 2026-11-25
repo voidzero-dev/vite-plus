@@ -8,14 +8,10 @@ export default defineConfig({
     ignorePatterns: cloudflare.ignorePatterns,
     options: { typeCheck: true },
     jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
-    rules: { 'vite-plus/prefer-vite-plus-imports': 'error' },
-    overrides: [
-      {
-        // create-vite's vanilla-ts entry point asserts that its two DOM elements exist.
-        files: ['**/*/src/main.ts'],
-        rules: { 'typescript/no-non-null-assertion': 'off' },
-      },
-    ],
+    rules: {
+      'typescript/no-non-null-assertion': 'off',
+      'vite-plus/prefer-vite-plus-imports': 'error',
+    },
   },
   run: {
     cache: true,
