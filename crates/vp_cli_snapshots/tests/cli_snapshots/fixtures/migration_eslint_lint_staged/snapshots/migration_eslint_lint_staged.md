@@ -80,7 +80,7 @@ export default defineConfig({
     ]
   },
   staged: {
-    "*.ts": "vp lint --fix"
+    "*.ts": "vp lint --no-error-on-unmatched-pattern --fix"
   },
 });
 ```

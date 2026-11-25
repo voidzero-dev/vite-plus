@@ -11,6 +11,8 @@ steps = [
 [[case]]
 name = "command_build_profile"
 vp = "local"
+# `vp build --profile` intermittently times out after 120s on macOS CI.
+skip-platforms = ["macos"]
 steps = [
   { argv = ["vp", "build", "--profile"], comment = "--profile records a CPU profile of the build" },
   { argv = ["vpt", "stat-file", "vite-profile-0.cpuprofile", "--assert", "file"], comment = "the profile is written to the project root" },
