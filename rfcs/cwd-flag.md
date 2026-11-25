@@ -352,7 +352,7 @@ No upstream Vite or tsdown changes are required.
 
 - `crates/vp_global_cli/src/main.rs` / `cli.rs`: parse the global `-C <dir>`, resolve the local install from `<dir>`, and delegate with `<dir>` as the effective cwd. Preserve an explicit-target marker for the local CLI.
 - `packages/cli/src/bin.ts`: parse `-C` for direct local invocations and pass the explicit-target marker to the binding.
-- `packages/cli/binding/src/cli/app_target.rs` / `mod.rs`: apply the exact-bare command resolution order. Skip target selection when `-C` or a subcommand argument is present.
+- `crates/vp_app_target`: apply the exact-bare command resolution order. The global CLI (`crates/vp_global_cli/src/commands/delegate.rs`) and the binding (`packages/cli/binding/src/cli/mod.rs`) call it, and skip target selection when `-C` or a subcommand argument is present.
 - `packages/cli/binding/src/cli/execution.rs`: spawn the child with cwd set to the target directory.
 - Picker: reuse `vt_select` and `vt_workspace`, both already dependencies via the `vt` crates.
 - `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded, and add `defaultPackage?: string` to `packages/cli/src/define-config.ts`.

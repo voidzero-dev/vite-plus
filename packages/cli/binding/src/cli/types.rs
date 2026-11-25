@@ -114,13 +114,9 @@ pub enum SynthesizableSubcommand {
 }
 
 impl SynthesizableSubcommand {
-    /// The bare app command that may select a target directory. Explicit `-C`,
-    /// including a directory that the global CLI already selected, and any
-    /// argument skip selection.
-    pub(super) fn bare_app_command(&self, explicit_chdir: bool) -> Option<&'static str> {
-        if explicit_chdir {
-            return None;
-        }
+    /// The app command that may select a target directory, when its arguments
+    /// leave the selection to the CLI.
+    pub(super) fn bare_app_command(&self) -> Option<&'static str> {
         let (command, args) = match self {
             Self::Dev { args } => ("dev", args),
             Self::Build { args } => ("build", args),
@@ -128,7 +124,7 @@ impl SynthesizableSubcommand {
             Self::Pack { args } => ("pack", args),
             _ => return None,
         };
-        args.is_empty().then_some(command)
+        vp_app_target::is_bare_app_command(args).then_some(command)
     }
 }
 
@@ -263,23 +259,17 @@ mod tests {
     use super::SynthesizableSubcommand as Subcommand;
 
     #[test]
-    fn only_bare_app_commands_select_a_target() {
+    fn only_app_commands_select_a_target() {
         for (subcommand, expected) in [
             (Subcommand::Dev { args: vec![] }, Some("dev")),
-            (Subcommand::Build { args: vec![] }, Some("build")),
+            (Subcommand::Build { args: vec!["--".into()] }, Some("build")),
             (Subcommand::Preview { args: vec![] }, Some("preview")),
             (Subcommand::Pack { args: vec![] }, Some("pack")),
+            (Subcommand::Build { args: vec!["--watch".into()] }, None),
             (Subcommand::Lint { args: vec![] }, None),
             (Subcommand::Test { args: vec![] }, None),
-            (Subcommand::Build { args: vec!["--watch".into()] }, None),
-            (Subcommand::Build { args: vec!["--ssr".into()] }, None),
-            (Subcommand::Build { args: vec!["apps/web".into()] }, None),
-            (Subcommand::Dev { args: vec!["--host".into()] }, None),
-            (Subcommand::Preview { args: vec!["--help".into()] }, None),
-            (Subcommand::Pack { args: vec!["--root".into(), "src".into()] }, None),
         ] {
-            assert_eq!(subcommand.bare_app_command(false), expected);
-            assert_eq!(subcommand.bare_app_command(true), None);
+            assert_eq!(subcommand.bare_app_command(), expected);
         }
     }
 

@@ -34,18 +34,17 @@ pub async fn execute_app(
     raw_subcommand: Option<&str>,
     explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
-    let select_target = !explicit_chdir
-        && vp_app_target::is_bare_app_command(command, args.iter().map(String::as_str));
+    let select_target = !explicit_chdir && vp_app_target::is_bare_app_command(args);
     if !select_target {
         return execute_local(cwd, command, args, raw_subcommand, explicit_chdir).await;
     }
 
     // The note refers to a script in the directory where the user ran vp.
     script_note::print(raw_subcommand.or(Some(command)), &cwd);
-    let (target, _) = vp_app_target::resolve_app_target(command, &cwd)
+    let target = vp_app_target::resolve_app_target(command, &cwd)
         .map_err(|error| Error::Other(vt_str::format!("{error:#}")))?;
     let cwd = match target {
-        AppTarget::CurrentDir => cwd,
+        AppTarget::CurrentDir(_) => cwd,
         AppTarget::Dir(dir) => dir,
         AppTarget::Exit(code) => return Ok(crate::cli::exit_status(i32::from(code))),
     };

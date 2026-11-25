@@ -18,7 +18,9 @@ use vt_workspace::WorkspaceFile;
 /// Where a bare app command should run.
 pub enum AppTarget {
     /// No elicitation applies; run in the invocation directory as today.
-    CurrentDir,
+    /// Carries the workspace root found for that directory, when the lookup
+    /// succeeded, so the caller can skip a second `find_workspace_root` walk.
+    CurrentDir(Option<vt_workspace::WorkspaceRoot>),
     /// Run as if invoked in this directory (implicit `-C`).
     Dir(AbsolutePathBuf),
     /// Elicitation printed its output and decided the exit code.
@@ -32,14 +34,14 @@ struct PackageRow {
     likely_runnable: bool,
 }
 
-/// Does this app invocation leave target selection to the CLI? Any argument
-/// skips selection. Build and dev also accept a lone `--`, which Vite then
-/// receives unchanged.
-pub fn is_bare_app_command<'a>(command: &str, mut args: impl Iterator<Item = &'a str>) -> bool {
-    match args.next() {
-        None => true,
-        Some("--") => matches!(command, "build" | "dev") && args.next().is_none(),
-        Some(_) => false,
+/// Do these app command arguments leave target selection to the CLI? Any
+/// argument skips selection, except a lone `--`, which build and dev pass on
+/// to Vite unchanged.
+pub fn is_bare_app_command(args: &[impl AsRef<str>]) -> bool {
+    match args {
+        [] => true,
+        [separator] => separator.as_ref() == "--",
+        _ => false,
     }
 }
 
@@ -191,7 +193,7 @@ fn emit_milestone_title(name: &str) {
 /// which case the script merely spawns the real binary, which then behaves
 /// identically to a direct invocation.
 pub fn needs_elicitation(command: &str, cwd: &AbsolutePath) -> bool {
-    matches!(classify(command, cwd), Classification::Elicit(_))
+    !matches!(classify(command, cwd), Classification::RunInPlace(_))
 }
 
 /// Outcome of classifying a bare app command.
@@ -202,13 +204,6 @@ enum Classification {
     /// inside a large monorepo, where the walk is the only per-invocation
     /// cost this feature adds.
     RunInPlace(Option<vt_workspace::WorkspaceRoot>),
-    /// Elicit a target: `defaultPackage`, or the picker/listing at a
-    /// workspace root.
-    Elicit(Elicitation),
-}
-
-/// Why a bare app command needs target elicitation.
-enum Elicitation {
     /// The invocation root's config explicitly declares `defaultPackage`
     /// (with this value — possibly invalid, which the resolver reports).
     DefaultPackage(vp_static_config::FieldValue),
@@ -256,7 +251,7 @@ fn classify(command: &str, cwd: &AbsolutePath) -> Classification {
         .and_then(|config| config.get_declared("defaultPackage"))
         .and_then(|value| default_package_for_command(command, value))
     {
-        return Classification::Elicit(Elicitation::DefaultPackage(value));
+        return Classification::DefaultPackage(value);
     }
     // The picker/listing needs workspace metadata; anything unresolvable
     // keeps today's behavior (the caller surfaces its own workspace errors).
@@ -281,29 +276,19 @@ fn classify(command: &str, cwd: &AbsolutePath) -> Classification {
     if root_has_intent_signal(&root_config, &workspace_root.path, command) {
         return Classification::RunInPlace(Some(workspace_root));
     }
-    Classification::Elicit(Elicitation::WorkspaceRoot(workspace_root))
+    Classification::WorkspaceRoot(workspace_root)
 }
 
 /// Resolve the target of a bare `dev`, `build`, `preview`, or `pack` command.
-/// The second tuple element is the workspace
-/// root already found for `cwd`. It is present only when the command runs in
-/// the unchanged `cwd`, so it matches a fresh lookup there. The caller reuses
-/// it to skip a second `find_workspace_root` walk.
-pub fn resolve_app_target(
-    command: &str,
-    cwd: &AbsolutePath,
-) -> Result<(AppTarget, Option<vt_workspace::WorkspaceRoot>)> {
-    let elicitation = match classify(command, cwd) {
+pub fn resolve_app_target(command: &str, cwd: &AbsolutePath) -> Result<AppTarget> {
+    let workspace_root = match classify(command, cwd) {
         Classification::RunInPlace(workspace_root) => {
-            return Ok((AppTarget::CurrentDir, workspace_root));
+            return Ok(AppTarget::CurrentDir(workspace_root));
         }
-        Classification::Elicit(elicitation) => elicitation,
-    };
-    let workspace_root = match elicitation {
-        Elicitation::DefaultPackage(value) => {
-            return Ok((resolve_default_package(command, cwd, value), None));
+        Classification::DefaultPackage(value) => {
+            return Ok(resolve_default_package(command, cwd, value));
         }
-        Elicitation::WorkspaceRoot(workspace_root) => workspace_root,
+        Classification::WorkspaceRoot(workspace_root) => workspace_root,
     };
 
     let graph = vt_workspace::load_package_graph(&workspace_root)?;
@@ -333,7 +318,7 @@ pub fn resolve_app_target(
     if rows.is_empty() {
         // The workspace root is the only target. Static extraction can miss
         // plugin-provided config, so run the command in place.
-        return Ok((AppTarget::CurrentDir, Some(workspace_root)));
+        return Ok(AppTarget::CurrentDir(Some(workspace_root)));
     }
     rows.sort_by(|a, b| {
         (!a.likely_runnable, a.path.as_str()).cmp(&(!b.likely_runnable, b.path.as_str()))
@@ -356,17 +341,14 @@ pub fn resolve_app_target(
             run_package_picker(command, &rows)?
         };
         let Some(index) = picked else {
-            return Ok((AppTarget::Exit(130), None));
+            return Ok(AppTarget::Exit(130));
         };
         let row = &rows[index];
-        output::print_and_flush(
-            &mut std::io::stdout().lock(),
-            &format!(
-                "Selected package: {} ({})\nTip: run this directly with `vp -C {} {command}`\n",
-                row.name, row.path, row.path
-            ),
-        );
-        return Ok((AppTarget::Dir(row.absolute.clone()), None));
+        output::print_stdout_line(format_args!(
+            "Selected package: {} ({})\nTip: run this directly with `vp -C {} {command}`",
+            row.name, row.path, row.path
+        ));
+        return Ok(AppTarget::Dir(row.absolute.clone()));
     }
 
     output::error(&format!("`vp {command}` at the workspace root needs a target package."));
@@ -380,7 +362,7 @@ pub fn resolve_app_target(
     let example = &rows[0].path;
     output::raw_stderr(&format!("  Pass a directory:  vp -C {example} {command}"));
     output::raw_stderr(&format!("  Or run every package's {command} script:  vp run -r {command}"));
-    Ok((AppTarget::Exit(1), None))
+    Ok(AppTarget::Exit(1))
 }
 
 #[cfg(test)]
@@ -390,22 +372,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_bare_app_commands_select_a_target() {
-        let bare =
-            |command: &str, args: &[&str]| is_bare_app_command(command, args.iter().copied());
-        for command in ["dev", "build", "preview", "pack"] {
-            assert!(bare(command, &[]), "{command} without arguments");
+    fn only_bare_arguments_select_a_target() {
+        let no_args: [&str; 0] = [];
+        assert!(is_bare_app_command(&no_args));
+        assert!(is_bare_app_command(&["--"]));
+        for args in [
+            &["--", "--mode"][..],
+            &["--watch"],
+            &["--ssr"],
+            &["apps/web"],
+            &["--host"],
+            &["--help"],
+            &["--root", "src"],
+        ] {
+            assert!(!is_bare_app_command(args), "{args:?}");
         }
-        assert!(bare("build", &["--"]));
-        assert!(bare("dev", &["--"]));
-        assert!(!bare("preview", &["--"]));
-        assert!(!bare("pack", &["--"]));
-        assert!(!bare("build", &["--", "--mode"]));
-        assert!(!bare("build", &["--watch"]));
-        assert!(!bare("build", &["apps/web"]));
-        assert!(!bare("dev", &["--host"]));
-        assert!(!bare("preview", &["--help"]));
-        assert!(!bare("pack", &["--root", "src"]));
     }
 
     #[test]
