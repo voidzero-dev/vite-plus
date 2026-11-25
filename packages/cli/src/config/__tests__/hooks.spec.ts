@@ -7,6 +7,7 @@ import {
   linkSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -16,6 +17,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import { describe, expect, it } from 'vitest';
 
@@ -67,6 +69,31 @@ function countDirnameCalls(script: string): number {
   return (match[1].match(/dirname/g) ?? []).length;
 }
 
+// bash reads a sourced file whole, so it never shows #3567. Run hooks with dash
+// where it exists: macOS has /bin/dash, and Debian or Ubuntu use it as /bin/sh.
+function envWithDashAsSh(tmp: string): NodeJS.ProcessEnv {
+  const dash = ['/bin/dash', '/usr/bin/dash'].find((path) => existsSync(path));
+  if (!dash) {
+    return process.env;
+  }
+  const bin = join(tmp, '.git', 'test-bin');
+  mkdirSync(bin);
+  symlinkSync(dash, join(bin, 'sh'));
+  return { ...process.env, PATH: `${bin}:${process.env.PATH}` };
+}
+
+function commitPostCheckoutHook(tmp: string, lines: Array<string>): void {
+  writeFileSync(
+    join(tmp, '.vite-hooks', 'post-checkout'),
+    ['#!/usr/bin/env sh', ...lines, ''].join('\n'),
+    { mode: 0o755 },
+  );
+  execSync('git add -A', { cwd: tmp, stdio: 'ignore' });
+  // On an unborn HEAD, `git checkout -b` does not update the worktree and
+  // does not run post-checkout.
+  expect(runCommit(tmp, 'init').status).toBe(0);
+}
+
 describe('install', () => {
   it.skipIf(process.platform === 'win32')(
     'should create _/pre-commit but not pre-commit in hooks dir root',
@@ -86,6 +113,130 @@ describe('install', () => {
         expect(existsSync(join(tmp, hooksDir, '_', 'pre-commit'))).toBe(true);
         // install() does NOT create pre-commit at the hooks dir root
         expect(existsSync(join(tmp, hooksDir, 'pre-commit'))).toBe(false);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'replaces the dispatcher with a new file instead of rewriting it in place',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-atomic-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+
+        const dispatcherPath = join(tmp, '.vite-hooks', '_', 'h');
+        expect(install('.vite-hooks').isError).toBe(false);
+        const firstInode = statSync(dispatcherPath).ino;
+
+        // A hook shell that has the old file open keeps reading the old file.
+        expect(install('.vite-hooks').isError).toBe(false);
+        expect(statSync(dispatcherPath).ino).not.toBe(firstInode);
+        expect(statSync(dispatcherPath).mode & 0o777).toBe(0o755);
+        expect(
+          readdirSync(join(tmp, '.vite-hooks', '_')).filter((name) => name.endsWith('.tmp')),
+        ).toEqual([]);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a hook running when vp config replaces an older dispatcher during the hook',
+    async () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-replace-old-'));
+      const originalCwd = process.cwd();
+      let waitForHook: Promise<Array<unknown>> | undefined;
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+        expect(install('.vite-hooks').isError).toBe(false);
+        // vite-plus 1.8.0 and earlier wrote a dispatcher without the brace group
+        // and without a final newline. A shell reads more of it after the hook.
+        writeFileSync(
+          join(tmp, '.vite-hooks', '_', 'h'),
+          [
+            '#!/usr/bin/env sh',
+            'n=$(basename "$0")',
+            's=$(dirname "$(dirname "$0")")/$n',
+            '[ ! -f "$s" ] && exit 0',
+            'sh -e "$s" "$@"',
+            'c=$?',
+            'exit $c',
+          ].join('\n'),
+        );
+        // The hook stops until the test runs `vp config`, as `pnpm install`
+        // with `prepare: vp config` does in a post-checkout hook.
+        commitPostCheckoutHook(tmp, [
+          ': > .git/hook-started',
+          'i=0',
+          'while [ ! -f .git/hook-release ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done',
+        ]);
+
+        const checkout = spawn('git', ['checkout', '-b', 'other'], {
+          cwd: tmp,
+          env: envWithDashAsSh(tmp),
+          stdio: ['ignore', 'ignore', 'pipe'],
+        });
+        let stderr = '';
+        checkout.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+          stderr += chunk;
+        });
+        const closed = once(checkout, 'close');
+        waitForHook = closed;
+        const deadline = Date.now() + 10_000;
+        while (!existsSync(join(tmp, '.git', 'hook-started')) && Date.now() < deadline) {
+          await delay(20);
+        }
+        expect(existsSync(join(tmp, '.git', 'hook-started'))).toBe(true);
+
+        expect(install('.vite-hooks').isError).toBe(false);
+        writeFileSync(join(tmp, '.git', 'hook-release'), '');
+        const [code] = await closed;
+
+        expect(stderr).not.toMatch(/error|illegal/i);
+        expect(code).toBe(0);
+      } finally {
+        if (waitForHook) {
+          // When an assertion fails before the release, end the hook before the cleanup.
+          writeFileSync(join(tmp, '.git', 'hook-release'), '');
+          await waitForHook;
+        }
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+    15_000,
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a hook running when an older vp config rewrites the dispatcher in place',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-rewrite-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
+        expect(install('.vite-hooks').isError).toBe(false);
+
+        // vite-plus 1.8.0 and earlier write in place, for example after a checkout
+        // of a branch that pins one. The new bytes are not valid shell, so the
+        // checkout fails if the shell reads the dispatcher after the hook.
+        commitPostCheckoutHook(tmp, ["printf '%2048s' '' | tr ' ' ')' > .vite-hooks/_/h"]);
+
+        const checkout = spawnSync('git', ['checkout', '-b', 'other'], {
+          cwd: tmp,
+          encoding: 'utf8',
+          env: envWithDashAsSh(tmp),
+        });
+        expect(checkout.stderr).not.toMatch(/error|illegal/i);
+        expect(checkout.status).toBe(0);
       } finally {
         process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });

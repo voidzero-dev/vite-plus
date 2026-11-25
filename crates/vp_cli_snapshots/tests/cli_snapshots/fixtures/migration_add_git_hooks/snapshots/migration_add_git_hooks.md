@@ -83,6 +83,8 @@ hook dispatcher script content
 
 ```
 #!/usr/bin/env sh
+# Read the whole file before the hook runs. A hook that runs vp config can rewrite it.
+{
 { [ "$HUSKY" = "2" ] || [ "$VP_GIT_HOOKS" = "2" ] || [ "$VITE_GIT_HOOKS" = "2" ]; } && set -x
 n=$(basename "$0")
 s=$(dirname "$(dirname "$0")")/$n
@@ -116,6 +118,7 @@ c=$?
 [ $c != 0 ] && echo "VITE+ - $n script failed (code $c)"
 [ $c = 127 ] && echo "VITE+ - command not found in PATH=$PATH"
 exit $c
+}
 ```
 
 ## `vpt print-file .vite-hooks/_/pre-commit`
