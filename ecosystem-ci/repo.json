@@ -80,7 +80,7 @@
   "vinext": {
     "repository": "https://github.com/cloudflare/vinext.git",
     "branch": "main",
-    "hash": "516cbea80795830df8e2350c93b2a171bd899384",
+    "hash": "b0f179fdbe53143c60edbd892e596d3d69607381",
     "forceFreshMigration": true
   },
   "videojs-v10": {
