@@ -36,6 +36,7 @@ check package.json
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@cloudflare/oxlint-config": "^0.2.0",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -56,6 +57,7 @@ check package.json
 check vite config has cache enabled
 
 ```
+import cloudflare from "@cloudflare/oxlint-config/vite-plus";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
@@ -64,14 +66,38 @@ export default defineConfig({
   },
   fmt: {},
   lint: {
+    extends: [cloudflare],
+    env: cloudflare.env,
+    ignorePatterns: cloudflare.ignorePatterns,
+    options: { typeCheck: true },
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
-    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
-    options: { typeAware: true, typeCheck: true },
+    rules: {
+      "no-console": ["error", { allow: ["error"] }],
+      "typescript/no-non-null-assertion": "off",
+      "vite-plus/prefer-vite-plus-imports": "error",
+    },
   },
   run: {
     cache: true,
   },
 });
+```
+
+## `vpt write-file vite-plus-monorepo/equality.js 'export const isMissing = (value) => value == null;'`
+
+
+## `cd vite-plus-monorepo && vp lint --format unix equality.js`
+
+the Cloudflare preset rejects loose equality with null
+
+**Exit code:** 1
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+equality.js:1:43: Expected === and instead saw == [Error/eslint(eqeqeq)]
+
+1 problem
 ```
 
 ## `vpt print-file vite-plus-monorepo/pnpm-workspace.yaml`
@@ -271,9 +297,9 @@ monorepo package create without --editor should not write VS Code config
 vite-plus-monorepo/apps/vite-plus-application/.vscode: missing
 ```
 
-## `cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/no-editor --no-editor`
+## `cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/no-editor --no-editor -- --template vanilla-ts`
 
-create application with explicit editor opt-out inside monorepo
+create a vanilla-ts application with explicit editor opt-out inside monorepo
 
 
 ## `vpt stat-file vite-plus-monorepo/apps/no-editor/.vscode --assert missing`
@@ -283,6 +309,11 @@ create application with explicit editor opt-out inside monorepo
 ```
 vite-plus-monorepo/apps/no-editor/.vscode: missing
 ```
+
+## `cd vite-plus-monorepo && vp lint --format unix apps/no-editor/src/main.ts`
+
+the additional vanilla-ts app passes the workspace lint rules
+
 
 ## `cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/editor-opt-in --editor vscode`
 
@@ -408,6 +439,7 @@ check package.json
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@cloudflare/oxlint-config": "^0.2.0",
     "vite-plus": "catalog:"
   },
   "devEngines": {
