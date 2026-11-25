@@ -2,22 +2,26 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { ResolvedConfig } from 'vite/pack';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import type { DtsGeneratorEnvironment } from '../pack-dts.js';
 import {
   hasExplicitDtsGenerator,
   readIsolatedDeclarations,
   selectDtsGenerator,
   TSRS_EXPERIMENTAL_WARNING,
   withTsrsWarningSuppressed,
-  type DtsGeneratorEnvironment,
 } from '../pack-dts.js';
 
 const TSRS_URL = 'file:///bundled/tsrs/lib/version.cjs';
 const TSRS_NOTICE =
   'tsrs support is highly experimental and may change or break without notice. Some options will be unavailable.';
 
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
+
+/** The declaration options of a resolved tsdown config, as `vp pack` passes them. */
+type DtsOptions = Exclude<ResolvedConfig['dts'], false>;
 
 function createProject(files: Record<string, string>) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-pack-dts-'));
@@ -46,7 +50,7 @@ function environment(typescriptPath?: string): DtsGeneratorEnvironment {
 const noTypeScript = environment();
 const PLAIN_TSCONFIG = JSON.stringify({ compilerOptions: { strict: true } });
 
-function config(cwd: string, dts: unknown, tsconfig: false | string = 'tsconfig.json') {
+function config(cwd: string, dts: false | DtsOptions, tsconfig: false | string = 'tsconfig.json') {
   return { cwd, dts, tsconfig: tsconfig && path.join(cwd, tsconfig) };
 }
 
@@ -92,18 +96,20 @@ describe('selectDtsGenerator', () => {
     });
   });
 
-  it.each(['tsc', 'oxc', 'tsgo', { name: 'custom' }])(
-    'keeps an explicit %s generator',
-    (generator) => {
-      const cwd = createProject({ 'tsconfig.json': PLAIN_TSCONFIG });
-      const dts = { generator };
+  it.each<{ name: string; generator: DtsOptions['generator'] }>([
+    { name: 'tsc', generator: 'tsc' },
+    { name: 'oxc', generator: 'oxc' },
+    { name: 'tsgo', generator: 'tsgo' },
+    { name: 'custom', generator: { emit: () => ({ code: '' }) } },
+  ])('keeps an explicit $name generator', ({ generator }) => {
+    const cwd = createProject({ 'tsconfig.json': PLAIN_TSCONFIG });
+    const dts = { generator };
 
-      expect(selectDtsGenerator(config(cwd, dts), noTypeScript)).toEqual({
-        kind: 'unchanged',
-        dts,
-      });
-    },
-  );
+    expect(selectDtsGenerator(config(cwd, dts), noTypeScript)).toEqual({
+      kind: 'unchanged',
+      dts,
+    });
+  });
 
   it('supplies the bundled tsrs to an explicit tsrs generator', () => {
     const cwd = createProject({ 'tsconfig.json': PLAIN_TSCONFIG });
@@ -118,7 +124,7 @@ describe('selectDtsGenerator', () => {
 
   it('keeps a user tsrs moduleUrl', () => {
     const cwd = createProject({ 'tsconfig.json': PLAIN_TSCONFIG });
-    const dts = { generator: 'tsrs', tsrs: { moduleUrl: 'file:///custom/tsrs.cjs' } };
+    const dts: DtsOptions = { generator: 'tsrs', tsrs: { moduleUrl: 'file:///custom/tsrs.cjs' } };
 
     expect(selectDtsGenerator(config(cwd, dts), noTypeScript).dts).toBe(dts);
   });
@@ -126,7 +132,7 @@ describe('selectDtsGenerator', () => {
   it.each([
     ['tsc.vue', { tsc: { vue: true } }],
     ['the deprecated vue option', { vue: true }],
-    ['custom languages', { customLanguages: [{}] }],
+    ['custom languages', { customLanguages: [{ extensionPatterns: [/\.custom$/] }] }],
   ])('keeps upstream selection for %s', (_name, dts) => {
     const cwd = createProject({ 'tsconfig.json': PLAIN_TSCONFIG });
 
@@ -263,6 +269,17 @@ describe('readIsolatedDeclarations', () => {
     expect(readIsolatedDeclarations(path.join(cwd, 'reset.json'))).toBe(false);
   });
 
+  it('reads a base that several extends entries share', () => {
+    const cwd = createProject({
+      'tsconfig.json': JSON.stringify({ extends: ['./a.json', './b.json'] }),
+      'a.json': JSON.stringify({ extends: './base.json' }),
+      'b.json': JSON.stringify({ extends: './base.json' }),
+      'base.json': JSON.stringify({ compilerOptions: { strict: true } }),
+    });
+
+    expect(readIsolatedDeclarations(path.join(cwd, 'tsconfig.json'))).toBe(false);
+  });
+
   it('returns undefined for an unreadable chain', () => {
     const cwd = createProject({
       'invalid.json': '{',
@@ -289,11 +306,12 @@ describe('warning suppression', () => {
     expect(withTsrsWarningSuppressed([/a/, 'b'])).toEqual([/a/, 'b', TSRS_EXPERIMENTAL_WARNING]);
 
     const suppress = withTsrsWarningSuppressed((message) => message === 'custom');
-    expect(typeof suppress).toBe('function');
-    const matches = suppress as (message: string) => boolean;
-    expect(matches('custom')).toBe(true);
-    expect(matches(TSRS_NOTICE)).toBe(true);
-    expect(matches('other')).toBe(false);
+    if (typeof suppress !== 'function') {
+      throw new TypeError('Expected a suppressWarnings function');
+    }
+    expect(suppress('custom')).toBe(true);
+    expect(suppress(TSRS_NOTICE)).toBe(true);
+    expect(suppress('other')).toBe(false);
   });
 
   it('detects an explicit generator', () => {

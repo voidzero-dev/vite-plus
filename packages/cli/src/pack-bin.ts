@@ -182,7 +182,7 @@ cli
           config.configDeps.forEach((dep) => configDeps.add(dep));
           // tsdown has resolved declaration enablement, including inference from package.json.
           const selection = selectDtsGenerator(config, dtsEnvironment);
-          config.dts = selection.dts as ResolvedConfig['dts'];
+          config.dts = selection.dts;
           if (selection.kind === 'tsrs') {
             tsrsConfig ??= config;
           } else if (selection.kind === 'unchanged') {

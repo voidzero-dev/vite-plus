@@ -14,9 +14,12 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
+import type { ParseError } from 'jsonc-parser';
+import { parse as parseJsonc } from 'jsonc-parser';
 
 import { resolveBundled } from './utils/constants.ts';
+import type { JsonValue } from './utils/json-value.ts';
+import { isJsonObject, isObjectValue, parseJsonObject } from './utils/json-value.ts';
 
 /**
  * The declaration plugin prints this notice the first time it runs `tsrs`.
@@ -39,9 +42,9 @@ export interface DtsGeneratorOptions {
   generator?: unknown;
   cwd?: string;
   tsconfig?: string | boolean;
-  compilerOptions?: Record<string, unknown>;
-  tsconfigRaw?: Record<string, unknown>;
-  customLanguages?: unknown[];
+  compilerOptions?: { isolatedDeclarations?: unknown };
+  tsconfigRaw?: object;
+  customLanguages?: ReadonlyArray<unknown>;
   tsc?: { vue?: unknown };
   /** Deprecated alias of `tsc.vue`. */
   vue?: unknown;
@@ -49,10 +52,10 @@ export interface DtsGeneratorOptions {
 }
 
 /** The resolved tsdown config fields that the selection reads. */
-export interface DtsGeneratorConfig {
+export interface DtsGeneratorConfig<T extends DtsGeneratorOptions> {
   cwd: string;
   tsconfig: false | string;
-  dts: unknown;
+  dts: false | T;
 }
 
 export interface DtsGeneratorEnvironment {
@@ -62,13 +65,13 @@ export interface DtsGeneratorEnvironment {
   tsrsModuleUrl(): string;
 }
 
-export type DtsGeneratorSelection =
+export type DtsGeneratorSelection<T extends DtsGeneratorOptions> =
   /** Declarations are off, or upstream keeps its selection. */
-  | { kind: 'unchanged'; dts: unknown; typescriptPath?: string }
+  | { kind: 'unchanged'; dts: false | T; typescriptPath?: string }
   /** The user selected `tsrs`. Only a missing `moduleUrl` was filled. */
-  | { kind: 'explicit-tsrs'; dts: DtsGeneratorOptions }
+  | { kind: 'explicit-tsrs'; dts: T }
   /** Vite+ selected `tsrs` because `typescript` did not resolve. */
-  | { kind: 'tsrs'; dts: DtsGeneratorOptions };
+  | { kind: 'tsrs'; dts: T };
 
 /**
  * The environment of the installed `vite-plus`. The declaration plugin is
@@ -82,7 +85,9 @@ export function createDtsGeneratorEnvironment(): DtsGeneratorEnvironment {
       for (const specifier of ['typescript/package.json', 'typescript']) {
         try {
           return require.resolve(specifier);
-        } catch {}
+        } catch {
+          // Try the next specifier. TypeScript 7 may not export `package.json`.
+        }
       }
       return undefined;
     },
@@ -94,23 +99,19 @@ export function createDtsGeneratorEnvironment(): DtsGeneratorEnvironment {
 
 /** The version of the `tsrs` package that `vite-plus` ships. */
 export function bundledTsrsVersion(): string {
-  const manifest = JSON.parse(fs.readFileSync(resolveBundled('tsrs/package.json'), 'utf8')) as {
-    version: string;
-  };
-  return manifest.version;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function hasKeys(value: unknown): boolean {
-  return isObject(value) && Object.keys(value).length > 0;
+  const file = resolveBundled('tsrs/package.json');
+  const { version } = parseJsonObject(fs.readFileSync(file, 'utf8'), file);
+  if (typeof version !== 'string') {
+    throw new TypeError(`Expected a version in ${file}`);
+  }
+  return version;
 }
 
 /** Whether a `pack.dts` value sets `generator` itself. */
-export function hasExplicitDtsGenerator(dts: unknown): boolean {
-  return isObject(dts) && dts.generator !== undefined;
+export function hasExplicitDtsGenerator(
+  dts: boolean | string | DtsGeneratorOptions | undefined,
+): boolean {
+  return typeof dts === 'object' && dts.generator !== undefined;
 }
 
 /** Adds {@link TSRS_EXPERIMENTAL_WARNING} to a `suppressWarnings` value and keeps its entries. */
@@ -129,10 +130,7 @@ export function withTsrsWarningSuppressed(
   ];
 }
 
-function withTsrsModuleUrl(
-  dts: DtsGeneratorOptions,
-  env: DtsGeneratorEnvironment,
-): DtsGeneratorOptions {
+function withTsrsModuleUrl<T extends DtsGeneratorOptions>(dts: T, env: DtsGeneratorEnvironment): T {
   if (dts.tsrs?.moduleUrl !== undefined) {
     return dts;
   }
@@ -145,19 +143,18 @@ function withTsrsModuleUrl(
  * Throws when Vite+ would select `tsrs` but the config sets compiler options
  * that native generators do not apply to the program.
  */
-export function selectDtsGenerator(
-  config: DtsGeneratorConfig,
+export function selectDtsGenerator<T extends DtsGeneratorOptions>(
+  config: DtsGeneratorConfig<T>,
   env: DtsGeneratorEnvironment,
-): DtsGeneratorSelection {
+): DtsGeneratorSelection<T> {
   const { dts } = config;
-  if (!isObject(dts)) {
+  if (dts === false) {
     return { kind: 'unchanged', dts };
   }
-  const options = dts as DtsGeneratorOptions;
-  if (options.generator === 'tsrs') {
-    return { kind: 'explicit-tsrs', dts: withTsrsModuleUrl(options, env) };
+  if (dts.generator === 'tsrs') {
+    return { kind: 'explicit-tsrs', dts: withTsrsModuleUrl(dts, env) };
   }
-  if (options.generator !== undefined || usesCustomLanguages(options)) {
+  if (dts.generator !== undefined || usesCustomLanguages(dts)) {
     return { kind: 'unchanged', dts };
   }
 
@@ -167,21 +164,21 @@ export function selectDtsGenerator(
   }
 
   // Native generators need a tsconfig file. Without one, keep the upstream error.
-  const tsconfigPath = resolveDtsTsconfig(config, options);
+  const tsconfigPath = resolveDtsTsconfig(config, dts);
   if (tsconfigPath === undefined) {
     return { kind: 'unchanged', dts };
   }
 
   // Upstream selects Oxc for isolated declarations, which works without TypeScript.
   const isolatedDeclarations =
-    options.compilerOptions?.isolatedDeclarations ?? readIsolatedDeclarations(tsconfigPath);
+    dts.compilerOptions?.isolatedDeclarations ?? readIsolatedDeclarations(tsconfigPath);
   // `undefined` means that the tsconfig chain could not be read. Upstream reports that error.
   if (isolatedDeclarations !== false) {
     return { kind: 'unchanged', dts };
   }
 
-  const overrides = (['compilerOptions', 'tsconfigRaw'] as const).filter((key) =>
-    hasKeys(options[key]),
+  const overrides = (['compilerOptions', 'tsconfigRaw'] as const).filter(
+    (key) => Object.keys(dts[key] ?? {}).length > 0,
   );
   if (overrides.length > 0) {
     const names = overrides.map((key) => `\`dts.${key}\``).join(' and ');
@@ -192,7 +189,7 @@ export function selectDtsGenerator(
     );
   }
 
-  return { kind: 'tsrs', dts: withTsrsModuleUrl({ ...options, generator: 'tsrs' }, env) };
+  return { kind: 'tsrs', dts: withTsrsModuleUrl({ ...dts, generator: 'tsrs' }, env) };
 }
 
 function usesCustomLanguages(dts: DtsGeneratorOptions): boolean {
@@ -204,7 +201,7 @@ function usesCustomLanguages(dts: DtsGeneratorOptions): boolean {
  * its resolved `tsconfig` to the plugin, and `dts.tsconfig` overrides it.
  */
 function resolveDtsTsconfig(
-  config: DtsGeneratorConfig,
+  config: Pick<DtsGeneratorConfig<DtsGeneratorOptions>, 'cwd' | 'tsconfig'>,
   dts: DtsGeneratorOptions,
 ): string | undefined {
   const cwd = dts.cwd ?? config.cwd;
@@ -237,7 +234,7 @@ function findTsconfig(dir: string): string | undefined {
 /**
  * Reads the effective `compilerOptions.isolatedDeclarations` of a tsconfig,
  * including `extends`. Returns `undefined` when a file in the chain cannot be
- * read or resolved.
+ * read or resolved, or when the chain has a cycle.
  */
 export function readIsolatedDeclarations(tsconfigPath: string): boolean | undefined {
   const value = readOption(tsconfigPath, new Set());
@@ -246,25 +243,33 @@ export function readIsolatedDeclarations(tsconfigPath: string): boolean | undefi
 
 const UNREADABLE = Symbol('unreadable');
 
-function readOption(file: string, seen: Set<string>): boolean | undefined | typeof UNREADABLE {
-  if (seen.has(file)) {
+type OptionValue = boolean | undefined | typeof UNREADABLE;
+
+/** `ancestors` holds the files on the current `extends` path, so a shared base is not a cycle. */
+function readOption(file: string, ancestors: Set<string>): OptionValue {
+  if (ancestors.has(file)) {
     return UNREADABLE;
   }
-  seen.add(file);
+  ancestors.add(file);
+  const value = readOwnOrInheritedOption(file, ancestors);
+  ancestors.delete(file);
+  return value;
+}
 
+function readOwnOrInheritedOption(file: string, ancestors: Set<string>): OptionValue {
+  const errors: Array<ParseError> = [];
   let tsconfig: unknown;
-  const errors: ParseError[] = [];
   try {
     tsconfig = parseJsonc(fs.readFileSync(file, 'utf8'), errors, { allowTrailingComma: true });
   } catch {
     return UNREADABLE;
   }
-  if (errors.length > 0 || !isObject(tsconfig)) {
+  if (errors.length > 0 || !isJsonObject(tsconfig)) {
     return UNREADABLE;
   }
 
-  const compilerOptions = tsconfig.compilerOptions;
-  if (isObject(compilerOptions)) {
+  const { compilerOptions } = tsconfig;
+  if (isObjectValue(compilerOptions)) {
     const value = compilerOptions.isolatedDeclarations;
     // `null` resets an inherited value to the default, which is `false`.
     if (typeof value === 'boolean' || value === null) {
@@ -273,7 +278,7 @@ function readOption(file: string, seen: Set<string>): boolean | undefined | type
   }
 
   const extendsValue = tsconfig.extends;
-  const parents =
+  const parents: Array<JsonValue> =
     typeof extendsValue === 'string'
       ? [extendsValue]
       : Array.isArray(extendsValue)
@@ -285,7 +290,7 @@ function readOption(file: string, seen: Set<string>): boolean | undefined | type
     if (parent === undefined) {
       return UNREADABLE;
     }
-    const value = readOption(parent, seen);
+    const value = readOption(parent, ancestors);
     if (value !== undefined) {
       return value;
     }
@@ -308,7 +313,9 @@ function resolveExtends(specifier: string, fromFile: string): string | undefined
   for (const candidate of [specifier, `${specifier}.json`, `${specifier}/tsconfig.json`]) {
     try {
       return require.resolve(candidate);
-    } catch {}
+    } catch {
+      // Try the next form. TypeScript resolves these forms for package `extends`.
+    }
   }
   return undefined;
 }
