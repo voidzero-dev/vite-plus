@@ -20,7 +20,7 @@ The change does not replace `tsc` tasks, the editor's compiler, Vue/Volar integr
 | Declaration plugin bundled through tsdown | `0.28.8`, no `tsrs` generator | `0.30.2`. The `tsrs` generator first ships in `0.29.0`.            |
 | `tsrs`, a CLI dependency used by lint     | `=7.1.0-beta.tsrs4`           | Unchanged, and also used by pack                                   |
 | Bundled Rolldown                          | `1.2.19`                      | `1.3.3`, which tsdown `0.23.7` requires (`~1.3.0`)                 |
-| Bundled Vite                              | `8.3.8`                       | `8.4.0-beta.1`                                                     |
+| Bundled Vite                              | `8.3.8`                       | `8.4.0-beta.2`                                                     |
 
 [#3511](https://github.com/voidzero-dev/vite-plus/pull/3511) performs this upgrade. It is a prerequisite, not part of this design, and this change merges after it. See [Out of scope](#out-of-scope) for the upstream changes that it handles and the ones that stay open.
 
