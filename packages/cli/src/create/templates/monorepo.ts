@@ -8,11 +8,13 @@ import { removeConfigKey } from '../../../binding/index.js';
 import { rewriteMonorepoProject, supportsCatalog } from '../../migration/migrator.ts';
 import type { WorkspaceInfo } from '../../types/index.ts';
 import { PackageManager } from '../../types/index.ts';
+import { VITE_PLUS_VERSION } from '../../utils/constants.ts';
 import type { JsonObject } from '../../utils/json-value.ts';
 import { isObjectValue } from '../../utils/json-value.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { getScopeFromPackageName } from '../../utils/package.ts';
 import { templatesDir } from '../../utils/path.ts';
+import { isPreviewVitePlusVersion } from '../../utils/preview-registry.ts';
 import { editYamlFile, readYamlFile } from '../../utils/yaml.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
@@ -45,9 +47,15 @@ export async function executeMonorepoTemplate(
   copyDir(templateDir, fullPath);
   renameFiles(fullPath);
 
-  // set project name
   editJsonFile(path.join(fullPath, 'package.json'), (pkg) => {
     pkg.name = templateInfo.packageName;
+    if (
+      workspaceInfo.packageManager === PackageManager.npm &&
+      (VITE_PLUS_VERSION === '0.0.0' || isPreviewVitePlusVersion(VITE_PLUS_VERSION))
+    ) {
+      // npm checks the preset's optional Vite+ peer against the CI or preview version.
+      pkg.overrides = { '@cloudflare/oxlint-config': { 'vite-plus': '$vite-plus' } };
+    }
     return pkg;
   });
 

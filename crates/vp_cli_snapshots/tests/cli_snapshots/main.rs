@@ -1798,7 +1798,7 @@ fn main() {
     // configs resolve to the checkout packages via Node's upward walk (the
     // staged workspaces have no node_modules of their own); the linked
     // packages' own dependencies then resolve at their real location.
-    // Anything else a fixture imports must be vendored inside the fixture.
+    // Vendor any additional fixture-specific dependencies inside the fixture.
     {
         let repo_root = flavor::repo_root();
         let node_modules = tmp_dir_path.join("node_modules");
@@ -1809,6 +1809,13 @@ fn main() {
         // `vite` resolves to the core package, matching the vite -> core
         // override installed in migrated projects.
         flavor::link_dir(&repo_root.join("packages/core"), &node_modules.join("vite"));
+        // Monorepo creation formats the generated config even when fixtures skip installation.
+        let cloudflare = node_modules.join("@cloudflare");
+        std::fs::create_dir_all(&cloudflare).unwrap();
+        flavor::link_dir(
+            &repo_root.join("packages/cli/node_modules/@cloudflare/oxlint-config"),
+            &cloudflare.join("oxlint-config"),
+        );
     }
 
     let fixtures_dir = flavor::manifest_dir().join("tests/cli_snapshots/fixtures");
