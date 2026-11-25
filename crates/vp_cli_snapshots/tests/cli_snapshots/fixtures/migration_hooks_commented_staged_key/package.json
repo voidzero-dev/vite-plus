@@ -1,0 +1,16 @@
+{
+  "name": "migration-hooks-commented-staged-key",
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "lint-staged": {
+    "*.ts": "vp check --fix"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.16.0",
+      "onFail": "download"
+    }
+  }
+}

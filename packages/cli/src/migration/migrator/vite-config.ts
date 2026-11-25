@@ -938,9 +938,7 @@ export function hasStagedConfigInViteConfig(projectPath: string): boolean {
   if (!configs.viteConfig) {
     return false;
   }
-  const viteConfigPath = path.join(projectPath, configs.viteConfig);
-  const content = fs.readFileSync(viteConfigPath, 'utf8');
-  return /\bstaged\s*:/.test(content);
+  return hasConfigKey(path.join(projectPath, configs.viteConfig), 'staged');
 }
 
 /**

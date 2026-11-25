@@ -1,0 +1,11 @@
+[[case]]
+name = "migration_hooks_commented_staged_key"
+vp = "global"
+comment = "A commented-out `staged:` must not count as existing staged config, or package.json lint-staged is deleted without being merged."
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--hooks"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "lint-staged should be removed only because it was merged", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "staged config should be merged from package.json", continue-on-failure = true },
+]
