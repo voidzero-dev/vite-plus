@@ -1,4 +1,4 @@
-use crate::script_rewrite::{ScriptRewriteConfig, rewrite_script};
+use crate::script_rewrite::{FlagConversion, ScriptRewriteConfig, rewrite_script};
 
 const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
     source_command: "eslint",
@@ -10,7 +10,6 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--no-inline-config",
         "--color",
         "--no-color",
-        "--no-warn-ignored",
         "--exit-on-fatal-error",
         "--stats",
         "--pass-on-unpruned-suppressions",
@@ -31,7 +30,12 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--flag",
         "--concurrency",
     ],
-    flag_conversions: &[],
+    // ESLint only warns about ignored files, but Oxlint fails when they leave nothing to lint.
+    flag_conversions: &[FlagConversion {
+        source_flags: &["--no-warn-ignored"],
+        target_flag: "--no-error-on-unmatched-pattern",
+        dedup_flag: "--no-error-on-unmatched-pattern",
+    }],
 };
 
 /// Rewrite a single script: rename `eslint` → `vp lint` and strip ESLint-only flags.
@@ -71,6 +75,17 @@ mod tests {
         // Oxlint supports this flag with the same meaning, so it is kept
         assert_eq!(
             rewrite_eslint_script("eslint --no-error-on-unmatched-pattern --fix ."),
+            "vp lint --no-error-on-unmatched-pattern --fix ."
+        );
+        // ignored-only file lists keep succeeding, as they did with ESLint
+        assert_eq!(
+            rewrite_eslint_script("eslint --max-warnings 0 --no-warn-ignored --fix"),
+            "vp lint --max-warnings 0 --no-error-on-unmatched-pattern --fix"
+        );
+        assert_eq!(
+            rewrite_eslint_script(
+                "eslint --no-warn-ignored --no-error-on-unmatched-pattern --fix ."
+            ),
             "vp lint --no-error-on-unmatched-pattern --fix ."
         );
         assert_eq!(rewrite_eslint_script("eslint --no-inline-config ."), "vp lint .");
@@ -150,7 +165,6 @@ mod tests {
             "--color",
             "--no-color",
             "--stats",
-            "--no-warn-ignored",
             "--exit-on-fatal-error",
             "--pass-on-unpruned-suppressions",
         ] {

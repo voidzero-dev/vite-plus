@@ -8,6 +8,6 @@
     "vite": "^7.0.0"
   },
   "lint-staged": {
-    "*.ts": "eslint --no-color --fix"
+    "*.ts": "eslint --no-color --no-warn-ignored --fix"
   }
 }
