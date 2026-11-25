@@ -13,7 +13,6 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--color",
         "--no-color",
         "--no-warn-ignored",
-        "--pass-on-no-patterns",
         "--exit-on-fatal-error",
         "--stats",
         "--pass-on-unpruned-suppressions",
@@ -41,7 +40,6 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--concurrency",
         "--suppress-rule",
         "--suppressions-location",
-        "--fix-type",
     ],
     flag_conversions: &[],
 };
@@ -170,7 +168,6 @@ mod tests {
             "--report-unused-inline-configs warn",
             "--flag unstable_config_lookup_from_file",
             "--concurrency 2",
-            "--fix-type problem",
             "--suppress-rule no-console",
             "--suppressions-location suppressions.json",
             "--no-config-lookup",
@@ -178,7 +175,6 @@ mod tests {
             "--no-color",
             "--stats",
             "--no-warn-ignored",
-            "--pass-on-no-patterns",
             "--exit-on-fatal-error",
             "--pass-on-unpruned-suppressions",
         ] {
@@ -188,6 +184,16 @@ mod tests {
                 "{flags}"
             );
         }
+
+        // Stripping these would widen what the script fixes, so they stay and fail loudly.
+        assert_eq!(
+            rewrite_eslint_script("eslint --fix --pass-on-no-patterns $FILES"),
+            "vp lint --fix --pass-on-no-patterns $FILES"
+        );
+        assert_eq!(
+            rewrite_eslint_script("eslint --fix --fix-type layout src"),
+            "vp lint --fix --fix-type layout src"
+        );
     }
 
     #[test]
