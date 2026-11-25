@@ -197,6 +197,7 @@ const guideSidebar = [
     items: [
       { text: 'IDE Integration', link: '/guide/ide-integration' },
       { text: 'CI', link: '/guide/ci' },
+      { text: 'Cloudflare Workers Builds', link: '/guide/cloudflare-workers' },
       { text: 'Docker', link: '/guide/docker' },
     ],
   },
