@@ -9,16 +9,39 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--no-error-on-unmatched-pattern",
         "--debug",
         "--no-inline-config",
+        "--no-config-lookup",
+        "--color",
+        "--no-color",
+        "--no-warn-ignored",
+        "--pass-on-no-patterns",
+        "--exit-on-fatal-error",
+        "--stats",
+        "--pass-on-unpruned-suppressions",
     ],
     value_flags: &[
+        // Migration moves the ESLint config into vite.config.ts and deletes the original file.
+        "-c",
+        "--config",
         "--ext",
         "--rulesdir",
         "--resolve-plugins-relative-to",
         "--parser",
         "--parser-options",
         "--plugin",
+        "-o",
         "--output-file",
         "--env",
+        "--cache-location",
+        "--cache-file",
+        "--cache-strategy",
+        "--global",
+        "--rule",
+        "--report-unused-inline-configs",
+        "--flag",
+        "--concurrency",
+        "--suppress-rule",
+        "--suppressions-location",
+        "--fix-type",
     ],
     flag_conversions: &[],
 };
@@ -62,6 +85,29 @@ mod tests {
             "vp lint --fix ."
         );
         assert_eq!(rewrite_eslint_script("eslint --no-inline-config ."), "vp lint .");
+        assert_eq!(rewrite_eslint_script("eslint --no-color --stats --fix ."), "vp lint --fix .");
+
+        // the migrated config lives in vite.config.ts, so config paths are dropped
+        assert_eq!(rewrite_eslint_script("eslint -c eslint.config.mjs ."), "vp lint .");
+        assert_eq!(rewrite_eslint_script("eslint --config=eslint.config.mjs ."), "vp lint .");
+
+        // Oxlint has no cache, so cache options go with --cache
+        assert_eq!(
+            rewrite_eslint_script(
+                "eslint --cache --cache-location node_modules/.cache/eslint --cache-strategy content --fix ."
+            ),
+            "vp lint --fix ."
+        );
+        assert_eq!(
+            rewrite_eslint_script("eslint -o report.txt --rule 'no-console: error' ."),
+            "vp lint ."
+        );
+
+        // flags Oxlint accepts stay
+        assert_eq!(
+            rewrite_eslint_script("eslint --quiet --max-warnings 0 --ignore-pattern dist ."),
+            "vp lint --quiet --max-warnings 0 --ignore-pattern dist ."
+        );
 
         // multiple flags stripped at once
         assert_eq!(
