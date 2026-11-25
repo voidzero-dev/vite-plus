@@ -18,9 +18,6 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--pass-on-unpruned-suppressions",
     ],
     value_flags: &[
-        // Migration moves the ESLint config into vite.config.ts and deletes the original file.
-        "-c",
-        "--config",
         "--ext",
         "--rulesdir",
         "--resolve-plugins-relative-to",
@@ -34,7 +31,6 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--cache-file",
         "--cache-strategy",
         "--global",
-        "--rule",
         "--report-unused-inline-configs",
         "--flag",
         "--concurrency",
@@ -85,10 +81,6 @@ mod tests {
         assert_eq!(rewrite_eslint_script("eslint --no-inline-config ."), "vp lint .");
         assert_eq!(rewrite_eslint_script("eslint --no-color --stats --fix ."), "vp lint --fix .");
 
-        // the migrated config lives in vite.config.ts, so config paths are dropped
-        assert_eq!(rewrite_eslint_script("eslint -c eslint.config.mjs ."), "vp lint .");
-        assert_eq!(rewrite_eslint_script("eslint --config=eslint.config.mjs ."), "vp lint .");
-
         // Oxlint has no cache, so cache options go with --cache
         assert_eq!(
             rewrite_eslint_script(
@@ -96,10 +88,7 @@ mod tests {
             ),
             "vp lint --fix ."
         );
-        assert_eq!(
-            rewrite_eslint_script("eslint -o report.txt --rule 'no-console: error' ."),
-            "vp lint ."
-        );
+        assert_eq!(rewrite_eslint_script("eslint -o report.txt ."), "vp lint .");
 
         // flags Oxlint accepts stay
         assert_eq!(
@@ -157,14 +146,11 @@ mod tests {
     fn test_rewrite_eslint_strips_flags_oxlint_rejects() {
         // Each value flag must also drop its value; a boolean flag must keep the next token.
         for flags in [
-            "-c eslint.config.mjs",
-            "--config eslint.config.mjs",
             "-o report.txt",
             "--cache-location .eslintcache",
             "--cache-file .eslintcache",
             "--cache-strategy content",
             "--global foo",
-            "--rule 'no-console: error'",
             "--report-unused-inline-configs warn",
             "--flag unstable_config_lookup_from_file",
             "--concurrency 2",
@@ -185,7 +171,15 @@ mod tests {
             );
         }
 
-        // Stripping these would widen what the script fixes, so they stay and fail loudly.
+        // Stripping these would change what the script checks or fixes, so they stay and fail loudly.
+        assert_eq!(
+            rewrite_eslint_script("eslint -c eslint.ci.config.mjs src"),
+            "vp lint -c eslint.ci.config.mjs src"
+        );
+        assert_eq!(
+            rewrite_eslint_script("eslint --rule 'no-console: error' src"),
+            "vp lint --rule 'no-console: error' src"
+        );
         assert_eq!(
             rewrite_eslint_script("eslint --fix --pass-on-no-patterns $FILES"),
             "vp lint --fix --pass-on-no-patterns $FILES"
