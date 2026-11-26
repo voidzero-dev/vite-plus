@@ -99,6 +99,7 @@ describe('generated metadata through native Rust', () => {
     }
     expect(complete(['vp', 'test', '--no-i'])).toContain('--no-isolate');
     expect(complete(['vp', 'test', '--no-file-p'])).toContain('--no-file-parallelism');
+    expect(complete(['vp', 'test', '--max-w'])).toContain('--max-workers');
     for (const flag of ['--maxWorkers', '--max-workers']) {
       expect(complete(['vp', 'test', flag, ''])).toEqual([]);
     }
