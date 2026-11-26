@@ -52,7 +52,8 @@ describe('public createCLI metadata contract (installed Vitest)', () => {
     for (const command of data.commands) {
       expect(Object.keys(command).toSorted()).toEqual(['name', 'options']);
     }
-    expect(JSON.parse(JSON.stringify(data))).toEqual(data);
+    const serialized = JSON.stringify(data);
+    expect(JSON.parse(serialized)).toStrictEqual(data);
     expect(metadata()).toEqual(data);
   });
 

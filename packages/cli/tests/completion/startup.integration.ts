@@ -24,7 +24,7 @@ import { resolveCompletionConsumer } from '../../../tools/src/completion-consume
 import { extractCompletionMetadata } from '../../build/completion-metadata.ts';
 import { VITEST_VERSION } from '../../src/utils/constants.ts';
 
-const temporary: string[] = [];
+const temporary: Array<string> = [];
 afterEach(() => {
   for (const root of temporary.splice(0)) {
     rmSync(root, { recursive: true, force: true });
@@ -54,7 +54,7 @@ function fixture() {
   const log = path.join(root, 'node-called');
   writeFileSync(
     path.join(canary, 'node'),
-    `#!/bin/sh\nprintf called >> '${log.replaceAll("'", "'\\''")}'\nexit 93\n`,
+    `#!/bin/sh\nprintf called >> '${log.replaceAll("'", String.raw`'\''`)}'\nexit 93\n`,
   );
   chmodSync(path.join(canary, 'node'), 0o755);
   writeFileSync(
@@ -83,15 +83,21 @@ function fixture() {
   }
   return { root, home, project, raw, env, log };
 }
-function run(f: ReturnType<typeof fixture>, binary: string, args: string[], completion = true) {
+function run(
+  f: ReturnType<typeof fixture>,
+  binary: string,
+  args: Array<string>,
+  completion = true,
+) {
+  const env = { ...f.env };
+  if (completion) {
+    Object.assign(env, { VP_COMPLETE: 'bash', _CLAP_COMPLETE_INDEX: '2', _CLAP_IFS: '\n' });
+  }
   return spawnSync(binary, args, {
     cwd: f.project,
     encoding: 'utf8',
-    timeout: 15000,
-    env: {
-      ...f.env,
-      ...(completion ? { VP_COMPLETE: 'bash', _CLAP_COMPLETE_INDEX: '2', _CLAP_IFS: '\n' } : {}),
-    },
+    timeout: 15_000,
+    env,
   });
 }
 function packageMetadata(pkg: string) {
@@ -117,7 +123,7 @@ function vitestPackage(dir: string) {
     JSON.stringify({ name: 'vitest', version: VITEST_VERSION }),
   );
 }
-function snapshot(root: string): Record<string, string> {
+function snapshot(root: string) {
   const result: Record<string, string> = {};
   function walk(dir: string) {
     for (const name of readdirSync(dir).toSorted()) {
@@ -224,11 +230,10 @@ describe('read-only completion before first-start setup', () => {
     expect(result.error).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);
     expect(result.stderr).toBe('');
-    if (mode === 'valid') {
-      expect(result.stdout.split('\n').map((l) => l.split('\t')[0])).toContain('--contract-global');
-    } else {
-      expect(result.stdout).toBe('');
-    }
+    const validOutput = result.stdout
+      .split('\n')
+      .some((line) => line.split('\t')[0] === '--contract-global');
+    expect(mode === 'valid' ? validOutput : result.stdout === '').toBe(true);
     const registration = run(f, f.raw, []);
     expect(registration.status, registration.stderr).toBe(0);
     expect(registration.stderr).toBe('');

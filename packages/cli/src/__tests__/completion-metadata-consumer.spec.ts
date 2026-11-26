@@ -9,7 +9,7 @@ import {
   resolveCompletionConsumer,
 } from '../../../tools/src/completion-consumer.ts';
 
-const temporary: string[] = [];
+const temporary: Array<string> = [];
 afterEach(() => {
   for (const directory of temporary.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
@@ -138,6 +138,6 @@ describe('completion Rust consumer handoff', () => {
     expect(() =>
       cargoCompletionConsumer([message('/first/vp'), message('/second/vp')].join('\n'), root),
     ).toThrow('received 2');
-    expect(() => cargoCompletionConsumer('invalid json', root)).toThrow();
+    expect(() => cargoCompletionConsumer('invalid json', root)).toThrow(/JSON/);
   });
 });

@@ -30,15 +30,21 @@ export function resolveCompletionConsumer(
 export function cargoCompletionConsumer(output: string, root: string): string {
   const executables = new Set<string>();
   for (const line of output.split('\n').filter(Boolean)) {
-    const message = JSON.parse(line) as {
-      reason?: string;
-      target?: { name?: string; kind?: string[] };
-      executable?: string | null;
-    };
+    const message: unknown = JSON.parse(line);
     if (
+      message &&
+      typeof message === 'object' &&
+      'reason' in message &&
       message.reason === 'compiler-artifact' &&
-      message.target?.name === 'vp' &&
-      message.target.kind?.includes('bin') &&
+      'target' in message &&
+      message.target &&
+      typeof message.target === 'object' &&
+      'name' in message.target &&
+      message.target.name === 'vp' &&
+      'kind' in message.target &&
+      Array.isArray(message.target.kind) &&
+      message.target.kind.includes('bin') &&
+      'executable' in message &&
       typeof message.executable === 'string'
     ) {
       executables.add(path.resolve(root, message.executable));

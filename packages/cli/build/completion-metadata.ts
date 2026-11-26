@@ -3,7 +3,9 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-type CLI = ReturnType<(typeof import('vitest/node'))['createCLI']>;
+import type { createCLI } from 'vitest/node';
+
+type CLI = ReturnType<typeof createCLI>;
 
 // Spellings accepted by Vitest but omitted from its option declarations.
 const completionAliases = new Map([
@@ -13,7 +15,7 @@ const completionAliases = new Map([
 ]);
 
 export interface OptionMetadata {
-  flags: string[];
+  flags: Array<string>;
   description: string;
   valueMode: 'none' | 'required' | 'optional';
 }
@@ -22,11 +24,19 @@ export interface TestCompletionMetadata {
   schemaVersion: 1;
   vitePlusVersion: string;
   vitestVersion: string;
-  globalOptions: OptionMetadata[];
-  commands: {
+  globalOptions: Array<OptionMetadata>;
+  commands: Array<{
     name: string;
-    options: OptionMetadata[];
-  }[];
+    options: Array<OptionMetadata>;
+  }>;
+}
+
+function primaryFlag(option: OptionMetadata): string {
+  const flag = option.flags.find((flag) => flag.startsWith('--'));
+  if (!flag) {
+    throw new Error('Missing primary Vitest option flag');
+  }
+  return flag;
 }
 
 /** Keep CLI spelling: CAC normalizes `--no-color` to the name `color`. */
@@ -59,7 +69,7 @@ export function extractCompletionMetadata(
           ? flag.length - 2 > 256 || !/^--[A-Za-z0-9][A-Za-z0-9._-]*$/.test(flag)
           : !/^-[A-Za-z0-9]$/.test(flag),
       ) ||
-      Buffer.byteLength(value.description ?? '') > 16384
+      Buffer.byteLength(value.description ?? '') > 16_384
     ) {
       throw new Error(`Unsupported Vitest option declaration: ${value.rawName}`);
     }
@@ -110,7 +120,7 @@ export function extractCompletionMetadata(
         }
         flags.add(flag);
       }
-      const primary = option.flags.find((flag) => flag.startsWith('--'))!;
+      const primary = primaryFlag(option);
       if (scope === metadata.globalOptions) {
         globals.set(primary, option);
       } else {
@@ -128,10 +138,7 @@ export function extractCompletionMetadata(
   for (const command of metadata.commands) {
     const merged = new Map(globals);
     for (const option of command.options) {
-      merged.set(
-        option.flags.find((flag) => flag.startsWith('--'))!,
-        option,
-      );
+      merged.set(primaryFlag(option), option);
     }
     const flags = new Set<string>();
     for (const option of merged.values()) {
@@ -149,27 +156,45 @@ export function extractCompletionMetadata(
   return metadata;
 }
 
+function hasCreateCLI(runner: unknown): runner is { createCLI: typeof createCLI } {
+  return (
+    !!runner &&
+    typeof runner === 'object' &&
+    'createCLI' in runner &&
+    typeof runner.createCLI === 'function'
+  );
+}
+
+async function readVersion(file: string): Promise<string> {
+  const data: unknown = JSON.parse(await readFile(file, 'utf8'));
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !('version' in data) ||
+    typeof data.version !== 'string'
+  ) {
+    throw new Error(`Missing package version in ${file}`);
+  }
+  return data.version;
+}
+
 /** Generate after tsdown and shim synchronization have finished cleaning dist. */
 export async function writeTestCompletionMetadata(
   packageDir: string,
   expectedVitestVersion: string,
 ): Promise<TestCompletionMetadata> {
   const require = createRequire(join(packageDir, 'package.json'));
-  const packageJson = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8'));
-  const vitestPackage = JSON.parse(await readFile(require.resolve('vitest/package.json'), 'utf8'));
-  if (vitestPackage.version !== expectedVitestVersion) {
-    throw new Error(`Expected vitest@${expectedVitestVersion}, found ${vitestPackage.version}`);
+  const vitePlusVersion = await readVersion(join(packageDir, 'package.json'));
+  const vitestVersion = await readVersion(require.resolve('vitest/package.json'));
+  if (vitestVersion !== expectedVitestVersion) {
+    throw new Error(`Expected vitest@${expectedVitestVersion}, found ${vitestVersion}`);
   }
-  // Resolve from the same CLI package that owns the runner dependency. No deep
-  // imports, CLI parsing, command actions, or project configuration loading.
-  const { createCLI } = (await import(pathToFileURL(require.resolve('vitest/node')).href)) as {
-    createCLI: () => CLI;
-  };
-  const metadata = extractCompletionMetadata(
-    createCLI(),
-    packageJson.version,
-    vitestPackage.version,
-  );
+  // Resolve from the same CLI package that owns the runner dependency.
+  const runner: unknown = await import(pathToFileURL(require.resolve('vitest/node')).href);
+  if (!hasCreateCLI(runner)) {
+    throw new Error('Vitest does not export createCLI');
+  }
+  const metadata = extractCompletionMetadata(runner.createCLI(), vitePlusVersion, vitestVersion);
   const directory = join(packageDir, 'dist/completion');
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, 'test.json'), `${JSON.stringify(metadata, null, 2)}\n`);

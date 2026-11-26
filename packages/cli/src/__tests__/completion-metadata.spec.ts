@@ -12,7 +12,7 @@ import {
 } from '../../build/completion-metadata.ts';
 import { VITEST_VERSION } from '../utils/constants.ts';
 
-const temporary: string[] = [];
+const temporary: Array<string> = [];
 afterEach(async () => {
   await Promise.all(temporary.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -176,7 +176,7 @@ describe('Vitest completion metadata adapter (synthetic declarations)', () => {
     expect(() => extract(excessive)).toThrow('exceeds schema limits');
     const tooLarge = fixture();
     for (let i = 0; i < 70; i++) {
-      tooLarge.option(`--contract-${i}`, 'x'.repeat(16384));
+      tooLarge.option(`--contract-${i}`, 'x'.repeat(16_384));
     }
     expect(() => extract(tooLarge)).toThrow('exceeds schema limits');
   });

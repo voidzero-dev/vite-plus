@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { resolveCompletionConsumer } from '../../../tools/src/completion-consumer.ts';
 import { writeTestCompletionMetadata } from '../../build/completion-metadata.ts';
 import { VITEST_VERSION } from '../../src/utils/constants.ts';
-const temporary: string[] = [];
+const temporary: Array<string> = [];
 afterEach(async () => {
   await Promise.all(temporary.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -72,11 +72,11 @@ describe('generated metadata through native Rust', () => {
           options: [...data.globalOptions, ...command.options],
         })),
     ];
-    function complete(words: string[]) {
+    function complete(words: Array<string>) {
       const result = spawnSync(consumer, ['--', ...words], {
         cwd: project,
         encoding: 'utf8',
-        timeout: 15000,
+        timeout: 15_000,
         env: {
           ...process.env,
           PATH: shadowDirectory + path.delimiter + (process.env.PATH ?? ''),
@@ -140,7 +140,7 @@ describe('generated metadata through native Rust', () => {
         {
           cwd: project,
           encoding: 'utf8',
-          timeout: 15000,
+          timeout: 15_000,
           env: {
             ...process.env,
             HOME: home,
@@ -164,11 +164,11 @@ describe('generated metadata through native Rust', () => {
       expect(result.error).toBeUndefined();
       expect(result.status, result.stderr).toBe(0);
       expect(result.stderr).toBe('');
-      if (mode === 'registration') {
-        expect(result.stdout).toContain('VP_COMPLETE');
-      }
-      await expect(access(vpHome)).rejects.toThrow();
-      await expect(access(path.join(bin, '.vp-setup-complete'))).rejects.toThrow();
+      expect(mode !== 'registration' || result.stdout.includes('VP_COMPLETE')).toBe(true);
+      await expect(access(vpHome)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(access(path.join(bin, '.vp-setup-complete'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
       expect(await readdir(home)).toEqual([]);
     },
   );
