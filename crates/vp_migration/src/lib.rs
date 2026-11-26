@@ -21,7 +21,9 @@ mod source_analysis;
 mod task_cache;
 mod vite_config;
 
-pub use file_walker::{WalkResult, find_ts_files, is_directory_gitignored};
+pub use file_walker::{
+    WalkResult, find_ts_files, is_directory_gitignored, unignored_child_directories,
+};
 pub use import_rewriter::{
     BatchRewriteResult, RewriteImportsOptions, find_retained_vitest_packages,
     rewrite_imports_in_directory, rewrite_imports_in_directory_with_options,
