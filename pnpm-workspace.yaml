@@ -4,6 +4,7 @@ packages:
   - rolldown/packages/rolldown
   - vite
   - vite/packages/vite
+catalogPrune: true
 catalog:
   '@clack/core': ^1.5.1
   '@cloudflare/oxlint-config': ^0.2.0
@@ -79,6 +80,7 @@ catalog:
 catalogMode: prefer
 ignoreScripts: true
 minimumReleaseAge: 1440
+minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeExclude:
   - '@babel/*'
   - '@cloudflare/oxlint-config@0.2.0'
@@ -101,12 +103,9 @@ minimumReleaseAgeExclude:
   - '@vitest/*'
   - '@void/*'
   - '@voidzero-dev/*'
-  - oxc-minify
   - oxc-parser
-  - oxc-transform
   - oxfmt
   - oxlint
-  - ast-kit
   - lightningcss
   - lightningcss-*
   - baseline-browser-mapping
@@ -115,8 +114,6 @@ minimumReleaseAgeExclude:
   - launch-editor
   - launch-editor-middleware
   - lint-staged
-  - logs-sdk
-  - rolldown
   - rolldown-plugin-dts
   - tinyexec
   - tsdown
@@ -124,16 +121,8 @@ minimumReleaseAgeExclude:
   - tsx
   - unrun
   - verkit
-  - vite
-  - vitepress
   - vitest
-  - vue-virtual-scroller
-  - lodash-es@4.18.1
-  - vite-plus
   - '@rolldown/binding-*'
-  - vitepress-plugin-feedback-tracker@0.2.0-alpha.1
-  - es-module-lexer@2.3.0
-  - void
   - '@napi-rs/cli'
   - '@napi-rs/wasm-runtime'
   - '@emnapi/*'
@@ -141,7 +130,6 @@ minimumReleaseAgeExclude:
   - '@vitejs/devtools'
   - '@vitejs/devtools-*'
   - resolve.exports@2.0.4
-  - vitepress-plugin-group-icons@1.8.2
 overrides:
   # tsrs provides the type-aware backend for Oxlint, including the vendored Vite workspace.
   oxlint-tsgolint: '-'
