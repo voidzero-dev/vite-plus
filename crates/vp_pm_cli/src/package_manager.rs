@@ -180,15 +180,7 @@ fn resolve_cache_key(
     expected_hash: Option<&str>,
 ) -> Result<Option<Str>, Error> {
     let platform_origin = if package_manager_type.uses_platform_binary(version) {
-        let platform_package = match package_manager_type {
-            PackageManagerType::Bun => get_bun_platform_package_name()?,
-            PackageManagerType::Pnpm => get_pnpm_platform_package_name()?.to_string(),
-            other => {
-                return Err(Error::UnsupportedPackageManager(
-                    format!("{other} has no platform package").into(),
-                ));
-            }
-        };
+        let platform_package = get_platform_package_name(package_manager_type)?;
         let npm_config = NpmConfig::load();
         Some(origin_fingerprint(&npm_config.registry_for_package(&platform_package)))
     } else {
@@ -1808,17 +1800,17 @@ async fn download_package_manager_inner(
 
     let bin_name = package_manager_type.to_string();
 
-    // Bun pins cover the main tarball, so verify its platform binary separately.
-    if matches!(package_manager_type, PackageManagerType::Bun) {
-        return download_bun_package_manager(&version, expected_hash, npm_config).await;
-    }
-
-    // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
-    // directly (the main package only ships preinstall-replaced placeholders).
-    // A declared hash names the main tarball and is verified against it; the
-    // platform tarball is verified against the registry's `dist.integrity`.
-    if matches!(package_manager_type, PackageManagerType::Pnpm) && parsed_version.major >= 12 {
-        return download_pnpm_native_package_manager(&version, expected_hash, npm_config).await;
+    // Bun and pnpm >= 12 ship a native binary in a platform package. A declared
+    // hash names the main tarball and is verified against it; the platform
+    // tarball is verified against the registry's `dist.integrity`.
+    if package_manager_type.uses_platform_binary(&version) {
+        return download_native_package_manager(
+            package_manager_type,
+            &version,
+            expected_hash,
+            npm_config,
+        )
+        .await;
     }
 
     let tgz_url = tarball_url
@@ -2000,43 +1992,45 @@ fn bun_requires_baseline() -> bool {
     false
 }
 
-/// Download bun package manager (native binary) from npm.
+/// Download a native package manager (bun, or pnpm >= 12) from its
+/// platform-specific npm package (`@oven/bun-*` or `@pnpm/exe.*`).
 ///
-/// Unlike JS-based package managers (pnpm/npm/yarn), bun is a native binary
-/// distributed via platform-specific npm packages (`@oven/bun-{os}-{arch}`).
+/// Unlike JS-based package managers, these ship a native binary. The main
+/// package holds no executable, so the platform package is downloaded directly.
 ///
-/// Layout: `<DATA>/package_manager/bun/{version}/bun/bin/bun.native`
-async fn download_bun_package_manager(
+/// Layout: `<DATA>/package_manager/{name}/{version}/[{key}/]{name}/bin/{name}.native`
+async fn download_native_package_manager(
+    package_manager_type: PackageManagerType,
     version: &Str,
     expected_hash: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
-    let package_name: Str = "bun".into();
+    let bin_name = package_manager_type.to_string();
+    let package_name: Str = bin_name.as_str().into();
 
     // The executed binary comes from the platform package, so bind cache reuse
     // to the registry that serves it, not only to the main-tarball pin. Store a
     // fingerprint of the origin, never the raw URL, which can carry credentials.
-    let platform_package_name = get_bun_platform_package_name()?;
+    let platform_package_name = get_platform_package_name(package_manager_type)?;
     let platform_origin =
         origin_fingerprint(&npm_config.registry_for_package(&platform_package_name));
 
     // Key-address a pinned install by the pin and the platform origin, so a
     // different pin or origin resolves to a different, immutable directory. An
     // unpinned install has no out-of-band anchor and stays on the version dir.
-    // <DATA>/package_manager/bun/{version}/[{key}/]bun/bin/bun.native
     let cache_key = install_cache_key(expected_hash, Some(platform_origin.as_str()));
-    let version_dir = package_manager_version_dir(PackageManagerType::Bun, version);
+    let version_dir = package_manager_version_dir(package_manager_type, version);
     let install_dir =
-        package_manager_install_dir(PackageManagerType::Bun, version, cache_key.as_deref());
+        package_manager_install_dir(package_manager_type, version, cache_key.as_deref());
 
     // A complete install holds the content for this pin and origin (or the current
     // unpinned install); reuse it.
-    if is_package_manager_install_complete(&install_dir, "bun")? {
+    if is_package_manager_install_complete(&install_dir, &bin_name)? {
         return Ok((install_dir, package_name, version.clone()));
     }
 
     let platform_hash = verify_pin_and_fetch_platform_integrity(
-        PackageManagerType::Bun,
+        package_manager_type,
         &platform_package_name,
         version,
         expected_hash,
@@ -2057,7 +2051,7 @@ async fn download_bun_package_manager(
     let tmp_dir = tempfile::tempdir_in(manager_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
-    let download_message = format!("Downloading bun v{version}...");
+    let download_message = format!("Downloading {bin_name} v{version}...");
     download_and_extract_tgz(
         TgzDownload {
             url: &platform_tgz_url,
@@ -2072,7 +2066,7 @@ async fn download_bun_package_manager(
     .map_err(|err| {
         if is_not_found(&err) {
             Error::PackageManagerVersionNotFound {
-                name: PackageManagerType::Bun.to_string().into(),
+                name: package_name.clone(),
                 version: version.clone(),
                 url: platform_tgz_url.into(),
             }
@@ -2081,24 +2075,21 @@ async fn download_bun_package_manager(
         }
     })?;
 
-    // Create the expected directory structure: bun/bin/
-    let tmp_bun_dir = target_dir_tmp.join("bun");
-    let tmp_bin_dir = tmp_bun_dir.join("bin");
+    // Create the expected directory structure: {name}/bin/
+    let tmp_bin_dir = target_dir_tmp.join(&bin_name).join("bin");
     tokio::fs::create_dir_all(&tmp_bin_dir).await?;
 
-    // The platform package extracts to `package/bin/` with the bun binary inside
-    // Find the native binary in the extracted package
+    // The platform package extracts to `package/`. Bun keeps its binary in
+    // `package/bin/`, while pnpm keeps it at the package root.
     let package_dir = target_dir_tmp.join("package");
-    let package_bin_dir = package_dir.join("bin");
-    let native_bin_src =
-        if cfg!(windows) { package_bin_dir.join("bun.exe") } else { package_bin_dir.join("bun") };
+    let native_bin_src = match package_manager_type {
+        PackageManagerType::Bun => package_dir.join("bin"),
+        _ => package_dir.clone(),
+    }
+    .join(format!("{bin_name}{}", env::consts::EXE_SUFFIX));
 
-    // Move native binary to bin/bun.native
-    let native_bin_dest = if cfg!(windows) {
-        tmp_bin_dir.join("bun.native.exe")
-    } else {
-        tmp_bin_dir.join("bun.native")
-    };
+    // Move native binary to bin/{name}.native
+    let native_bin_dest = tmp_bin_dir.join(format!("{bin_name}.native{}", env::consts::EXE_SUFFIX));
     tokio::fs::rename(&native_bin_src, &native_bin_dest).await?;
 
     // Set executable permission on the native binary
@@ -2112,8 +2103,12 @@ async fn download_bun_package_manager(
     remove_dir_all_force(&package_dir).await?;
 
     // Finish shims before publishing the directory to lock-free cache readers.
-    tracing::debug!("Create shim files for bun");
-    create_shim_files(PackageManagerType::Bun, AbsolutePath::new(&tmp_bin_dir).unwrap()).await?;
+    tracing::debug!("Create native shim files for {bin_name}");
+    let tmp_bin_dir = AbsolutePath::new(&tmp_bin_dir).unwrap();
+    match package_manager_type {
+        PackageManagerType::Pnpm => create_pnpm_native_shim_files(tmp_bin_dir).await?,
+        _ => create_bun_shim_files(tmp_bin_dir).await?,
+    }
 
     // Acquire lock for atomic rename
     let lock_path = manager_dir.join(format!("{version}.lock"));
@@ -2122,7 +2117,18 @@ async fn download_bun_package_manager(
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
-    publish_install(install_dir, &target_dir_tmp, "bun", package_name, version.clone()).await
+    publish_install(install_dir, &target_dir_tmp, &bin_name, package_name, version.clone()).await
+}
+
+/// Platform package that holds the native binary of bun or pnpm >= 12.
+fn get_platform_package_name(package_manager_type: PackageManagerType) -> Result<String, Error> {
+    match package_manager_type {
+        PackageManagerType::Bun => get_bun_platform_package_name(),
+        PackageManagerType::Pnpm => Ok(get_pnpm_platform_package_name()?.to_string()),
+        other => {
+            Err(Error::UnsupportedPackageManager(format!("{other} has no platform package").into()))
+        }
+    }
 }
 
 /// Platform-specific `@pnpm/exe.{os}-{arch}` package name for pnpm >= 12.
@@ -2271,125 +2277,6 @@ async fn fetch_registry_integrity(
         });
     };
     metadata.dist.integrity().ok_or_else(unavailable)
-}
-
-/// Download pnpm >= 12 (native binary) via its platform-specific npm package.
-///
-/// Layout: `<DATA>/package_manager/pnpm/{version}/pnpm/bin/pnpm.native`
-async fn download_pnpm_native_package_manager(
-    version: &Str,
-    expected_hash: Option<&str>,
-    npm_config: &NpmConfig,
-) -> Result<(AbsolutePathBuf, Str, Str), Error> {
-    let package_name: Str = "pnpm".into();
-    let platform_package_name = get_pnpm_platform_package_name()?;
-
-    // The executed binary comes from the platform package, so bind cache reuse
-    // to the registry that serves it, not only to the main-tarball pin. Store a
-    // fingerprint of the origin, never the raw URL, which can carry credentials.
-    let platform_origin =
-        origin_fingerprint(&npm_config.registry_for_package(platform_package_name));
-
-    // Key-address a pinned install by the pin and the platform origin, so a
-    // different pin or origin resolves to a different, immutable directory. An
-    // unpinned install has no out-of-band anchor and stays on the version dir.
-    // <DATA>/package_manager/pnpm/{version}/[{key}/]pnpm/bin/pnpm.native
-    let cache_key = install_cache_key(expected_hash, Some(platform_origin.as_str()));
-    let version_dir = package_manager_version_dir(PackageManagerType::Pnpm, version);
-    let install_dir =
-        package_manager_install_dir(PackageManagerType::Pnpm, version, cache_key.as_deref());
-
-    // A complete install holds the content for this pin and origin (or the current
-    // unpinned install); reuse it.
-    if is_package_manager_install_complete(&install_dir, "pnpm")? {
-        return Ok((install_dir, package_name, version.clone()));
-    }
-
-    let platform_hash = verify_pin_and_fetch_platform_integrity(
-        PackageManagerType::Pnpm,
-        platform_package_name,
-        version,
-        expected_hash,
-        npm_config,
-    )
-    .await?;
-
-    // Stage the download in a temp directory beside the version directory, not
-    // inside it, so a reader scanning key subdirectories never sees the staging
-    // copy. Only create the manager directory now, so a failed install leaves no
-    // empty version directory; the version directory is created at publish time.
-    let manager_dir = version_dir.parent().expect("a version directory has a parent");
-    tokio::fs::create_dir_all(manager_dir).await?;
-
-    // Download the platform-specific package directly
-    let platform_tgz_url = npm_config.package_tgz_url(platform_package_name, version);
-    // Keep the TempDir guard alive so a failure path cleans up the temp dir.
-    let tmp_dir = tempfile::tempdir_in(manager_dir)?;
-    let target_dir_tmp = tmp_dir.path().to_path_buf();
-
-    let download_message = format!("Downloading pnpm v{version}...");
-    download_and_extract_tgz(
-        TgzDownload {
-            url: &platform_tgz_url,
-            archive_digest: Some(&platform_hash),
-            unpack: Unpack::All,
-            message: Some(&download_message),
-        },
-        &target_dir_tmp,
-        npm_config,
-    )
-    .await
-    .map_err(|err| {
-        if is_not_found(&err) {
-            Error::PackageManagerVersionNotFound {
-                name: PackageManagerType::Pnpm.to_string().into(),
-                version: version.clone(),
-                url: platform_tgz_url.into(),
-            }
-        } else {
-            err
-        }
-    })?;
-
-    // Create the expected directory structure: pnpm/bin/
-    let tmp_bin_dir = target_dir_tmp.join("pnpm").join("bin");
-    tokio::fs::create_dir_all(&tmp_bin_dir).await?;
-
-    // The platform package extracts to `package/` with the native binary at its root
-    let package_dir = target_dir_tmp.join("package");
-    let native_bin_src =
-        if cfg!(windows) { package_dir.join("pnpm.exe") } else { package_dir.join("pnpm") };
-
-    // Move native binary to bin/pnpm.native
-    let native_bin_dest = if cfg!(windows) {
-        tmp_bin_dir.join("pnpm.native.exe")
-    } else {
-        tmp_bin_dir.join("pnpm.native")
-    };
-    tokio::fs::rename(&native_bin_src, &native_bin_dest).await?;
-
-    // Set executable permission on the native binary
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        tokio::fs::set_permissions(&native_bin_dest, fs::Permissions::from_mode(0o755)).await?;
-    }
-
-    // Clean up the extracted package directory
-    remove_dir_all_force(&package_dir).await?;
-
-    // Finish shims before publishing the directory to lock-free cache readers.
-    tracing::debug!("Create native shim files for pnpm");
-    create_pnpm_native_shim_files(AbsolutePath::new(&tmp_bin_dir).unwrap()).await?;
-
-    // Acquire lock for atomic rename
-    let lock_path = manager_dir.join(format!("{version}.lock"));
-    tracing::debug!("Acquire lock file: {:?}", lock_path);
-    let lock_file = open_lock_file(lock_path.as_path())?;
-    lock_file.lock()?;
-    tracing::debug!("Lock acquired: {:?}", lock_path);
-
-    publish_install(install_dir, &target_dir_tmp, "pnpm", package_name, version.clone()).await
 }
 
 /// Create shims for pnpm's native binary (pnpm >= 12): `pnpm` execs it
@@ -2690,11 +2577,7 @@ mod tests {
     ) {
         use httpmock::prelude::*;
         let bin = package_manager_type.to_string();
-        let platform_package = match package_manager_type {
-            PackageManagerType::Bun => get_bun_platform_package_name().unwrap(),
-            PackageManagerType::Pnpm => get_pnpm_platform_package_name().unwrap().to_string(),
-            other => panic!("{other} is not a platform-binary manager"),
-        };
+        let platform_package = get_platform_package_name(package_manager_type).unwrap();
         server.mock(|when, then| {
             when.method(GET).path(format!("/{bin}/-/{bin}-{version}.tgz"));
             then.status(200).body(main_tgz);
@@ -5973,7 +5856,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_download_bun_package_manager_preserves_existing_install() {
+    async fn test_download_native_package_manager_preserves_existing_install() {
         let temp_dir = create_temp_dir();
         let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let version: Str = "1.3.14".into();
@@ -5990,7 +5873,9 @@ mod tests {
             NpmConfig { values: HashMap::from([("registry".to_string(), registry.base_url())]) };
 
         EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.as_path())], |_| async {
-            download_bun_package_manager(&version, None, &config).await.unwrap();
+            download_native_package_manager(PackageManagerType::Bun, &version, None, &config)
+                .await
+                .unwrap();
         })
         .await;
 

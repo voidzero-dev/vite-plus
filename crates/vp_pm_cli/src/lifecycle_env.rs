@@ -64,7 +64,7 @@ impl PackageManager {
                 return entry;
             }
         }
-        // pnpm >= 12 ships a native binary (see `download_pnpm_native_package_manager`)
+        // pnpm >= 12 ships a native binary (see `download_native_package_manager`)
         // and identifies with the running executable itself.
         if matches!(self.client, PackageManagerType::Pnpm) {
             let native = if cfg!(windows) {
