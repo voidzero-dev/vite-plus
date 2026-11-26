@@ -13,7 +13,8 @@
 
 import { dirname, join } from 'node:path';
 
-import { CONFIG_METADATA_ENV, DEFAULT_ENVS, resolve } from './utils/constants.ts';
+import { CONFIG_METADATA_ENV, DEFAULT_ENVS } from './utils/constants.ts';
+import { resolveProjectTool } from './utils/resolve-project-tool.ts';
 
 /**
  * Resolves the oxfmt binary path and environment variables.
@@ -34,7 +35,7 @@ export async function fmt(): Promise<{
   // resolve the main entry point and derive the bin path from it.
   // resolve('oxfmt') returns .../oxfmt/dist/index.js, so we need to go up
   // two directories (past 'dist') to reach the package root.
-  const oxfmtMainPath = resolve('oxfmt');
+  const oxfmtMainPath = resolveProjectTool('oxfmt');
   const binPath = join(dirname(dirname(oxfmtMainPath)), 'bin', 'oxfmt');
 
   return {
