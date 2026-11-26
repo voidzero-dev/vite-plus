@@ -6,6 +6,8 @@ You can use `voidzero-dev/setup-vp` to use Vite+ in CI environments.
 
 [`voidzero-dev/setup-vp`](https://github.com/voidzero-dev/setup-vp) provides integrations for GitHub Actions, GitLab CI/CD, and Azure Pipelines. All three install Vite+, can select the project's Node.js version, and can install project dependencies. The GitHub Action and Azure Pipelines template can also cache package-manager data automatically. GitLab CI/CD uses the job's native cache configuration and requires Node.js to start the setup runtime.
 
+For a Git-connected Cloudflare Worker, see [Cloudflare Workers Builds](/guide/cloudflare-workers) for the build and deploy commands.
+
 ## setup-vp Versioning
 
 Set `<setup-vp-version>` in each example to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead. Do not use the `v1` tag. The `v1` tag no longer receives updates.
