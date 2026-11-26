@@ -624,3 +624,14 @@ steps = [
   ["node", "verify-benchmarks.mjs"],
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
 ]
+
+[[case]]
+name = "gitignored_directories"
+vp = "global"
+comment = "Skip gitignored directories and invalid .gitignore lines without failing migration."
+steps = [
+  { argv = ["vpt", "write-file", ".gitignore", "{a,b\nstatic/\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "static/bundle.test.ts", "import { test } from 'vitest';\ntest.sequential('ignored', () => {});\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "example.test.ts", "static/bundle.test.ts", ".gitignore"],
+]
