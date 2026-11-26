@@ -97,6 +97,17 @@ pub fn is_directory_gitignored(root: String, directory: String) -> Result<bool> 
         .map_err(anyhow::Error::from)?)
 }
 
+/// Return the child directory names of `parent` that inherited `.gitignore` rules keep.
+#[napi]
+pub fn unignored_child_directories(
+    root: String,
+    parent: String,
+    names: Vec<String>,
+) -> Result<Vec<String>> {
+    Ok(vp_migration::unignored_child_directories(Path::new(&root), Path::new(&parent), names)
+        .map_err(anyhow::Error::from)?)
+}
+
 /// Rewrite scripts json content using rules from rules_yaml
 ///
 /// # Arguments

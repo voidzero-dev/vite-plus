@@ -721,6 +721,21 @@ describe('Vitest v5 config compatibility', () => {
     },
   );
 
+  it('does not read files in gitignored directories', () => {
+    const input = `import { test } from 'vitest';\ntest.sequential('works', () => {});`;
+    const root = project({
+      '.gitignore': 'static/\n',
+      'unit.test.js': input,
+      'static/assets/bundle.test.js': input,
+    });
+    const plan = planProject(root);
+    expect(plan.inputs.has(path.join(root, 'unit.test.js'))).toBe(true);
+    expect(plan.inputs.has(path.join(root, 'static/assets/bundle.test.js'))).toBe(false);
+    applyVitestV5Migration(plan);
+    expect(fs.readFileSync(path.join(root, 'unit.test.js'), 'utf8')).toContain('concurrent: false');
+    expect(fs.readFileSync(path.join(root, 'static/assets/bundle.test.js'), 'utf8')).toBe(input);
+  });
+
   it.each<{ projects: string; files: Record<string, string> }>([
     { projects: `[{ extends: true, test: {} }]`, files: {} },
     {

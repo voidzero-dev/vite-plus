@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use ignore::{WalkBuilder, gitignore::GitignoreBuilder};
+use ignore::{
+    WalkBuilder,
+    gitignore::{Gitignore, GitignoreBuilder},
+};
 use vp_error::Error;
 
 /// File extensions to process for import rewriting.
@@ -24,30 +27,74 @@ pub fn is_directory_gitignored(root: &Path, directory: &Path) -> Result<bool, Er
     let relative = directory
         .strip_prefix(root)
         .map_err(|_| Error::InvalidArgument("Ignore target must be inside the root".into()))?;
+    match (directory.parent(), directory.file_name()) {
+        (Some(parent), Some(name)) if relative.components().next().is_some() => {
+            Ok(gitignored_children(root, parent, &[name])?[0])
+        }
+        _ => Ok(false),
+    }
+}
+
+/// Return the child directory names of `parent` that are not gitignored. Uses the
+/// same rules as [`is_directory_gitignored`], but reads the ignore files once.
+pub fn unignored_child_directories(
+    root: &Path,
+    parent: &Path,
+    names: Vec<String>,
+) -> Result<Vec<String>, Error> {
+    if names.is_empty() {
+        return Ok(names);
+    }
+    let ignored = gitignored_children(root, parent, &names)?;
+    Ok(names
+        .into_iter()
+        .zip(ignored)
+        .filter(|(_, ignored)| !ignored)
+        .map(|(name, _)| name)
+        .collect())
+}
+
+fn gitignored_children(
+    root: &Path,
+    parent: &Path,
+    names: &[impl AsRef<Path>],
+) -> Result<Vec<bool>, Error> {
+    let relative = parent
+        .strip_prefix(root)
+        .map_err(|_| Error::InvalidArgument("Ignore target must be inside the root".into()))?;
     let mut current = root.to_path_buf();
     let mut matchers = Vec::new();
     for component in relative.components() {
-        let ignore_file = current.join(".gitignore");
-        if ignore_file.is_file() {
-            let mut builder = GitignoreBuilder::new(&current);
-            if let Some(error) = builder.add(&ignore_file) {
-                return Err(error.into());
-            }
-            matchers.push(builder.build()?);
-        }
+        add_ignore_file(&current, &mut matchers)?;
         current.push(component);
-        // Deeper ignore files take precedence. Check each directory before
-        // descending: a negation cannot re-include an ignored parent directory.
-        let matched = matchers
-            .iter()
-            .rev()
-            .map(|matcher| matcher.matched(&current, true))
-            .find(|matched| !matched.is_none());
-        if matched.is_some_and(|matched| matched.is_ignore()) {
-            return Ok(true);
+        // Check each directory before descending: a negation cannot
+        // re-include an ignored parent directory.
+        if is_ignored(&matchers, &current) {
+            return Ok(vec![true; names.len()]);
         }
     }
-    Ok(false)
+    add_ignore_file(&current, &mut matchers)?;
+    Ok(names.iter().map(|name| is_ignored(&matchers, &current.join(name))).collect())
+}
+
+fn add_ignore_file(directory: &Path, matchers: &mut Vec<Gitignore>) -> Result<(), Error> {
+    let ignore_file = directory.join(".gitignore");
+    if ignore_file.is_file() {
+        let mut builder = GitignoreBuilder::new(directory);
+        let _ = builder.add(&ignore_file);
+        matchers.push(builder.build()?);
+    }
+    Ok(())
+}
+
+/// Deeper ignore files take precedence.
+fn is_ignored(matchers: &[Gitignore], directory: &Path) -> bool {
+    matchers
+        .iter()
+        .rev()
+        .map(|matcher| matcher.matched(directory, true))
+        .find(|matched| !matched.is_none())
+        .is_some_and(|matched| matched.is_ignore())
 }
 
 /// Find all TypeScript/JavaScript files in a directory, respecting gitignore
@@ -156,7 +203,30 @@ mod tests {
                 expected,
                 "root: {root_rules:?}, package: {package_rules:?}"
             );
+            assert_eq!(
+                unignored_child_directories(temp.path(), &package, vec![".vitest".into()])
+                    .unwrap()
+                    .is_empty(),
+                expected,
+                "batch root: {root_rules:?}, package: {package_rules:?}"
+            );
         }
+    }
+
+    #[test]
+    fn test_invalid_gitignore_lines_are_skipped() {
+        let temp = tempdir().unwrap();
+        fs::write(temp.path().join(".gitignore"), "{a,b\n.vitest/\n").unwrap();
+        assert!(is_directory_gitignored(temp.path(), &temp.path().join(".vitest")).unwrap());
+        assert_eq!(
+            unignored_child_directories(
+                temp.path(),
+                temp.path(),
+                vec![".vitest".into(), "src".into()]
+            )
+            .unwrap(),
+            vec!["src".to_string()]
+        );
     }
 
     #[test]

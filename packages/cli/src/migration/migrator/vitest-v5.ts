@@ -17,7 +17,7 @@ import {
 } from 'verkit';
 import { isScalar, parseDocument, visit } from 'yaml';
 
-import { isDirectoryGitignored } from '../../../binding/index.js';
+import { isDirectoryGitignored, unignoredChildDirectories } from '../../../binding/index.js';
 import cliPackage from '../../../package.json' with { type: 'json' };
 import type { WorkspaceInfoOptional } from '../../types/index.ts';
 import { PackageManager } from '../../types/index.ts';
@@ -132,15 +132,28 @@ function dependency(pkg: JsonObject, name: string): string | undefined {
 
 function filesInProject(directory: string): Array<string> {
   const files: Array<string> = [];
+  const ignoreRoot = findGitRoot(directory) ?? directory;
   const walk = (current: string) => {
     if (current !== directory && fs.existsSync(path.join(current, 'package.json'))) {
       return;
     }
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+    const directories = new Set(
+      unignoredChildDirectories(
+        ignoreRoot,
+        current,
+        entries
+          .filter((entry) => entry.isDirectory() && !SKIP_DIRS.has(entry.name))
+          .map((entry) => entry.name),
+      ),
+    );
+    for (const entry of entries) {
       const file = path.join(current, entry.name);
       // Never follow symlinks into another package or outside the workspace.
-      if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) {
-        walk(file);
+      if (entry.isDirectory()) {
+        if (directories.has(entry.name)) {
+          walk(file);
+        }
       } else if (
         entry.isFile() &&
         !['.pnp.cjs', '.pnp.loader.mjs'].includes(entry.name) &&

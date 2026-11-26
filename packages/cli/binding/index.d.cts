@@ -4265,6 +4265,13 @@ export interface TaskCacheConfigResult {
   manualTasks: Array<string>;
 }
 
+/** Return the child directory names of `parent` that inherited `.gitignore` rules keep. */
+export declare function unignoredChildDirectories(
+  root: string,
+  parent: string,
+  names: Array<string>,
+): Array<string>;
+
 /**
  * Set the value of a top-level config key in a vite config file (upsert)
  *
