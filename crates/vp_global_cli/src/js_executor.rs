@@ -35,7 +35,7 @@ pub struct JsExecutor {
     scripts_dir: Option<AbsolutePathBuf>,
     /// Subcommand as the user wrote it, forwarded to the CLI this one runs
     raw_subcommand: Option<String>,
-    /// Whether the user selected the command directory with `-C`
+    /// Whether `-C` or app target selection fixed the command directory
     explicit_chdir: bool,
     /// Whether a project-local CLI miss should emit a warning before global fallback
     warn_on_missing_local_cli: bool,
@@ -68,7 +68,8 @@ impl JsExecutor {
         self
     }
 
-    /// Preserve an explicit `-C` after the global CLI changes the child cwd.
+    /// Tell the delegated CLI that `-C` or app target selection fixed the
+    /// command directory, so that it does not select another one.
     pub const fn with_explicit_chdir(mut self, explicit_chdir: bool) -> Self {
         self.explicit_chdir = explicit_chdir;
         self

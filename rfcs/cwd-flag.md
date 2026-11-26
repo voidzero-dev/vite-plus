@@ -272,12 +272,11 @@ vp -C <dir> <cmd> [args...]  ===  cd <dir> && vp <cmd> [args...]
 
 The child's spawn cwd is `<dir>`, so config lookup, `.env` loading, `process.cwd()` reads in configs and plugins, and relative CLI args all behave as if the user had `cd`'d. The POSIX `PWD` environment variable is refreshed too (by both entry points and for elicitation-retargeted tools), so `process.env.PWD` readers match the `cd` form. Both entry points apply `-C` by changing their own process cwd at startup, before any argument normalization, picker, or command logic runs, which is indistinguishable from having been started in `<dir>`: the global binary consumes the flag first thing in `main` (so command aliases, the no-command picker, and in-process helpers that read the process cwd are all covered), and the local `vp` bin does the same before dispatch.
 
-The global binary also resolves the local `vite-plus` install from `<dir>`, matching `cd` exactly; through the package's own `vp` bin the executing CLI is already chosen, so there the invariant assumes a single Vite+ version per workspace (the supported monorepo model). The implicit `-C` forms (picker, auto-select, `defaultPackage`) run inside the already-chosen CLI under the same assumption: the spawned tool gets the target's cwd and `PWD`, but the executing CLI and its runtime were resolved at the invocation directory. Within one workspace the two coincide; a `defaultPackage` target carrying its own Vite+ install or runtime pin is resolved by the invoking CLI today (full re-delegation is tracked as follow-up work).
+The global binary also resolves the local `vite-plus` install from `<dir>`, matching `cd` exactly; through the package's own `vp` bin the executing CLI is already chosen, so there the invariant assumes a single Vite+ version per workspace (the supported monorepo model). The implicit `-C` forms (picker, auto-select, `defaultPackage`) get the same resolution through the global binary. It selects the target before it chooses the local `vite-plus` install, the managed Node.js runtime, and the tool paths, and then runs the command as `vp -C <dir> <cmd>` would. Through the package's own `vp` bin, the selected tool gets the target's cwd and `PWD`, but it runs in the already-chosen CLI and runtime.
 
 ### Entry points and version assumption
 
-- `-C` is parsed by both the global binary and the local bin; the picker and `defaultPackage` live in the local CLI's NAPI binding (`execute_direct_subcommand`), which every entry point executes. Bare `vp dev` at a root is primarily a global-CLI experience, but a root-level `"dev": "vp dev"` script flows through the same logic.
-- Pre-1.0, both the global CLI and any local install are assumed to ship this feature; no version negotiation with older CLIs is specified. In the non-workspace shape the root has no local install, so the bundled CLI executes end to end, which is equivalent under this assumption.
+- `-C` is parsed by both the global binary and the local bin. Both use `crates/vp_app_target` for the picker and `defaultPackage`. For a bare app command without `-C`, the global binary selects the target itself and delegates with `VP_EXPLICIT_CHDIR=1`, so the local CLI does not select again. The local CLI's NAPI binding (`execute_direct_subcommand`) selects the target when the package's own `vp` bin runs, for example from a root-level `"dev": "vp dev"` script.
 
 ### Picker contents
 
@@ -353,7 +352,7 @@ No upstream Vite or tsdown changes are required.
 
 - `crates/vp_global_cli/src/main.rs` / `cli.rs`: parse the global `-C <dir>`, resolve the local install from `<dir>`, and delegate with `<dir>` as the effective cwd. Preserve an explicit-target marker for the local CLI.
 - `packages/cli/src/bin.ts`: parse `-C` for direct local invocations and pass the explicit-target marker to the binding.
-- `packages/cli/binding/src/cli/app_target.rs` / `mod.rs`: apply the exact-bare command resolution order. Skip target selection when `-C` or a subcommand argument is present.
+- `crates/vp_app_target`: apply the exact-bare command resolution order. The global CLI (`crates/vp_global_cli/src/commands/delegate.rs`) and the binding (`packages/cli/binding/src/cli/mod.rs`) call it, and skip target selection when `-C` or a subcommand argument is present.
 - `packages/cli/binding/src/cli/execution.rs`: spawn the child with cwd set to the target directory.
 - Picker: reuse `vt_select` and `vt_workspace`, both already dependencies via the `vt` crates.
 - `defaultPackage`: extend the `VitePlusConfigLoader` static extraction the same way `run` config is loaded, and add `defaultPackage?: string` to `packages/cli/src/define-config.ts`.

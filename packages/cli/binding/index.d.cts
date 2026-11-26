@@ -3655,7 +3655,7 @@ export interface CliOptions {
   pack: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
   doc: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
   cwd?: string;
-  /** Whether the user supplied the global `-C` option. */
+  /** Whether `-C` or the global CLI's app target selection fixed the working directory. */
   explicitChdir?: boolean;
   /**
    * Return the `vp dev` command in `RunResult.devCommand` instead of
