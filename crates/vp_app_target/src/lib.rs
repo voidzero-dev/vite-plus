@@ -149,23 +149,16 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
         prompt: &prompt,
         page_size: 12,
     };
-    let mut selected_index = 0usize;
-    let mut stdout = std::io::stdout();
-    let result = vt_select::select_list(
-        &mut stdout,
-        &params,
-        vt_select::Mode::Interactive { selected_index: &mut selected_index },
-        |state| {
-            if !emit_milestones {
-                return;
-            }
-            let milestone = format!("package-select:{}:{}", state.query, state.selected_index);
-            emit_milestone_title(&milestone);
-        },
-    )?;
+    let result = vt_select::select_interactive(&params, |state| {
+        if !emit_milestones {
+            return;
+        }
+        let milestone = format!("package-select:{}:{}", state.query, state.selected_index);
+        emit_milestone_title(&milestone);
+    })?;
     Ok(match result {
-        vt_select::SelectResult::Selected => Some(selected_index),
-        vt_select::SelectResult::Cancelled => None,
+        vt_select::SelectOutcome::Selected(index) => Some(index),
+        vt_select::SelectOutcome::Cancelled => None,
     })
 }
 
