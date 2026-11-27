@@ -50,8 +50,10 @@ struct Metadata {
 /// Decode the existing CompleteEnv transport, preserving the cursor's empty word.
 /// Bash/Zsh provide an index; Fish/PowerShell already pass words up to the cursor.
 pub(crate) fn request_words(args: &[String], index: Option<usize>) -> Option<Vec<String>> {
-    let separator = args.iter().position(|arg| arg == "--")?;
-    let mut words = args.get(separator + 1..)?.to_vec();
+    if args.get(1)?.as_str() != "--" {
+        return None;
+    }
+    let mut words = args[2..].to_vec();
     if words.is_empty() {
         return None;
     }

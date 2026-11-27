@@ -7,13 +7,6 @@ import type { createCLI } from 'vitest/node';
 
 type CLI = ReturnType<typeof createCLI>;
 
-// Spellings accepted by Vitest but omitted from its option declarations.
-const completionAliases = new Map([
-  ['--isolate', '--no-isolate'],
-  ['--fileParallelism', '--no-file-parallelism'],
-  ['--maxWorkers', '--max-workers'],
-]);
-
 export interface OptionMetadata {
   flags: Array<string>;
   description: string;
@@ -57,9 +50,20 @@ export function extractCompletionMetadata(
       (match) => match[1],
     );
     const primary = flags.find((flag) => flag.startsWith('--'));
-    const alias = primary && completionAliases.get(primary);
-    if (alias && !flags.includes(alias)) {
-      flags.push(alias);
+    // CAC camelizes the top-level key only, preserving nested property names.
+    for (const flag of flags.filter((name) => name.startsWith('--'))) {
+      const kebab = flag.replace(/^[^.]+/, (key) =>
+        key.replaceAll(/[a-z][A-Z]/g, (pair) => pair[0] + '-' + pair[1].toLowerCase()),
+      );
+      if (!flags.includes(kebab)) {
+        flags.push(kebab);
+      }
+      if (value.isBoolean && !kebab.startsWith('--no-')) {
+        const negative = '--no-' + kebab.slice(2);
+        if (!flags.includes(negative)) {
+          flags.push(negative);
+        }
+      }
     }
     if (
       !primary ||
@@ -74,7 +78,8 @@ export function extractCompletionMetadata(
       throw new Error(`Unsupported Vitest option declaration: ${value.rawName}`);
     }
     // Vitest also accepts a bare --browser to enable browser mode.
-    const requiresValue = value.required && !flags.includes('--browser');
+    const optionalBoolean = primary.includes('.') && /<boolean\b/.test(value.rawName);
+    const requiresValue = value.required && primary !== '--browser' && !optionalBoolean;
     return {
       flags,
       description: value.description ?? '',

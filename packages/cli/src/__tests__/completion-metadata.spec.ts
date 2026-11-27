@@ -38,7 +38,7 @@ describe('Vitest completion metadata adapter (synthetic declarations)', () => {
     cli.option('--contractoptional [value]', 'Optional');
     expect(extract(cli).globalOptions).toEqual([
       {
-        flags: ['-b', '--contractboolean'],
+        flags: ['-b', '--contractboolean', '--no-contractboolean'],
         description: 'Boolean',
         valueMode: 'none',
       },
@@ -106,7 +106,7 @@ describe('Vitest completion metadata adapter (synthetic declarations)', () => {
         name: 'future-command',
         options: [
           {
-            flags: ['--future-flag'],
+            flags: ['--future-flag', '--no-future-flag'],
             description: 'Future option',
             valueMode: 'none',
           },

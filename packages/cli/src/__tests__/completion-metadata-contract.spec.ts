@@ -27,23 +27,19 @@ describe('public createCLI metadata contract (installed Vitest)', () => {
     );
     const sourceScopes = [cli.globalCommand, ...cli.commands];
     const targetScopes = [data.globalOptions, ...data.commands.map((command) => command.options)];
-    const extraFlags = new Map([
-      ['--isolate', '--no-isolate'],
-      ['--fileParallelism', '--no-file-parallelism'],
-      ['--maxWorkers', '--max-workers'],
-    ]);
     for (const [index, source] of sourceScopes.entries()) {
       expect(targetScopes[index]).toHaveLength(source.options.length);
       for (const [optionIndex, option] of source.options.entries()) {
         const projected = targetScopes[index][optionIndex];
         const declared = option.rawName.split(',').map((part) => part.trim().split(/\s+/)[0]);
-        const alias = extraFlags.get(declared.find((flag) => flag.startsWith('--'))!);
         expect(projected).toEqual({
-          flags: alias && !declared.includes(alias) ? [...declared, alias] : declared,
+          flags: expect.arrayContaining(declared),
           description: option.description ?? '',
           valueMode: option.isBoolean
             ? 'none'
-            : option.required && option.rawName !== '--browser <name>'
+            : option.required &&
+                option.rawName !== '--browser <name>' &&
+                !/\.[^ ]+ <boolean\b/.test(option.rawName)
               ? 'required'
               : 'optional',
         });

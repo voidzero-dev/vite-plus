@@ -411,9 +411,9 @@ async fn run() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    if env::var_os("VP_COMPLETE").is_some_and(|shell| !shell.is_empty() && shell != "0")
-        && let Some(code) = self_setup::complete_from_existing_install().await
-    {
+    let completion_enabled =
+        env::var_os("VP_COMPLETE").is_some_and(|shell| !shell.is_empty() && shell != "0");
+    if completion_enabled && let Some(code) = self_setup::complete_from_existing_install().await {
         return code;
     }
 
@@ -437,7 +437,7 @@ async fn run() -> ExitCode {
         env::var("_CLAP_COMPLETE_INDEX").ok().and_then(|index| index.parse().ok()),
     );
     let mut completion_directory_valid = true;
-    if env::var_os("VP_COMPLETE").is_some()
+    if completion_enabled
         && let Some(words) = &completion_words
         && let Some((dir, _)) = parse_leading_chdir(&words[1..])
         && let Ok(current) = vt_path::current_dir()

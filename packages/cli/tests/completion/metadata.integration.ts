@@ -100,7 +100,11 @@ describe('generated metadata through native Rust', () => {
     expect(complete(['vp', 'test', '--no-i'])).toContain('--no-isolate');
     expect(complete(['vp', 'test', '--no-file-p'])).toContain('--no-file-parallelism');
     expect(complete(['vp', 'test', '--max-w'])).toContain('--max-workers');
-    for (const flag of ['--maxWorkers', '--max-workers']) {
+    expect(complete(['vp', 'test', '--no-inject-cjs'])).toContain('--no-inject-cjs-globals');
+    expect(complete(['vp', 'test', '--coverage.thresholds.perFile', '--proje'])).toContain(
+      '--project',
+    );
+    for (const flag of ['--maxWorkers', '--max-workers', '--test-timeout', '--test-name-pattern']) {
       expect(complete(['vp', 'test', flag, ''])).toEqual([]);
     }
     expect(complete(['vp', 'test', '--browser', '--proje'])).toContain('--project');

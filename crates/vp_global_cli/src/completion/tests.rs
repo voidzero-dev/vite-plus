@@ -123,6 +123,8 @@ fn decodes_transport_and_cursor_without_reindexing() {
     assert_eq!(request_words(&args, Some(4)).unwrap().last().unwrap(), "");
     assert!(request_words(&args, Some(20)).is_none());
     assert!(request_words(&["vp".into()], None).is_none());
+    let ordinary = ["vp", "exec", "--", "git", "-C", "repo"].map(str::to_owned);
+    assert!(request_words(&ordinary, None).is_none());
     for words in [
         vec!["vp", "-C", "project", "test", ""],
         vec!["vp", "-Cproject", "test", ""],
