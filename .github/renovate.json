@@ -100,7 +100,7 @@
         "vite",
         "vitest",
         "vitest-dev",
-        "yuku-parser"
+        "yuku"
       ],
       "enabled": false
     },
@@ -163,8 +163,7 @@
         "anyhow",
         "append-only-vec",
         "arcstr",
-        "async-channel",
-        "async-scoped",
+        "async-lock",
         "base-encode",
         "base64-simd",
         "bitflags",
@@ -173,6 +172,7 @@
         "dashmap",
         "derive_more",
         "dunce",
+        "event-listener",
         "fast-glob",
         "flate2",
         "form_urlencoded",
@@ -180,6 +180,7 @@
         "glob",
         "globstar",
         "heck",
+        "idna",
         "idna_adapter",
         "indexmap",
         "infer",
@@ -212,6 +213,7 @@
         "rolldown-ariadne",
         "rolldown-notify",
         "rolldown-notify-debouncer-full",
+        "rolldown-notify-napi",
         "rustc-hash",
         "schemars",
         "self_cell",

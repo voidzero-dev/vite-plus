@@ -70,6 +70,7 @@ await bundleRolldownPluginutils();
 await bundleRolldown();
 await buildVite();
 await bundleTsdown();
+await patchTsdownNativePreview();
 await brandTsdown();
 await wireBundledTsdownExtensions();
 generateLicenseFile({
@@ -374,7 +375,7 @@ async function bundleRolldown() {
     throw new Error('Missing Rolldown package version');
   }
   const webContainerVersionLookup =
-    'JSON.parse(fs.readFileSync(__require.resolve("rolldown/package.json"), "utf-8")).version';
+    'JSON.parse(fs.readFileSync((/* @__PURE__ */ __require()).resolve("rolldown/package.json"), "utf-8")).version';
   let webContainerVersionRewrites = 0;
   const rolldownFiles = new Set<string>();
 
@@ -485,16 +486,15 @@ async function bundleTsdown() {
   // in and they cannot be bundled. Both are core `dependencies`, so they resolve
   // at runtime and CSS bundling works without users installing anything.
   //
-  // `yuku-parser` (used by `rolldown-plugin-dts`) loads native bindings through
-  // `yuku-core`. Keep it external and declare it as a core dependency so the
-  // native loader resolves its platform package at runtime. Pin its version
-  // to the one resolved by the bundled plugin. `yuku-ast` and
-  // `yuku-codegen` are pure JavaScript in Yuku 0.19 and are bundled into core.
+  // `yuku` (used by `rolldown-plugin-dts`) loads native bindings from its
+  // optional `@yuku-toolchain/*` packages. Keep it external and declare it as a
+  // core dependency so those packages resolve at runtime. Pin its version to
+  // the one resolved by the bundled plugin.
   const tsdownExternal = [
     ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
     'lightningcss',
     'postcss',
-    'yuku-parser',
+    'yuku',
   ];
   const isExternal = (id: string) => tsdownExternal.some((e) => id === e || id.startsWith(`${e}/`));
 
@@ -564,6 +564,62 @@ async function bundleTsdown() {
   // Copy client.d.ts to dist/tsdown/ to expose it as the vite-plus/pack/client entry point,
   // equivalent to tsdown/client for registering bundler type features with TypeScript.
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
+}
+
+// rolldown-plugin-dts 0.30 replaced the TypeScript 7.0 CLI backend with its
+// native async API. Preserve the previous `@typescript/native-preview` CLI
+// fallback for projects whose classic TypeScript package is 6.x or older.
+async function patchTsdownNativePreview() {
+  const tsdownDistDir = join(projectDir, 'dist/tsdown');
+  const chunkFiles = await glob(toPosixPath(join(tsdownDistDir, '*.js')), { absolute: true });
+  const patches = [
+    {
+      search:
+        'return moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && !!getPackageInfo("typescript")?.version.startsWith("7.0.") && !tryLoadTsgoApi(moduleUrl);',
+      replacement:
+        'return moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && !tryLoadTsgoApi(moduleUrl) && (!!getPackageInfo("typescript")?.version.startsWith("7.0.") || !!getPackageInfo("@typescript/native-preview"));',
+    },
+    {
+      search: 'const pkgJsonPath = tryResolve("typescript/package.json");',
+      replacement:
+        'const pkgName = getPackageInfo("typescript")?.version.startsWith("7.0.") ? "typescript" : "@typescript/native-preview";\n\tconst pkgJsonPath = tryResolve(`${pkgName}/package.json`);',
+    },
+    {
+      search: 'logger.info(`Emit types with ${styleText("underline", `typescript@${version}`)}`);',
+      replacement:
+        'logger.info(`Emit types with ${styleText("underline", `${pkgName}@${version}`)}`);',
+    },
+    {
+      search:
+        'TypeScript Go is not installed. Please install the `typescript@7.0` package to use the `tsgo` generator.',
+      replacement:
+        'TypeScript Go is not installed. Please install the `typescript@7.0` or `@typescript/native-preview` package to use the `tsgo` generator.',
+    },
+  ];
+  const patchCounts = patches.map(() => 0);
+
+  for (const chunkFile of chunkFiles) {
+    let content = await readFile(chunkFile, 'utf8');
+    let changed = false;
+    for (const [index, { search, replacement }] of patches.entries()) {
+      const occurrences = content.split(search).length - 1;
+      if (occurrences === 0) {
+        continue;
+      }
+      patchCounts[index] += occurrences;
+      content = content.replaceAll(search, replacement);
+      changed = true;
+    }
+    if (changed) {
+      await writeFile(chunkFile, content);
+    }
+  }
+
+  if (patchCounts.some((count) => count !== 1)) {
+    throw new Error(
+      `patchTsdownNativePreview: expected one match per patch, found ${patchCounts.join(', ')}`,
+    );
+  }
 }
 
 async function brandTsdown() {
@@ -773,6 +829,9 @@ async function mergePackageJson() {
   // and its declarations import their types, so isolated installs need them
   // declared here.
   destPkg.peerDependencies = {
+    // Preserve patchTsdownNativePreview's fallback after the dts plugin stopped
+    // declaring this peer. An explicit upstream range still takes precedence.
+    '@typescript/native-preview': '*',
     ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
@@ -780,6 +839,7 @@ async function mergePackageJson() {
 
   // Merge peerDependenciesMeta from rolldown-plugin-dts, tsdown and vite
   destPkg.peerDependenciesMeta = {
+    '@typescript/native-preview': { optional: true },
     ...dtsPkg.peerDependenciesMeta,
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,

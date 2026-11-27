@@ -15,10 +15,15 @@ export function getBundledDependencyRanges(
   const tsdownRequire = createRequire(coreRequire.resolve('tsdown/package.json'));
   const pluginPath = tsdownRequire.resolve('rolldown-plugin-dts/package.json');
   const vitePath = join(root, 'vite/packages/vite/package.json');
+  const pluginDependencies = readJsonObject(pluginPath).dependencies;
+  const yukuName =
+    isObjectValue(pluginDependencies) && Object.hasOwn(pluginDependencies, 'yuku')
+      ? 'yuku'
+      : 'yuku-parser';
   // These packages stay external in packages/core/build.ts. Follow their
   // bundled consumers rather than independently selecting the latest releases.
   const sources: Array<{ path: string; field: DependencyField; name: string }> = [
-    { path: pluginPath, field: 'dependencies', name: 'yuku-parser' },
+    { path: pluginPath, field: 'dependencies', name: yukuName },
     { path: vitePath, field: 'dependencies', name: 'postcss' },
     { path: vitePath, field: 'optionalDependencies', name: 'fsevents' },
   ];
@@ -28,9 +33,9 @@ export function getBundledDependencyRanges(
     if (typeof range !== 'string' || range.trim() === '') {
       throw new Error(`Missing ${field}.${name} in ${path}; review core's externals`);
     }
-    if (name === 'yuku-parser') {
-      // Pin the runtime parser to the exact version resolved by the bundled plugin.
-      const parserPath = createRequire(path).resolve('yuku-parser/package.json');
+    if (name === 'yuku' || name === 'yuku-parser') {
+      // Pin the runtime package to the exact version resolved by the bundled plugin.
+      const parserPath = createRequire(path).resolve(`${name}/package.json`);
       const { version } = readJsonObject(parserPath);
       if (typeof version !== 'string' || version.trim() === '') {
         throw new Error(`Missing version in ${parserPath}; review core's externals`);

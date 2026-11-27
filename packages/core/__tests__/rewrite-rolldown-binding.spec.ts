@@ -110,6 +110,24 @@ describe('rewriteRolldownBindingRequires', () => {
     expect(rewritten.guardRewrites).toBe(1);
   });
 
+  it('handles pure-annotated require calls', () => {
+    const source = [
+      `const binding = (/* @__PURE__ */ __require())("@rolldown/binding-darwin-arm64");`,
+      `const bindingPackageVersion = (/* @__PURE__ */ __require())("@rolldown/binding-darwin-arm64/package.json").version;`,
+      `if (bindingPackageVersion !== "1.3.4" && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== "0") throw new Error(\`Native binding package version mismatch, expected 1.3.4 but got \${bindingPackageVersion}. You can reinstall dependencies to fix this issue.\`);`,
+    ].join('\n');
+    const rewritten = rewriteRolldownBindingRequires(source, {
+      packageName: PACKAGE_NAME,
+      platformSuffixes,
+      version: VERSION,
+    });
+    expect(rewritten.source).toContain(`__require())("@voidzero-dev/vite-plus-darwin-arm64")`);
+    expect(rewritten.source).toContain(`bindingPackageVersion !== "9.9.9"`);
+    expect(rewritten.source).toContain('expected 9.9.9 but got');
+    expect(rewritten.specifierRewrites).toBe(2);
+    expect(rewritten.guardRewrites).toBe(1);
+  });
+
   it('is stable when applied twice', () => {
     const second = rewriteRolldownBindingRequires(result.source, {
       packageName: PACKAGE_NAME,

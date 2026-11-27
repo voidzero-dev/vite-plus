@@ -383,7 +383,7 @@ fn has_trusted_define_config_cjs_binding(stmt: &Statement<'_>) -> bool {
                         BindingPattern::ObjectPattern(pattern) => {
                             is_trusted_package_require(init)
                                 && pattern.properties.iter().any(|prop| {
-                                    !prop.computed
+                                    !prop.key.is_computed()
                                         && prop
                                             .key
                                             .static_name()
@@ -935,6 +935,20 @@ mod tests {
             "cjs",
         );
         assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
+    fn module_exports_define_config_computed_destructured_require_is_non_static() {
+        let result = parse_js_ts_config(
+            r"
+            const { ['defineConfig']: defineConfig } = require('vite-plus');
+            module.exports = defineConfig({
+                run: { cacheScripts: true },
+            });
+            ",
+            "cjs",
+        );
+        assert_non_static(&result, "run");
     }
 
     #[test]

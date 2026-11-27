@@ -344,6 +344,28 @@ test('pins the bundled parser, syncs Vite ranges, and preserves upgrade metadata
   expect(readFileSync(corePath, 'utf8')).toBe(before);
 });
 
+test('migrates the external parser to consolidated Yuku', () => {
+  const fixture = createSyncFixture();
+  const plugin = readJson(fixture.pluginPath);
+  plugin.dependencies = { yuku: '^0.28.0' };
+  writeJson(fixture.pluginPath, plugin);
+  writeJson(join(dirname(fixture.pluginPath), 'node_modules/yuku/package.json'), {
+    version: '0.28.1',
+  });
+
+  fixture.run();
+  expect(readJson(fixture.corePath).dependencies).toEqual({
+    postcss: '^8.5.28',
+    yuku: '0.28.1',
+  });
+  expect(readJson(fixture.versionsPath)['yuku']).toEqual({ old: '^0.9.3', new: '0.28.1' });
+  expect(readJson(fixture.versionsPath)).not.toHaveProperty('yuku-parser');
+
+  const before = readFileSync(fixture.corePath, 'utf8');
+  fixture.run();
+  expect(readFileSync(fixture.corePath, 'utf8')).toBe(before);
+});
+
 test('restarts the core version counter when the bundled Vite changes', () => {
   const fixture = createSyncFixture();
   const { corePath, versionsPath, metaDir, run } = fixture;

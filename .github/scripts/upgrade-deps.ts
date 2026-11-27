@@ -548,11 +548,20 @@ function syncBundledDependencies(): void {
   const pkg = readJsonObject(filePath);
   for (const { name, field, range } of ranges) {
     const dependencies = pkg[field];
-    if (!isObjectValue(dependencies) || typeof dependencies[name] !== 'string') {
+    if (!isObjectValue(dependencies)) {
+      throw new Error(`Missing ${field} in ${filePath}`);
+    }
+    // rolldown-plugin-dts 0.30 consolidated its parser packages into `yuku`.
+    const previousName =
+      name === 'yuku' && typeof dependencies[name] !== 'string' ? 'yuku-parser' : name;
+    if (typeof dependencies[previousName] !== 'string') {
       throw new Error(`Missing ${field}.${name} in ${filePath}`);
     }
     // Preserve the original version if synchronization runs again after fixups.
-    recordChange(name, changes.get(name)?.old ?? dependencies[name], range);
+    recordChange(name, changes.get(name)?.old ?? dependencies[previousName], range);
+    if (previousName !== name) {
+      delete dependencies[previousName];
+    }
     dependencies[name] = range;
   }
   syncCoreVersion(pkg);
