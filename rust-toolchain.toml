@@ -6,3 +6,5 @@ profile = "default"
 # vp_trampoline uses rust-src to build std from source.
 # This reduces the shim binary size.
 components = ["rust-src"]
+# fspy embeds the bare-metal Linux preload launcher via Cargo bindeps.
+targets = ["aarch64-unknown-none-softfloat", "x86_64-unknown-none"]
