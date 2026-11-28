@@ -59,6 +59,32 @@ if (scenario === 'system-pm') {
     run(['env', 'exec', '--node', process.versions.node, 'pnpm', 'install']),
     /selected Node and original PATH precedence preserved/,
   );
+} else if (scenario === 'system-npm') {
+  // npm is bundled with the managed Node.js, so prepending its bin directory
+  // must not hide the system npm that is first on PATH.
+  writeFileSync(
+    'package.json',
+    JSON.stringify({ name: 'system-first-path', private: true, packageManager: 'npm@10.9.0' }),
+  );
+  writeFileSync('.nvmrc', '22.23.4\n');
+  const npmBin = join(root, 'system-npm-bin');
+  mkdirSync(npmBin, { recursive: true });
+  executable(
+    join(npmBin, 'npm'),
+    '#!/bin/sh\nif [ "${1-}" = "--version" ]; then echo 10.9.0; else echo system-npm-ran; fi\n',
+  );
+  const managedNodeBin = join(process.env.VP_HOME, 'js_runtime/node/22.23.4/bin');
+  const installOnPath = (path) => {
+    const result = spawnSync('vp', ['install'], { env: { ...env, PATH: path }, encoding: 'utf8' });
+    assert.equal(result.status, 0, `install\n${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /system-npm-ran/);
+  };
+  run(['env', 'on', 'node']);
+  run(['env', 'off', 'npm']);
+  // The managed Node.js bin directory is not on PATH.
+  installOnPath([npmBin, process.env.PATH].join(delimiter));
+  // The system npm stays ahead even when the managed Node.js bin directory is on PATH.
+  installOnPath([npmBin, managedNodeBin, process.env.PATH].join(delimiter));
 } else {
   const managed = join(process.env.VP_HOME, 'package_manager/pnpm/10.18.0/pnpm/bin');
   mkdirSync(managed, { recursive: true });
@@ -80,4 +106,8 @@ if (scenario === 'system-pm') {
     );
   }
 }
-console.log(`${scenario}: selected Node and original PATH precedence preserved`);
+console.log(
+  scenario === 'system-npm'
+    ? 'system-npm: the system npm first on PATH ran for vp install'
+    : `${scenario}: selected Node and original PATH precedence preserved`,
+);

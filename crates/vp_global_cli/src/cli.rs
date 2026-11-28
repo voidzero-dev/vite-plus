@@ -727,9 +727,13 @@ async fn run_package_manager_command(
         None => {}
     }
 
-    commands::prepend_js_runtime_to_path_env(&cwd).await?;
-    let selected = commands::env::package_manager::resolve_current_spec(&cwd).await?;
-    let result = if let Some(selected) = selected.as_ref()
+    // Resolve a system-first package manager before
+    // `prepend_js_runtime_to_path_env` prepends the managed Node.js bin
+    // directory: that directory also contains npm, so a lookup on the
+    // modified PATH would dispatch Vite+'s bundled npm where system-first
+    // mode expects the system package manager that is first on PATH.
+    let system_manager = if let Some(selected) =
+        commands::env::package_manager::resolve_current_spec(&cwd).await?
         && commands::env::config::load_config()
             .await?
             .package_manager_shim_mode_for(selected.package_manager_type)
@@ -743,6 +747,12 @@ async fn run_package_manager_command(
         )
         .await
     {
+        Some(manager)
+    } else {
+        None
+    };
+    commands::prepend_js_runtime_to_path_env(&cwd).await?;
+    let result = if let Some(manager) = system_manager {
         vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager).await?
     } else {
         let selected = commands::env::package_manager::resolve_current(&cwd).await?;
