@@ -118,6 +118,24 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
     let config = env::config::load_config().await?;
     let mut executor = JsExecutor::new(None);
 
+    // Resolve a system-first package manager before prepending the managed
+    // Node.js bin directory: that directory also contains npm, so a lookup on
+    // the modified PATH would reuse Vite+'s own selection instead of the
+    // system package manager that is first on PATH.
+    let system_package_manager = if let Some(package_manager) =
+        env::package_manager::resolve_current_spec(project_path).await?
+        && config.package_manager_shim_mode_for(package_manager.package_manager_type)
+            == env::config::ShimMode::SystemFirst
+        && let Some(system_path) = crate::shim::dispatch::find_system_tool(
+            &package_manager.package_manager_type.to_string(),
+        )
+        && let Some(bin_dir) = system_path.parent()
+    {
+        Some((package_manager.package_manager_type.to_string(), bin_dir.to_absolute_path_buf()))
+    } else {
+        None
+    };
+
     let node_bin_prefix = if config.node_shim_mode == env::config::ShimMode::SystemFirst
         && let Some(system_node) = crate::shim::dispatch::find_system_tool("node")
         && let Some(bin_dir) = system_node.parent()
@@ -139,18 +157,9 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         &["node"],
         PrependOptions { dedupe_anywhere: true },
     )?;
-    if let Some(package_manager) = env::package_manager::resolve_current_spec(project_path).await? {
-        if config.package_manager_shim_mode_for(package_manager.package_manager_type)
-            == env::config::ShimMode::SystemFirst
-            && let Some(system_path) = crate::shim::dispatch::find_system_tool(
-                &package_manager.package_manager_type.to_string(),
-            )
-            && let Some(bin_dir) = system_path.parent()
-        {
-            let tool = package_manager.package_manager_type.to_string();
-            prepend_tools_to_path_env(bin_dir, &[&tool], PrependOptions { dedupe_anywhere: true })?;
-            return Ok(());
-        }
+    if let Some((tool, bin_dir)) = system_package_manager {
+        prepend_tools_to_path_env(&bin_dir, &[&tool], PrependOptions { dedupe_anywhere: true })?;
+        return Ok(());
     }
     if let Some(package_manager) = env::package_manager::resolve_current(project_path).await? {
         let (install_dir, _, _) = vp_pm_cli::download_package_manager_for_cwd(
