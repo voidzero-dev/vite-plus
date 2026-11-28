@@ -6,6 +6,13 @@ prewarm-package-managers = false
 steps = [["node", "verify.mjs", "system-pm"]]
 
 [[case]]
+name = "managed_node_precedes_later_node_path"
+vp = "global"
+skip-platforms = ["windows"]
+prewarm-package-managers = false
+steps = [["node", "verify.mjs", "managed-node-later"]]
+
+[[case]]
 name = "managed_shim_preserves_system_node_path"
 vp = "global"
 skip-platforms = ["windows"]

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 
 const scenario = process.argv[2];
@@ -51,7 +51,23 @@ function run(args) {
 }
 run(['env', 'off', 'node']);
 run(['env', 'off', 'pm']);
-if (scenario === 'system-pm') {
+if (scenario === 'managed-node-later') {
+  // The selected managed Node.js is already on PATH, but after another Node.js.
+  // The runner seeds `js_runtime` read-mostly, so reuse the runtime running this script.
+  const managedNode = join(process.env.VP_HOME, 'js_runtime/node', process.versions.node, 'bin');
+  assert.ok(existsSync(join(managedNode, 'node')), `missing seeded runtime in ${managedNode}`);
+  const otherNode = join(root, 'other-node-bin');
+  mkdirSync(otherNode);
+  executable(join(otherNode, 'node'), '#!/bin/sh\necho shadowed-by-other-node\nexit 1\n');
+  writeFileSync('.nvmrc', `${process.versions.node}\n`);
+  run(['env', 'on', 'node']);
+  const result = spawnSync('vp', ['install'], {
+    env: { ...env, PATH: [otherNode, managedNode, env.PATH].join(delimiter) },
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /selected Node and original PATH precedence preserved/);
+} else if (scenario === 'system-pm') {
   assert.match(run(['install']), /selected Node and original PATH precedence preserved/);
   run(['env', 'on', 'node']);
   assert.match(run(['install']), /selected Node and original PATH precedence preserved/);
