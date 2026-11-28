@@ -383,7 +383,7 @@ fn has_trusted_define_config_cjs_binding(stmt: &Statement<'_>) -> bool {
                         BindingPattern::ObjectPattern(pattern) => {
                             is_trusted_package_require(init)
                                 && pattern.properties.iter().any(|prop| {
-                                    !prop.computed
+                                    !prop.key.is_computed()
                                         && prop
                                             .key
                                             .static_name()

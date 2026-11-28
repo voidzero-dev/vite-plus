@@ -29,7 +29,7 @@ assert.ok(bindingExport, 'the emitted loader must export its binding initializer
 // No real /tmp files or package-manager processes are used by the loader.
 const baseDir = `/tmp/rolldown-${version}`;
 const bindingEntry = `${baseDir}/node_modules/@rolldown/binding-wasm32-wasi/rolldown-binding.wasi.cjs`;
-const wasmBinding = {};
+const wasmBinding = { __napiBindingTarget: 'wasm32-wasi' };
 let cached = mode === 'cached';
 let downloads = 0;
 let cacheChecks = 0;

@@ -548,11 +548,22 @@ function syncBundledDependencies(): void {
   const pkg = readJsonObject(filePath);
   for (const { name, field, range } of ranges) {
     const dependencies = pkg[field];
-    if (!isObjectValue(dependencies) || typeof dependencies[name] !== 'string') {
+    // Yuku consolidated its parser packages into `yuku` in the dts plugin.
+    // Accept the old core field once so the upgrade can perform the rename.
+    const previousName = name === 'yuku' ? 'yuku-parser' : undefined;
+    const previousRange =
+      isObjectValue(dependencies) && previousName ? dependencies[previousName] : undefined;
+    const currentRange = isObjectValue(dependencies)
+      ? (dependencies[name] ?? previousRange)
+      : undefined;
+    if (!isObjectValue(dependencies) || typeof currentRange !== 'string') {
       throw new Error(`Missing ${field}.${name} in ${filePath}`);
     }
     // Preserve the original version if synchronization runs again after fixups.
-    recordChange(name, changes.get(name)?.old ?? dependencies[name], range);
+    recordChange(name, changes.get(name)?.old ?? currentRange, range);
+    if (previousName) {
+      delete dependencies[previousName];
+    }
     dependencies[name] = range;
   }
   syncCoreVersion(pkg);

@@ -71,6 +71,7 @@ await bundleRolldown();
 await buildVite();
 await bundleTsdown();
 await brandTsdown();
+await preserveNativePreviewTsgo();
 await wireBundledTsdownExtensions();
 generateLicenseFile({
   title: 'Vite-Plus core license',
@@ -374,7 +375,7 @@ async function bundleRolldown() {
     throw new Error('Missing Rolldown package version');
   }
   const webContainerVersionLookup =
-    'JSON.parse(fs.readFileSync(__require.resolve("rolldown/package.json"), "utf-8")).version';
+    'JSON.parse(fs.readFileSync((/* @__PURE__ */ __require()).resolve("rolldown/package.json"), "utf-8")).version';
   let webContainerVersionRewrites = 0;
   const rolldownFiles = new Set<string>();
 
@@ -485,16 +486,15 @@ async function bundleTsdown() {
   // in and they cannot be bundled. Both are core `dependencies`, so they resolve
   // at runtime and CSS bundling works without users installing anything.
   //
-  // `yuku-parser` (used by `rolldown-plugin-dts`) loads native bindings through
-  // `yuku-core`. Keep it external and declare it as a core dependency so the
-  // native loader resolves its platform package at runtime. Pin its version
-  // to the one resolved by the bundled plugin. `yuku-ast` and
-  // `yuku-codegen` are pure JavaScript in Yuku 0.19 and are bundled into core.
+  // `yuku` (used by `rolldown-plugin-dts`) loads native bindings through its
+  // optional platform packages. Keep it external and declare it as a core
+  // dependency so the native loader resolves its platform package at runtime.
+  // Pin its version to the one resolved by the bundled plugin.
   const tsdownExternal = [
     ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
     'lightningcss',
     'postcss',
-    'yuku-parser',
+    'yuku',
   ];
   const isExternal = (id: string) => tsdownExternal.some((e) => id === e || id.startsWith(`${e}/`));
 
@@ -669,6 +669,119 @@ async function brandTsdown() {
   }
 }
 
+// tsdown 0.23.7's dts plugin dropped its native-preview peer in favor of the
+// TypeScript 7.1 API. Preserve Vite+'s existing explicit-tsgo support by using
+// the plugin's legacy CLI backend with @typescript/native-preview when the
+// installed classic TypeScript is older than 7. Each rewrite is required so a
+// future plugin change cannot silently remove one part of the compatibility path.
+async function preserveNativePreviewTsgo() {
+  const tsdownDistDir = join(projectDir, 'dist/tsdown');
+  const chunkFiles = await glob(toPosixPath(join(tsdownDistDir, '*.js')), { absolute: true });
+  const patches = [
+    {
+      name: 'default compiler selection',
+      search:
+        'function getDefaultTsgoModuleUrl(compiler = "tsgo") {\n' +
+        '\tconst packageName = PACKAGE_NAMES[compiler];\n' +
+        '\ttry {\n' +
+        '\t\treturn import.meta.resolve(packageName);\n' +
+        '\t} catch {}\n' +
+        '}',
+      replacement:
+        'function getDefaultTsgoModuleUrl(compiler = "tsgo") {\n' +
+        '\tconst packageName = PACKAGE_NAMES[compiler];\n' +
+        '\tconst typescriptVersion = getPackageInfo("typescript")?.version;\n' +
+        '\tif (compiler === "tsgo" && (!typescriptVersion || Number(typescriptVersion.split(".", 1)[0]) < 7)) {\n' +
+        '\t\ttry {\n' +
+        '\t\t\treturn import.meta.resolve("@typescript/native-preview");\n' +
+        '\t\t} catch {}\n' +
+        '\t}\n' +
+        '\ttry {\n' +
+        '\t\treturn import.meta.resolve(packageName);\n' +
+        '\t} catch {}\n' +
+        '}',
+    },
+    {
+      name: 'native-preview detection helper',
+      search:
+        'function tryLoadTsgoApi(moduleUrl, compiler = "tsgo") {\n' +
+        '\tif (moduleUrl == null) return;',
+      replacement:
+        'function isNativePreviewTsgo(moduleUrl) {\n' +
+        '\tif (moduleUrl == null) return false;\n' +
+        '\ttry {\n' +
+        '\t\treturn moduleUrl === import.meta.resolve("@typescript/native-preview");\n' +
+        '\t} catch {\n' +
+        '\t\treturn false;\n' +
+        '\t}\n' +
+        '}\n' +
+        'function tryLoadTsgoApi(moduleUrl, compiler = "tsgo") {\n' +
+        '\tif (moduleUrl == null) return;',
+    },
+    {
+      name: 'legacy backend selection',
+      search:
+        '\treturn moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && !!getPackageInfo("typescript")?.version.startsWith("7.0.") && !tryLoadTsgoApi(moduleUrl);',
+      replacement:
+        '\treturn isNativePreviewTsgo(moduleUrl) || moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && !!getPackageInfo("typescript")?.version.startsWith("7.0.") && !tryLoadTsgoApi(moduleUrl);',
+    },
+    {
+      name: 'native-preview executable resolution',
+      search:
+        'function resolveTsgoPath(logger) {\n' +
+        '\tif (tsgoPathCache) return tsgoPathCache;\n' +
+        '\tconst pkgJsonPath = tryResolve("typescript/package.json");\n' +
+        '\tif (!pkgJsonPath) throw new Error("TypeScript Go is not installed. Please install the `typescript@7.0` package to use the `tsgo` generator.");\n' +
+        '\tconst { version } = require(pkgJsonPath);\n' +
+        '\tlogger.info(`Emit types with ${styleText("underline", `typescript@${version}`)}`);',
+      replacement:
+        'function resolveTsgoPath(logger, moduleUrl) {\n' +
+        '\tif (tsgoPathCache) return tsgoPathCache;\n' +
+        '\tconst pkgName = isNativePreviewTsgo(moduleUrl) ? "@typescript/native-preview" : "typescript";\n' +
+        '\tconst pkgJsonPath = tryResolve(`${pkgName}/package.json`);\n' +
+        '\tif (!pkgJsonPath) throw new Error("TypeScript Go is not installed. Please install the `typescript@7.0` or `@typescript/native-preview` package to use the `tsgo` generator.");\n' +
+        '\tconst { version } = require(pkgJsonPath);\n' +
+        '\tlogger.info(`Emit types with ${styleText("underline", `${pkgName}@${version}`)}`);',
+    },
+    {
+      name: 'executable resolver call site',
+      search: 'tsgo.path ??= resolveTsgoPath(logger);',
+      replacement: 'tsgo.path ??= resolveTsgoPath(logger, tsgo.moduleUrl);',
+    },
+  ];
+  const patchCounts = Array.from<number>({ length: patches.length }).fill(0);
+
+  for (const chunkFile of chunkFiles) {
+    let content = await readFile(chunkFile, 'utf8');
+    let changed = false;
+    for (const [index, patch] of patches.entries()) {
+      const count = content.split(patch.search).length - 1;
+      if (count === 0) {
+        continue;
+      }
+      patchCounts[index] += count;
+      content = content.replaceAll(patch.search, patch.replacement);
+      changed = true;
+    }
+    if (changed) {
+      await writeFile(chunkFile, content);
+      console.log(`Preserved @typescript/native-preview tsgo support in ${chunkFile}`);
+    }
+  }
+
+  const invalidCounts = patches.flatMap((patch, index) => {
+    const count = patchCounts[index];
+    return count === 1 ? [] : [{ name: patch.name, count }];
+  });
+  if (invalidCounts.length > 0) {
+    throw new Error(
+      `preserveNativePreviewTsgo: expected each pattern once, found ${invalidCounts
+        .map(({ name, count }) => `${name}: ${count}`)
+        .join(', ')}`,
+    );
+  }
+}
+
 // Wire the bundled `@tsdown/exe` and `@tsdown/css` extensions into the bundled
 // tsdown so they load from the local chunks instead of resolving external
 // top-level packages. See https://github.com/voidzero-dev/vite-plus/issues/1586
@@ -768,10 +881,9 @@ async function mergePackageJson() {
   );
 
   // Merge peerDependencies from rolldown-plugin-dts, tsdown and vite. The bundled
-  // dts plugin still resolves `vue-tsc`, `@volar/typescript`,
-  // `@vue/language-core` and `@typescript/native-preview` from core at runtime,
-  // and its declarations import their types, so isolated installs need them
-  // declared here.
+  // dts plugin resolves `vue-tsc`, `@volar/typescript`, `@vue/language-core` and
+  // `tsrs` from core at runtime, and its declarations import their types, so
+  // isolated installs need them declared here.
   destPkg.peerDependencies = {
     ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
@@ -798,6 +910,11 @@ async function mergePackageJson() {
     delete destPkg.peerDependencies[bundled];
     delete destPkg.peerDependenciesMeta[bundled];
   }
+
+  // Vite+ retains the explicit-tsgo native-preview compatibility path restored
+  // by preserveNativePreviewTsgo, although the upstream plugin dropped this peer.
+  destPkg.peerDependencies['@typescript/native-preview'] = '*';
+  destPkg.peerDependenciesMeta['@typescript/native-preview'] = { optional: true };
 
   destPkg.bundledVersions = {
     ...destPkg.bundledVersions,
