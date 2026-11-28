@@ -75,9 +75,8 @@ import {
   hasProviderPeerDependency,
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
-  OXLINT_PLUGIN_API_PACKAGES,
-  packageOwnsOxlintApi,
   bundledPackagesToRemove,
+  removeBundledDevDependencies,
   VITEST_IS_MANAGED_OVERRIDE,
   managedOverrideKey,
   pinnedPackageManagerVersion,
@@ -394,34 +393,11 @@ function reconcileVitePlusBootstrapPackage(
 
   // Match the fresh migration and catalog cleanup. A preserved browser import
   // still needs its declared browser dependency in this package.
-  const ownsOxlintApi = packageOwnsOxlintApi(pkg);
-  for (const bundledPackage of bundledPackagesToRemove(
-    retainedImportDependencies?.browser.get(projectPath),
-  )) {
-    for (const dependencies of installGroups) {
-      if (
-        ownsOxlintApi &&
-        dependencies !== undefined &&
-        dependencies === pkg.dependencies &&
-        (OXLINT_PLUGIN_API_PACKAGES as ReadonlyArray<string>).includes(bundledPackage)
-      ) {
-        // A published plugin keeps the runtime dependency that supplies its
-        // upstream imports, as the fresh path does. Its `catalog:` reference
-        // becomes the concrete range because the catalog entry is deleted.
-        const current = dependencies[bundledPackage];
-        if (current?.startsWith('catalog:')) {
-          const resolved = catalogDependencyResolver?.(current, bundledPackage);
-          if (resolved) {
-            dependencies[bundledPackage] = resolved;
-          }
-        }
-        continue;
-      }
-      if (dependencies?.[bundledPackage] !== undefined) {
-        delete dependencies[bundledPackage];
-      }
-    }
-  }
+  removeBundledDevDependencies(
+    pkg,
+    bundledPackagesToRemove(retainedImportDependencies?.browser.get(projectPath)),
+    catalogDependencyResolver,
+  );
 
   if (usesAnyOptInProvider && packageManager === PackageManager.npm) {
     const viteAlreadyDirect = installGroups.some(

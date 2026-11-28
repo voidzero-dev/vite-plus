@@ -607,11 +607,11 @@ describe('Oxlint plugin dependency cleanup', () => {
     expect(pending()).toBe(false);
   });
 
-  it('keeps optional oxlint on the existing tool-migration path', () => {
+  it('keeps optional oxlint as a runtime dependency', () => {
     const pkg = { optionalDependencies: { oxlint: '^1.79.0' } };
-    expect(packageOwnsOxlintApi(pkg)).toBe(false);
+    expect(packageOwnsOxlintApi(pkg)).toBe(true);
     rewritePackageJson(pkg, PackageManager.pnpm);
-    expect(pkg.optionalDependencies).toEqual({});
+    expect(pkg.optionalDependencies).toEqual({ oxlint: '^1.79.0' });
   });
 });
 

@@ -135,6 +135,8 @@ What happens to each toolchain dependency, at a glance:
 | `@vitest/*`                    | Directly installed lockstep packages aligned to the bundled Vitest version (see [Vitest Ecosystem Packages](#vitest-ecosystem-packages)).                                   |
 | `@voidzero-dev/vite-plus-test` | Removed everywhere: dependencies, overrides, resolutions, and catalog aliases. Imports are rewritten to the current `vite-plus/test*` surface.                              |
 
+Vite+ bundles Oxlint, Oxfmt, tsdown, `@vitest/browser`, and `@vitest/browser-preview`, so migration removes their `devDependencies` entries. A package that also lists one of them in `dependencies`, `optionalDependencies`, or `peerDependencies` keeps every declaration of it, including the development copy. Such a package publishes or runs the tool, and its consumers may not use Vite+. A tsdown plugin, for example, keeps `tsdown` as a peer and as the devDependency it tests against. A kept `catalog:` reference becomes the range its catalog entry pointed at, because migration still removes that entry.
+
 ### Version Selection
 
 - `vite-plus` is pinned to the concrete version of the CLI running the migration, never the `latest` dist-tag.
@@ -239,7 +241,7 @@ The migration leaves three forms alone:
 - Default and namespace `oxlint` imports. They name no binding, so the migration cannot tell the two surfaces apart.
 - Bare side-effect `oxlint` imports, for the same reason.
 
-The migration also skips a package that declares `oxlint` or `@oxlint/plugins` in `dependencies` or `peerDependencies`, or `@oxlint/plugins` in `optionalDependencies`. These dependencies can supply a published Oxlint plugin. Its consumers may not run Vite+.
+The migration also skips a package that declares `oxlint` or `@oxlint/plugins` in `dependencies`, `optionalDependencies`, or `peerDependencies`. These dependencies can supply a published Oxlint plugin. Its consumers may not run Vite+.
 
 The cleanup retains a development dependency on `@oxlint/plugins` when source, package import aliases, or built plugins still reference it. This includes ignored output in directories such as `dist`, `build`, and `out`.
 
