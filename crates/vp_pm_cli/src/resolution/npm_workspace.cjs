@@ -4,39 +4,47 @@ const fs = require('fs');
 const path = require('path');
 const Module = require('module');
 
+function nativeScope(config) {
+  return (
+    config.get('global') ||
+    config.get('location') === 'global' ||
+    config.find('prefix') === 'cli' ||
+    config.get('workspaces') === false ||
+    !config.get('include-workspace-root')
+  );
+}
+
+function readManifest(dir) {
+  try {
+    return JSON.parse(
+      fs.readFileSync(path.join(dir, 'package.json'), 'utf8').replace(/^\uFEFF/, ''),
+    );
+  } catch (error) {
+    if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
+      throw error;
+    }
+    return null;
+  }
+}
+
 async function plan(Config, options, npm, member) {
   async function loadConfig(root) {
     const config = new Config({ ...options, env: { ...process.env } });
-    if (root)
+    if (root) {
       config.loadLocalPrefix = () => {
         config.localPrefix = root;
       };
+    }
     await config.load();
     return config;
   }
-  function nativeScope(config) {
-    return (
-      config.get('global') ||
-      config.get('location') === 'global' ||
-      config.find('prefix') === 'cli' ||
-      config.get('workspaces') === false ||
-      !config.get('include-workspace-root')
-    );
-  }
   let config = await loadConfig();
-  if (nativeScope(config)) return null;
+  if (nativeScope(config)) {
+    return null;
+  }
 
   const mapWorkspaces = npm('@npmcli/map-workspaces');
   member = fs.realpathSync(member);
-  function readManifest(dir) {
-    try {
-      return JSON.parse(
-        fs.readFileSync(path.join(dir, 'package.json'), 'utf8').replace(/^\uFEFF/, ''),
-      );
-    } catch (error) {
-      if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
-    }
-  }
   let root = member;
   let workspaces;
   for (let dir = path.dirname(member); ; dir = path.dirname(dir)) {
@@ -49,11 +57,15 @@ async function plan(Config, options, npm, member) {
         break;
       }
     }
-    if (dir === path.dirname(dir)) break;
+    if (dir === path.dirname(dir)) {
+      break;
+    }
   }
   if (!workspaces) {
     const pkg = readManifest(member);
-    if (!pkg || !pkg.workspaces) return null;
+    if (!pkg || !pkg.workspaces) {
+      return null;
+    }
     workspaces = await mapWorkspaces({ cwd: member, pkg });
   }
   // An early npm 8 release or a nested node_modules can select the wrong
@@ -61,7 +73,9 @@ async function plan(Config, options, npm, member) {
   const differentRoot = config.localPrefix !== root;
   if (differentRoot) {
     config = await loadConfig(root);
-    if (nativeScope(config)) return null;
+    if (nativeScope(config)) {
+      return null;
+    }
   }
   const selectors = config.find('workspace') === 'default' ? [] : config.get('workspace');
   const combined = selectors.length > 0 || config.get('workspaces') === true;
@@ -73,7 +87,9 @@ async function plan(Config, options, npm, member) {
     const oldNpm = npm('semver').lt(npm('../package.json').version, '8.19.0');
     if (
       specs.some((spec) => {
-        if (spec.type !== 'directory') return false;
+        if (spec.type !== 'directory') {
+          return false;
+        }
         return oldNpm || spec.name || !members.has(spec.fetchSpec);
       })
     ) {
@@ -92,7 +108,9 @@ async function plan(Config, options, npm, member) {
       );
     }
   }
-  if (!differentRoot && (root === member || selectors.length > 0)) return null;
+  if (!differentRoot && (root === member || selectors.length > 0)) {
+    return null;
+  }
   // npm 8 resolves path selectors from its prefix. Preserve their origin
   // when selecting another prefix, including selectors configured in npmrc.
   return {
@@ -108,24 +126,31 @@ module.exports = function enable(member, preload) {
   let active = true;
   function workspaceRequire(id) {
     const result = original.call(this, id);
-    if (!active || id !== '@npmcli/config' || path.basename(this.filename) !== 'npm.js')
+    if (!active || id !== '@npmcli/config' || path.basename(this.filename) !== 'npm.js') {
       return result;
+    }
     const npm = Module.createRequire(this.filename);
     if (
       path.basename(path.dirname(this.filename)) !== 'lib' ||
       !fs.existsSync(path.resolve(path.dirname(this.filename), '../package.json')) ||
       npm('../package.json').name !== 'npm'
-    )
+    ) {
       return result;
+    }
     active = false;
     // A user preload may have wrapped this function after it was installed.
-    if (Module.prototype.require === workspaceRequire) Module.prototype.require = original;
+    if (Module.prototype.require === workspaceRequire) {
+      Module.prototype.require = original;
+    }
     // A lifecycle script can start another npm. Only the outer invocation is scoped.
     const options = (process.env.NODE_OPTIONS || '')
       .replace(preload + ' ', '')
       .replace(preload, '');
-    if (options) process.env.NODE_OPTIONS = options;
-    else delete process.env.NODE_OPTIONS;
+    if (options) {
+      process.env.NODE_OPTIONS = options;
+    } else {
+      delete process.env.NODE_OPTIONS;
+    }
     return class WorkspaceConfig extends result {
       constructor(options) {
         super(options);
@@ -133,12 +158,15 @@ module.exports = function enable(member, preload) {
       }
       async load() {
         const edit = await plan(result, this.workspaceOptions, npm, member);
-        if (edit)
+        if (edit) {
           this.loadLocalPrefix = () => {
             this.localPrefix = edit.root;
           };
+        }
         await super.load();
-        if (edit && edit.selectors.length) this.set('workspace', edit.selectors);
+        if (edit && edit.selectors.length) {
+          this.set('workspace', edit.selectors);
+        }
       }
     };
   }
