@@ -8,23 +8,23 @@ exports[`build artifacts > snapshots remaining Rolldown package names and their 
   },
   {
     "code": "name: "rolldown"",
-    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+    "file": "rolldown/shared/validator-[hash].mjs",
   },
   {
     "code": "keywords: [ "bundler", "esbuild", "parcel", "rolldown", "rollup", "webpack" ]",
-    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+    "file": "rolldown/shared/validator-[hash].mjs",
   },
   {
     "code": ""rolldown": "./bin/cli.mjs"",
-    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+    "file": "rolldown/shared/validator-[hash].mjs",
   },
   {
     "code": ""@rolldown/pluginutils": "catalog:"",
-    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+    "file": "rolldown/shared/validator-[hash].mjs",
   },
   {
     "code": ""rolldown": "workspace:*"",
-    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+    "file": "rolldown/shared/validator-[hash].mjs",
   },
   {
     "code": "import { DevRuntime } from "rolldown/experimental/runtime";",

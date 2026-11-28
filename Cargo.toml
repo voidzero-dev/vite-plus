@@ -165,8 +165,7 @@ ast-grep-language = { version = "0.51.0", default-features = false, features = [
   "tree-sitter-bash",
   "tree-sitter-typescript",
 ] }
-async-channel = "2.5.0"
-async-scoped = "0.9.0"
+async-lock = "3.4.2"
 async-trait = "0.1.89"
 backon = "1.3.0"
 base-encode = "0.3.1"
@@ -190,6 +189,7 @@ derive_more = { version = "2.1.1", features = ["debug"] }
 directories = "6.0.0"
 dialoguer = { version = "0.12.0", default-features = false }
 dunce = "1.0.5"
+event-listener = "5.4.2"
 fast-glob = "1.1.0"
 flate2 = { version = "1.1.10", features = ["zlib-rs"] }
 form_urlencoded = "1.2.3"
@@ -221,11 +221,11 @@ jiff = { version = "1.0.1", default-features = false, features = [
 js-semver = "1.0.0"
 json-escape-simd = "3.1.1"
 json-strip-comments = "3"
-jsonschema = { version = "0.60.0", default-features = false }
+jsonschema = { version = "0.63.0", default-features = false }
 junction = "2.0.0"
 libtest-mimic = "0.8.2"
 memchr = "2.8.2"
-mimalloc-safe = "0.1.70"
+mimalloc-safe = "0.1.71"
 mime = "0.3.17"
 napi = { version = "3.12.2", default-features = false, features = [
   "async",
@@ -264,8 +264,9 @@ rayon = "1.12.0"
 regex = "1.13.0"
 regress = "0.12.0"
 reqwest = { version = "0.13", default-features = false }
-rolldown-notify = "11.0.0"
-rolldown-notify-debouncer-full = "0.8.0"
+rolldown-notify = "11.0.1"
+rolldown-notify-debouncer-full = "0.8.1"
+rolldown-notify-napi = "0.0.3"
 rustc-hash = "2.1.3"
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 same-file = "1.0.6"
@@ -279,7 +280,7 @@ serial_test = "4.0.0"
 sha1 = "0.11.0"
 sha2 = "0.11.0"
 shell-escape = "0.1.5"
-simd-utf16-len = "0.3.0"
+simd-utf16-len = "0.4.0"
 simdutf8 = "0.1.5"
 smallvec = { version = "1.16.0", features = ["union"] }
 string_cache = "0.11.0"
@@ -326,7 +327,9 @@ vt_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23
 vt_snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23096aa2f04eb59225c6467b15c2965ee6ae33" }
 vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23096aa2f04eb59225c6467b15c2965ee6ae33" }
 vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23096aa2f04eb59225c6467b15c2965ee6ae33" }
-walkdir = "2.5.0"
+# Pinned to 2.5.0: with 2.5.1, Vite's serve-bundled HMR test on Windows times out waiting for the update.
+# Upgrade once it is known which change in 2.5.1 causes this.
+walkdir = "=2.5.0"
 wax = "0.7.0"
 webpki-root-certs = "1.0.10"
 which = "8.0.6"
@@ -335,7 +338,7 @@ xxhash-rust = "0.8.16"
 zip = { version = "9.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
-oxc = { version = "0.156.0", features = [
+oxc = { version = "0.160.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -347,25 +350,25 @@ oxc = { version = "0.156.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.156.0", features = ["pool"] }
-oxc_ast = "0.156.0"
-oxc_ecmascript = "0.156.0"
+oxc_allocator = { version = "0.160.0", features = ["pool"] }
+oxc_ast = "0.160.0"
+oxc_ecmascript = "0.160.0"
 # Only `vp_static_config` uses the parser directly. It reads plain config values, so the
 # global `vp` skips the regular expression parser. The `oxc` crate enables it for the binding.
-oxc_parser = { version = "0.156.0", default-features = false }
-oxc_span = "0.156.0"
-oxc_napi = "0.156.0"
-oxc_str = "0.156.0"
-oxc_minify_napi = "0.156.0"
-oxc_parser_napi = "0.156.0"
-oxc_transform_napi = "0.156.0"
-oxc_traverse = "0.156.0"
+oxc_parser = { version = "0.160.0", default-features = false }
+oxc_span = "0.160.0"
+oxc_napi = "0.160.0"
+oxc_str = "0.160.0"
+oxc_minify_napi = "0.160.0"
+oxc_parser_napi = "0.160.0"
+oxc_transform_napi = "0.160.0"
+oxc_traverse = "0.160.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "5", features = ["rayon", "serde"] }
 oxc_resolver = { version = "11.24.3", features = ["yarn_pnp"] }
 oxc_resolver_napi = { version = "11.24.3", default-features = false, features = ["yarn_pnp"] }
-oxc_sourcemap = "9.0.0"
+oxc_sourcemap = "10.0.0"
 
 # vendored oxc-node, compiled into the native binding for `vpx <script>`; without its
 # `napi` feature it registers no exports and declares no global allocator, and
@@ -396,6 +399,7 @@ rolldown_plugin_copy_module = { path = "./rolldown/crates/rolldown_plugin_copy_m
 rolldown_plugin_data_url = { path = "./rolldown/crates/rolldown_plugin_data_url" }
 rolldown_plugin_esm_external_require = { path = "./rolldown/crates/rolldown_plugin_esm_external_require" }
 rolldown_plugin_hmr = { path = "./rolldown/crates/rolldown_plugin_hmr" }
+rolldown_plugin_inject = { path = "./rolldown/crates/rolldown_plugin_inject" }
 rolldown_plugin_isolated_declaration = { path = "./rolldown/crates/rolldown_plugin_isolated_declaration" }
 rolldown_plugin_lazy_compilation = { path = "./rolldown/crates/rolldown_plugin_lazy_compilation" }
 rolldown_plugin_oxc_runtime = { path = "./rolldown/crates/rolldown_plugin_oxc_runtime" }

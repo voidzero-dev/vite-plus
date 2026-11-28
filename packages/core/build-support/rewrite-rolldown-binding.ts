@@ -45,11 +45,12 @@ const SPECIFIER_RE = /@rolldown\/binding-([a-z0-9-]+)/g;
 // Anchoring on the rewritten specifier scopes the version replacement to
 // branches this build actually redirects; guards of platforms left on
 // `@rolldown/binding-*` keep comparing against the Rolldown version. Matching
-// bare `require(` also covers the bundled chunks' `__require(` calls.
+// bare `require(` also covers the bundled chunks' `__require(` calls, while
+// `require())(` covers their pure-annotated `(__require())(...)` form.
 function buildGuardRe(packageName: string): RegExp {
   const escaped = packageName.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(
-    `(require\\(["']${escaped}-[a-z0-9-]+\\/package\\.json["']\\)\\.version;\\s*if \\(bindingPackageVersion !== )(["'])[^"']+\\2([\\s\\S]{0,400}?expected )\\S+( but got)`,
+    `((?:require\\(|require\\(\\)\\)\\()["']${escaped}-[a-z0-9-]+\\/package\\.json["']\\)\\.version;\\s*if \\(bindingPackageVersion !== )(["'])[^"']+\\2([\\s\\S]{0,400}?expected )\\S+( but got)`,
     'g',
   );
 }

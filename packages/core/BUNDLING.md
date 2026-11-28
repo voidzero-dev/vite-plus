@@ -99,6 +99,7 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 
 - `peerDependencies` - Merged from rolldown-plugin-dts, tsdown and vite (minus bundled packages)
 - `peerDependenciesMeta` - Merged from rolldown-plugin-dts, tsdown and vite (minus bundled packages)
+- `@typescript/native-preview` - Retained as an optional peer for Vite+'s explicit-tsgo compatibility path
 - `bundledVersions` - Records vite, rolldown, and tsdown versions
 
 ---

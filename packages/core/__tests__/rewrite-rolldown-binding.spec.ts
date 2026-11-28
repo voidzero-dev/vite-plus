@@ -92,10 +92,10 @@ describe('rewriteRolldownBindingRequires', () => {
     expect(rewritten.guardRewrites).toBe(0);
   });
 
-  it('handles single-quoted loader output', () => {
+  it('handles single-quoted pure-annotated loader output', () => {
     const source = [
-      `const binding = require('@rolldown/binding-darwin-arm64');`,
-      `const bindingPackageVersion = require('@rolldown/binding-darwin-arm64/package.json').version;`,
+      `const binding = (/* @__PURE__ */ __require())('@rolldown/binding-darwin-arm64');`,
+      `const bindingPackageVersion = (/* @__PURE__ */ __require())('@rolldown/binding-darwin-arm64/package.json').version;`,
       `if (bindingPackageVersion !== '1.2.1' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') throw new Error(\`Native binding package version mismatch, expected 1.2.1 but got \${bindingPackageVersion}. You can reinstall dependencies to fix this issue.\`);`,
     ].join('\n');
     const rewritten = rewriteRolldownBindingRequires(source, {
@@ -103,7 +103,9 @@ describe('rewriteRolldownBindingRequires', () => {
       platformSuffixes,
       version: VERSION,
     });
-    expect(rewritten.source).toContain(`require('@voidzero-dev/vite-plus-darwin-arm64')`);
+    expect(rewritten.source).toContain(
+      `(/* @__PURE__ */ __require())('@voidzero-dev/vite-plus-darwin-arm64')`,
+    );
     expect(rewritten.source).toContain(`bindingPackageVersion !== '9.9.9'`);
     expect(rewritten.source).toContain('expected 9.9.9 but got');
     expect(rewritten.specifierRewrites).toBe(2);
