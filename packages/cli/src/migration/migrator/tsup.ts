@@ -21,6 +21,8 @@ import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { detectConfigs, TSUP_CONFIG_FILES, TSUP_PACKAGE_JSON_CONFIG } from '../detector.ts';
 import type { MigrationReport } from '../report.ts';
 import { addMigrationWarning } from '../report.ts';
+import type { DependencyBag } from './shared.ts';
+import { removeReplacedDevDependency } from './shared.ts';
 
 function showTsdownMigrationOptions(
   targetLabel = 'the project root',
@@ -614,11 +616,7 @@ function rewriteTsupPackageJson(packageJsonPath: string, preserveTsupDependency 
   if (!fs.existsSync(packageJsonPath)) {
     return;
   }
-  editJsonFile<{
-    scripts?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-    dependencies?: Record<string, string>;
-  }>(packageJsonPath, (pkg) => {
+  editJsonFile<DependencyBag & { scripts?: Record<string, string> }>(packageJsonPath, (pkg) => {
     let changed = false;
     // tsdown-migrate rewrites the command to tsdown. Vite+ Pack automatically
     // loads standard tsdown config files and does not accept `--config`, so
@@ -633,13 +631,8 @@ function rewriteTsupPackageJson(packageJsonPath: string, preserveTsupDependency 
 
     // Remove any tsup dependency left by the external migrator. The tsdown
     // dependency is removed later because vite-plus bundles it.
-    if (!preserveTsupDependency) {
-      for (const field of ['devDependencies', 'dependencies'] as const) {
-        if (pkg[field]?.tsup) {
-          delete pkg[field].tsup;
-          changed = true;
-        }
-      }
+    if (!preserveTsupDependency && removeReplacedDevDependency(pkg, 'tsup')) {
+      changed = true;
     }
     return changed ? pkg : undefined;
   });

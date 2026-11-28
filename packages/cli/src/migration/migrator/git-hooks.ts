@@ -25,11 +25,13 @@ import {
   removeLintStagedFromPackageJson,
 } from '../migrator.ts';
 import type { MigrationReport } from '../report.ts';
+import type { DependencyBag } from './shared.ts';
 import { rewriteScriptMap } from './shared.ts';
 import {
   getCommandStartIndex,
   LINT_STAGED_ALL_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
+  removeReplacedDevDependency,
   SHELL_STATE_COMMANDS,
   warnMigration,
 } from './shared.ts';
@@ -38,18 +40,9 @@ const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
 const SUPPORTED_GIT_HOOK_NAME_SET = new Set<string>(SUPPORTED_GIT_HOOK_NAMES);
 
 function removeReplacedStagedPackage(packageJsonPath: string): void {
-  editJsonFile<{
-    devDependencies?: Record<string, string>;
-    dependencies?: Record<string, string>;
-  }>(packageJsonPath, (pkg) => {
-    if (pkg.devDependencies?.['lint-staged']) {
-      delete pkg.devDependencies['lint-staged'];
-    }
-    if (pkg.dependencies?.['lint-staged']) {
-      delete pkg.dependencies['lint-staged'];
-    }
-    return pkg;
-  });
+  editJsonFile<DependencyBag>(packageJsonPath, (pkg) =>
+    removeReplacedDevDependency(pkg, 'lint-staged') ? pkg : undefined,
+  );
 }
 
 export function detectLegacyGitHooksMigrationCandidate(projectPath: string): boolean {

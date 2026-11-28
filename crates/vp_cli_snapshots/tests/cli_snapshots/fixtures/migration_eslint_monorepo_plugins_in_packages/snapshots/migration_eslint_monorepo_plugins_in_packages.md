@@ -2,7 +2,7 @@
 
 ## `vp migrate --no-interactive`
 
-workspace packages get the SAME aggressive cleanup as the root (deps, configs, lint-staged)
+migrate ESLint across the workspace
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -55,13 +55,21 @@ workspace: eslint, eslint-plugin-vue, @typescript-eslint/parser removed; @typesc
 
 ## `vpt print-file packages/lint-config/package.json`
 
-workspace: all eslint-plugin-* removed; peerDeps.eslint scrubbed (field deleted when empty)
+the shared lint config keeps its plugin dependencies and ESLint peer
 
 ```
 {
   "name": "@test/lint-config",
   "scripts": {
     "lint": "vp lint ."
+  },
+  "dependencies": {
+    "@stylistic/eslint-plugin": "^2.0.0",
+    "eslint-plugin-import": "^2.0.0",
+    "eslint-plugin-vue": "^10.0.0"
+  },
+  "peerDependencies": {
+    "eslint": ">=9"
   }
 }
 ```

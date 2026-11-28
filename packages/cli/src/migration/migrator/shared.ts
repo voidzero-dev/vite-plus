@@ -469,21 +469,70 @@ export function pnpmMajor(version: string | undefined): number | undefined {
   return version ? coerce(version)?.major : undefined;
 }
 
-// Packages that own the Oxlint JS-plugin authoring API as a published contract.
-// Optional `@oxlint/plugins` is also a runtime contract for consumers of a
-// published integration. Optional `oxlint` keeps the existing tool policy.
 export const OXLINT_PLUGINS_PACKAGE = '@oxlint/plugins';
 
-export const OXLINT_PLUGIN_API_PACKAGES = ['oxlint', OXLINT_PLUGINS_PACKAGE] as const;
+const OXLINT_PLUGIN_API_PACKAGES = ['oxlint', OXLINT_PLUGINS_PACKAGE] as const;
 
+// A package that declares either at runtime owns the Oxlint JS-plugin authoring API as a published contract.
 export function packageOwnsOxlintApi(pkg: DependencyBag): boolean {
+  return OXLINT_PLUGIN_API_PACKAGES.some((name) => declaresRuntimeDependency(pkg, name));
+}
+
+/**
+ * Vite+ replaces only a devDependency. A package that also lists it in
+ * `dependencies`, `optionalDependencies`, or `peerDependencies` publishes or
+ * runs it, and its consumers may not use Vite+.
+ */
+export function declaresRuntimeDependency(pkg: DependencyBag, name: string): boolean {
   return (
-    pkg.optionalDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined ||
-    OXLINT_PLUGIN_API_PACKAGES.some(
-      (name) =>
-        pkg.dependencies?.[name] !== undefined || pkg.peerDependencies?.[name] !== undefined,
-    )
+    pkg.dependencies?.[name] !== undefined ||
+    pkg.optionalDependencies?.[name] !== undefined ||
+    pkg.peerDependencies?.[name] !== undefined
   );
+}
+
+/** Remove a devDependency that Vite+ replaces. Returns whether it was removed. */
+export function removeReplacedDevDependency(pkg: DependencyBag, name: string): boolean {
+  if (pkg.devDependencies?.[name] === undefined || declaresRuntimeDependency(pkg, name)) {
+    return false;
+  }
+  delete pkg.devDependencies[name];
+  return true;
+}
+
+/**
+ * Remove the bundled packages that Vite+ replaces. Returns whether the package
+ * lists any of them as a devDependency, kept or not.
+ */
+export function removeBundledDevDependencies(
+  pkg: DependencyBag,
+  names: ReadonlyArray<string>,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  let declared = false;
+  for (const name of names) {
+    declared ||= pkg.devDependencies?.[name] !== undefined;
+    if (!declaresRuntimeDependency(pkg, name)) {
+      delete pkg.devDependencies?.[name];
+      continue;
+    }
+    // Catalog cleanup deletes the bundled entry, so a kept reference takes the range it pointed at.
+    for (const dependencies of [
+      pkg.devDependencies,
+      pkg.dependencies,
+      pkg.optionalDependencies,
+      pkg.peerDependencies,
+    ]) {
+      const current = dependencies?.[name];
+      const resolved = current?.startsWith('catalog:')
+        ? catalogDependencyResolver?.(current, name)
+        : undefined;
+      if (dependencies && resolved) {
+        dependencies[name] = resolved;
+      }
+    }
+  }
+  return declared;
 }
 
 /**

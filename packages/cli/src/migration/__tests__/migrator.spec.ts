@@ -272,7 +272,7 @@ describe('rewritePackageJson', () => {
       };
       rewritePackageJson(pkg, packageManager, isMonorepo);
       expect(pkg).toEqual({
-        dependencies: { foo: '1.0.0' },
+        dependencies: { foo: '1.0.0', tsdown: '1.0.0' },
         devDependencies: { 'vite-plus': vitePlusSpec },
       });
     },
@@ -529,9 +529,9 @@ describe('rewritePackageJson', () => {
     rewritePackageJson(pkg, PackageManager.pnpm, true);
 
     expect(pkg.peerDependencies.vite).toBe('*');
-    expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
+    expect(pkg.peerDependencies).toHaveProperty('tsdown');
     expect(pkg.optionalDependencies.vitest).toBe('catalog:test');
-    expect(pkg.optionalDependencies).not.toHaveProperty('oxlint');
+    expect(pkg.optionalDependencies).toHaveProperty('oxlint');
     expect(pkg).toHaveProperty(['devDependencies', 'vite-plus'], 'catalog:');
   });
 
@@ -840,7 +840,7 @@ describe('rewriteEslintPackageJson', () => {
     rewriteEslintPackageJson(pkgPath);
     const pkg = readJson(pkgPath);
     expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
-    expect(pkg.dependencies).toEqual({ vue: '^3.5.0' });
+    expect(pkg.dependencies).toEqual({ 'eslint-plugin-import': '^2.0.0', vue: '^3.5.0' });
   });
 
   it('removes scoped ESLint plugin/config packages (e.g. @vue/eslint-config-typescript)', () => {
@@ -956,22 +956,28 @@ describe('rewriteEslintPackageJson', () => {
     expect(pkg.devDependencies).toEqual({ '@types/node': '^22.0.0' });
   });
 
-  it('scrubs peerDependencies and optionalDependencies', () => {
-    const pkgPath = writePkg({
-      peerDependencies: {
-        eslint: '>=9',
-        'eslint-plugin-vue': '^10.0.0',
-      },
-      optionalDependencies: {
+  // An ESLint plugin package tests its rules with the ESLint its consumers provide.
+  it('keeps ESLint packages that the project also declares at runtime', () => {
+    const pkg = {
+      peerDependencies: { eslint: '>=9' },
+      optionalDependencies: { '@typescript-eslint/parser': '^8.0.0' },
+      devDependencies: {
+        eslint: '^9.0.0',
         '@typescript-eslint/parser': '^8.0.0',
+        'eslint-plugin-vue': '^10.0.0',
+        vite: '^7.0.0',
       },
-      devDependencies: { vite: '^7.0.0' },
-    });
+    };
+    const pkgPath = writePkg(pkg);
     rewriteEslintPackageJson(pkgPath);
-    const pkg = readJson(pkgPath);
-    expect(pkg.peerDependencies).toBeUndefined();
-    expect(pkg.optionalDependencies).toBeUndefined();
-    expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+    expect(readJson(pkgPath)).toEqual({
+      ...pkg,
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@typescript-eslint/parser': '^8.0.0',
+        vite: '^7.0.0',
+      },
+    });
   });
 
   it('deletes the dependency field entirely when our cleanup emptied it', () => {
@@ -985,7 +991,7 @@ describe('rewriteEslintPackageJson', () => {
     rewriteEslintPackageJson(pkgPath);
     const pkg = readJson(pkgPath);
     expect(pkg.devDependencies).toBeUndefined();
-    expect(pkg.dependencies).toBeUndefined();
+    expect(pkg.dependencies).toEqual({ 'eslint-config-airbnb': '^19.0.0' });
   });
 
   it('preserves unrelated dependencies (e.g. @vitejs/plugin-vue, vue, vite, @nuxt/kit)', () => {
@@ -5645,7 +5651,29 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // catalog entry to its public range before pruning it so the peer cannot
     // dangle after migration.
     expect(pkg).toHaveProperty(['peerDependencies', 'vitest'], '^4.0.0');
-    expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
+    expect(pkg).toHaveProperty(['peerDependencies', 'tsdown'], '^0.1.0');
+  });
+
+  // A tsdown plugin builds and tests against the tsdown its consumers provide.
+  it('keeps a bundled package that the project also declares as a peer', () => {
+    const packageJsonPath = path.join(tmpDir, 'package.json');
+    fs.writeFileSync(
+      packageJsonPath,
+      JSON.stringify({
+        name: 'tsdown-plugin-example',
+        peerDependencies: { tsdown: '^0.23.0' },
+        devDependencies: { tsdown: '^0.23.0' },
+      }),
+    );
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+
+    rewriteStandaloneProject(tmpDir, workspace, true, true);
+
+    const pkg = readJson(packageJsonPath);
+    expect(pkg.peerDependencies).toEqual({ tsdown: '^0.23.0' });
+    expect(pkg.devDependencies).toEqual({ tsdown: '^0.23.0', 'vite-plus': 'catalog:' });
+    checkBootstrapPass(workspace, false);
+    expect(readJson(packageJsonPath)).toEqual(pkg);
   });
 
   it('reuses catalogs.default without creating a duplicate top-level catalog', () => {

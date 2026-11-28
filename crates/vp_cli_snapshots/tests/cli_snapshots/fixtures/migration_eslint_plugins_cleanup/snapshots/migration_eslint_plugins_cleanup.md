@@ -2,7 +2,7 @@
 
 ## `vp migrate --no-interactive`
 
-migration should remove ESLint, plugins, configs, scopes, formatters, and peer eslint
+migrate the ESLint configuration
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -16,7 +16,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ## `vpt print-file package.json`
 
-verify the comprehensive ESLint ecosystem cleanup
+remove dev-only ESLint tooling and keep both declarations of the ESLint peer
 
 ```
 {
@@ -32,9 +32,13 @@ verify the comprehensive ESLint ecosystem cleanup
     "@types/node": "^22.0.0",
     "@typescript-eslint/utils": "^8.0.0",
     "@vitejs/plugin-vue": "^6.0.0",
+    "eslint": "^9.0.0",
     "vite": "catalog:",
     "vue": "^3.5.0",
     "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "eslint": ">=9"
   }
 }
 ```

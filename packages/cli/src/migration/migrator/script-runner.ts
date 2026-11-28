@@ -15,6 +15,7 @@ import { sourceTreeMatches } from '../migrator.ts';
 import type { MigrationReport } from '../report.ts';
 import type { DependencyBag } from './shared.ts';
 import {
+  declaresRuntimeDependency,
   getCommandStartIndex,
   isPlainRecord,
   LINT_STAGED_JSON_CONFIG_FILES,
@@ -944,17 +945,9 @@ function lintStagedJsonFiles(dir: string): Array<string> {
   );
 }
 
-/**
- * A package that lists a runner outside devDependencies keeps it: published code or
- * production scripts can need it, and `vpx` comes from the vite-plus devDependency.
- */
+// `vpx` comes from the vite-plus devDependency, so it cannot replace a runner the package needs at runtime.
 function ownsRunnerAtRuntime(runner: ScriptRunnerMigration, pkg: DependencyBag): boolean {
-  return runner.dependencies.some(
-    (dependency) =>
-      pkg.dependencies?.[dependency] !== undefined ||
-      pkg.optionalDependencies?.[dependency] !== undefined ||
-      pkg.peerDependencies?.[dependency] !== undefined,
-  );
+  return runner.dependencies.some((dependency) => declaresRuntimeDependency(pkg, dependency));
 }
 
 function packageDirs(rootDir: string, packages?: ReadonlyArray<WorkspacePackage>): Array<string> {
