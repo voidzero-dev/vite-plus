@@ -1,0 +1,10 @@
+{
+  "name": "workspace-root",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "npm@10.9.2",
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "fixture-member": "1.0.0"
+  }
+}

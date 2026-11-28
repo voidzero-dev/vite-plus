@@ -1,5 +1,14 @@
 # command_remove_npm8_nested_workspace
 
+## `npm pack ./packages/docs --pack-destination packages/app --silent`
+
+
+## `node check-tarball.cjs`
+
+```
+npm 8.1 rejected the combined tarball edit before writing manifests or a lockfile.
+```
+
 ## `cd packages/app && vp remove -w testnpm2 -- --no-audit`
 
 remove only the outer root declaration when the current member owns a workspace

@@ -1,0 +1,7 @@
+{
+  "name": "lifecycle-probe",
+  "version": "1.0.0",
+  "scripts": {
+    "install": "node capture.cjs"
+  }
+}

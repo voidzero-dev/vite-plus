@@ -30,12 +30,9 @@ async fn run_command(cwd: &AbsolutePath, command: ResolvedCommand) -> Result<Exi
     let ResolvedCommand { program, args, env, pre_run, npm_workspace_edit } = command;
     run_pre_run_actions(cwd, pre_run).await?;
 
-    let env = env.into_iter().collect::<HashMap<_, _>>();
-    let args = if let Some(edit) = npm_workspace_edit {
-        super::npm_workspace::edit_args(&program, cwd, edit, args, &env).await?
-    } else {
-        args
-    };
+    let mut env = env.into_iter().collect::<HashMap<_, _>>();
+    let _npm_workspace_preload =
+        if npm_workspace_edit { super::npm_workspace::prepare(cwd, &mut env)? } else { None };
     Ok(vp_command::run_command(&program, args, &env, cwd).await?)
 }
 

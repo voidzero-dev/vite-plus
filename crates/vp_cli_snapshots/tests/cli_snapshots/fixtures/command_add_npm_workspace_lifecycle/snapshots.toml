@@ -1,0 +1,9 @@
+[[case]]
+name = "command_add_npm_workspace_lifecycle"
+vp = "global"
+steps = [
+  { argv = ["npm", "pack", "./local-package", "--pack-destination", "packages/app", "--silent"], snapshot = false },
+  { argv = ["vpt", "mkdir", "packages/app/test-global"], snapshot = false },
+  { argv = ["vp", "add", "-w", "./lifecycle-probe-1.0.0.tgz", "--offline", "--", "--no-audit", "--no-fund"], cwd = "packages/app", envs = [["NPM_CONFIG_PREFIX", "${workspace}/test-global"]], snapshot = false },
+  ["node", "check.cjs"],
+]

@@ -81,4 +81,8 @@ The commands below describe project operations. Global mode is described under [
 
 ## Native Options
 
+With npm, `-w` adds the dependency to the root even when you run the command in a member. Add `--filter <name>` to include a member too.
+
+When adding a local tarball to both the root and a member, pass the tarball path without a package name and use npm 8.19.0 or later. For an external directory, add it to each target separately so each manifest gets the correct relative path.
+
 For native options, see [npm install](https://docs.npmjs.com/cli/v11/commands/npm-install), [pnpm add](https://pnpm.io/cli/add), [Yarn add](https://yarnpkg.com/cli/add), [Yarn Classic add](https://classic.yarnpkg.com/en/docs/cli/add), and [Bun add](https://bun.com/docs/pm/cli/add). To pass these options through Vite+, see [Native Arguments](./#native-arguments).

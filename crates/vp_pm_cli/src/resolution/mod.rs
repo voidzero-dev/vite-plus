@@ -31,7 +31,6 @@ mod command;
 mod commands;
 mod diagnostics;
 mod dialect;
-mod npm_entry;
 mod npm_workspace;
 mod resolve;
 mod runner;

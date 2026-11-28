@@ -13,7 +13,7 @@ pub(crate) struct ResolvedCommand {
     pub(crate) args: Vec<String>,
     pub(crate) env: BTreeMap<String, String>,
     pub(crate) pre_run: Vec<PreRunAction>,
-    pub(crate) npm_workspace_edit: Option<NpmWorkspaceEdit>,
+    pub(crate) npm_workspace_edit: bool,
 }
 
 impl ResolvedCommand {
@@ -24,7 +24,7 @@ impl ResolvedCommand {
             // Include npm/npx fallbacks: Vite+ manages their versions too.
             env.insert("npm_config_update_notifier".to_string(), "false".to_string());
         }
-        Self { program, args: Vec::new(), env, pre_run: Vec::new(), npm_workspace_edit: None }
+        Self { program, args: Vec::new(), env, pre_run: Vec::new(), npm_workspace_edit: false }
     }
 }
 
@@ -32,12 +32,6 @@ impl From<CommandBuilder> for CommandResolution {
     fn from(builder: CommandBuilder) -> Self {
         Self::Run(builder.build())
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NpmWorkspaceEdit {
-    AutomaticRoot,
-    LegacyRoot { local_dependency: bool },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,7 +95,7 @@ impl CommandBuilder {
         self
     }
 
-    pub(crate) fn npm_workspace_edit(&mut self, edit: Option<NpmWorkspaceEdit>) -> &mut Self {
+    pub(crate) fn npm_workspace_edit(&mut self, edit: bool) -> &mut Self {
         self.command.npm_workspace_edit = edit;
         self
     }

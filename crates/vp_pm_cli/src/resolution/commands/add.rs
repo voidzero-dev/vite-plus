@@ -227,14 +227,10 @@ impl Npm {
             return cmd.into();
         }
 
-        cmd.npm_workspace_edit(self.workspace_edit(
-            args.workspace_root && !args.packages.is_empty(),
-            !args.filter.is_empty(),
-            &args.packages,
-        ))
-        .arg("install")
-        .repeated("--workspace", args.filter.iter())
-        .arg_if("--include-workspace-root", args.workspace_root);
+        cmd.npm_workspace_edit(args.workspace_root && !args.packages.is_empty())
+            .arg("install")
+            .repeated("--workspace", args.filter.iter())
+            .arg_if("--include-workspace-root", args.workspace_root);
         match args.save_dependency.target() {
             Some(SaveDependencyTarget::Production) => {
                 // `--save` overrides npm's `save=false` setting when the user explicitly selects production.

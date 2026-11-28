@@ -2,6 +2,8 @@
 name = "command_remove_npm8_nested_workspace"
 vp = "global"
 steps = [
+  { argv = ["npm", "pack", "./packages/docs", "--pack-destination", "packages/app", "--silent"], snapshot = false },
+  ["node", "check-tarball.cjs"],
   { argv = ["vp", "remove", "-w", "testnpm2", "--", "--no-audit"], cwd = "packages/app", comment = "remove only the outer root declaration when the current member owns a workspace" },
   { argv = ["vp", "remove", "-w", "--filter", "docs", "test-vite-plus-install", "--", "--no-audit"], cwd = "packages/app", comment = "select the outer docs package when the inner workspace also has a member named docs" },
   { argv = ["vp", "remove", "-w", "testnpm2", "--", "--workspace=../docs", "--no-audit"], cwd = "packages/app", comment = "resolve an attached workspace path from the calling member" },
