@@ -30,9 +30,9 @@ import {
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
   OXLINT_PLUGINS_PACKAGE,
-  OXLINT_PLUGIN_API_PACKAGES,
   packageOwnsOxlintApi,
   bundledPackagesToRemove,
+  removeBundledDevDependencies,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
 } from './shared.ts';
@@ -186,43 +186,20 @@ export function rewritePackageJson(
   const hasBrowserDepSignal = VITEST_BROWSER_DEP_NAMES.some((name) =>
     dependencyGroups.some(({ dependencies }) => dependencies?.[name] !== undefined),
   );
-  // Published plugins keep their upstream imports and the dependencies that
-  // supply them, including optional @oxlint/plugins integrations.
-  const ownsOxlintApi = packageOwnsOxlintApi(pkg);
-  // Rewritten imports need a direct vite-plus dependency. Defer removal of
-  // @oxlint/plugins until dropDeadOxlintPluginsDependency checks the final source.
-  if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined && !ownsOxlintApi) {
+  // Rewritten imports need a direct vite-plus dependency, but published plugins
+  // keep their upstream imports. Defer removal of @oxlint/plugins until
+  // dropDeadOxlintPluginsDependency checks the final source.
+  if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined && !packageOwnsOxlintApi(pkg)) {
     needVitePlus = true;
   }
-  // remove packages that are replaced with vite-plus
-  for (const name of bundledPackagesToRemove(retainedBrowserPackages)) {
-    let wasRemoved = false;
-    for (const { dependencyField, dependencies } of dependencyGroups) {
-      if (
-        ownsOxlintApi &&
-        (dependencyField === 'peerDependencies' || dependencyField === 'dependencies') &&
-        (OXLINT_PLUGIN_API_PACKAGES as ReadonlyArray<string>).includes(name)
-      ) {
-        // A `catalog:` reference would dangle once the catalog entry for a
-        // REMOVE_PACKAGES name is dropped, and the next install fails. Resolve
-        // it to the concrete range the catalog currently points at.
-        const current = dependencies?.[name];
-        if (current?.startsWith('catalog:') && dependencies) {
-          const resolved = catalogDependencyResolver?.(current, name);
-          if (resolved) {
-            dependencies[name] = resolved;
-          }
-        }
-        continue;
-      }
-      if (dependencies?.[name]) {
-        delete dependencies[name];
-        wasRemoved = true;
-      }
-    }
-    if (wasRemoved) {
-      needVitePlus = true;
-    }
+  if (
+    removeBundledDevDependencies(
+      pkg,
+      bundledPackagesToRemove(retainedBrowserPackages),
+      catalogDependencyResolver,
+    )
+  ) {
+    needVitePlus = true;
   }
   // Official opt-in providers remain project dependencies. Align their versions
   // with bundled Vitest and ensure the framework peer required by each shim.

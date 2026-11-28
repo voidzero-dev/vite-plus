@@ -272,7 +272,7 @@ describe('rewritePackageJson', () => {
       };
       rewritePackageJson(pkg, packageManager, isMonorepo);
       expect(pkg).toEqual({
-        dependencies: { foo: '1.0.0' },
+        dependencies: { foo: '1.0.0', tsdown: '1.0.0' },
         devDependencies: { 'vite-plus': vitePlusSpec },
       });
     },
@@ -529,9 +529,9 @@ describe('rewritePackageJson', () => {
     rewritePackageJson(pkg, PackageManager.pnpm, true);
 
     expect(pkg.peerDependencies.vite).toBe('*');
-    expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
+    expect(pkg.peerDependencies).toHaveProperty('tsdown');
     expect(pkg.optionalDependencies.vitest).toBe('catalog:test');
-    expect(pkg.optionalDependencies).not.toHaveProperty('oxlint');
+    expect(pkg.optionalDependencies).toHaveProperty('oxlint');
     expect(pkg).toHaveProperty(['devDependencies', 'vite-plus'], 'catalog:');
   });
 
@@ -5645,7 +5645,29 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // catalog entry to its public range before pruning it so the peer cannot
     // dangle after migration.
     expect(pkg).toHaveProperty(['peerDependencies', 'vitest'], '^4.0.0');
-    expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
+    expect(pkg).toHaveProperty(['peerDependencies', 'tsdown'], '^0.1.0');
+  });
+
+  // A tsdown plugin builds and tests against the tsdown its consumers provide.
+  it('keeps a bundled package that the project also declares as a peer', () => {
+    const packageJsonPath = path.join(tmpDir, 'package.json');
+    fs.writeFileSync(
+      packageJsonPath,
+      JSON.stringify({
+        name: 'tsdown-plugin-example',
+        peerDependencies: { tsdown: '^0.23.0' },
+        devDependencies: { tsdown: '^0.23.0' },
+      }),
+    );
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+
+    rewriteStandaloneProject(tmpDir, workspace, true, true);
+
+    const pkg = readJson(packageJsonPath);
+    expect(pkg.peerDependencies).toEqual({ tsdown: '^0.23.0' });
+    expect(pkg.devDependencies).toEqual({ tsdown: '^0.23.0', 'vite-plus': 'catalog:' });
+    checkBootstrapPass(workspace, false);
+    expect(readJson(packageJsonPath)).toEqual(pkg);
   });
 
   it('reuses catalogs.default without creating a duplicate top-level catalog', () => {
