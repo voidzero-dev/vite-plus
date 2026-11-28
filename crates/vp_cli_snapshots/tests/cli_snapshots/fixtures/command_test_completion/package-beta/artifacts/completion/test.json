@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "vitePlusVersion": "1.3.0",
+  "vitestVersion": "5.1.0",
+  "globalOptions": [
+    {
+      "flags": [
+        "--beta"
+      ],
+      "description": "beta option",
+      "valueMode": "none"
+    }
+  ],
+  "commands": [
+    {
+      "name": "",
+      "options": []
+    },
+    {
+      "name": "run",
+      "options": []
+    }
+  ]
+}

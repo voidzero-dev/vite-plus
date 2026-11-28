@@ -31,6 +31,7 @@ import { z } from 'zod';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import corePkg from '../core/package.json' with { type: 'json' };
+import { writeTestCompletionMetadata } from './build/completion-metadata.ts';
 import { VITEST_VERSION } from './src/utils/constants.ts';
 import { errorMessage } from './src/utils/error.ts';
 import type { JsonObject, JsonValue } from './src/utils/json-value.ts';
@@ -182,6 +183,7 @@ if (!skipTs) {
   await syncCorePackageExports();
   await syncTestPackageExports();
   await syncToolchainExports();
+  await writeTestCompletionMetadata(projectDir, VITEST_VERSION);
 }
 await copyBundledDocs();
 await syncReadmeFromRoot();
