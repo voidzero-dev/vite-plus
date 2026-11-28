@@ -118,12 +118,14 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
     let config = env::config::load_config().await?;
     let mut executor = JsExecutor::new(None);
 
-    let node_bin_prefix = if config.node_shim_mode == env::config::ShimMode::SystemFirst
+    let (node_bin_prefix, system_runtime) = if config.node_shim_mode
+        == env::config::ShimMode::SystemFirst
         && let Some(system_node) = crate::shim::dispatch::find_system_tool("node")
         && let Some(bin_dir) = system_node.parent()
     {
-        bin_dir.to_absolute_path_buf()
+        (bin_dir.to_absolute_path_buf(), true)
     } else {
+        // The else branch selects a managed runtime: a system-first system Node is handled above.
         // Use project runtime if package.json exists, otherwise use CLI runtime
         let package_json_path = project_path.join("package.json");
         let runtime = if package_json_path.as_path().exists() {
@@ -131,13 +133,16 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         } else {
             executor.ensure_cli_runtime().await?
         };
-        runtime.get_bin_prefix()
+        (runtime.get_bin_prefix(), false)
     };
 
+    // A later PATH entry for the selected runtime does not make it win the
+    // `node` lookup, so move it to the front. A system directory keeps its
+    // position because it can also contain unrelated tools.
     prepend_tools_to_path_env(
         &node_bin_prefix,
         &["node"],
-        PrependOptions { dedupe_anywhere: true },
+        PrependOptions { dedupe_anywhere: system_runtime },
     )?;
     if let Some(package_manager) = env::package_manager::resolve_current_spec(project_path).await? {
         if config.package_manager_shim_mode_for(package_manager.package_manager_type)
