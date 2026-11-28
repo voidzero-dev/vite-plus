@@ -18,7 +18,12 @@ import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { PRETTIER_CONFIG_FILES, PRETTIER_PACKAGE_JSON_CONFIG, detectConfigs } from '../detector.ts';
 import { hasOnlyInjectedDefaults, rewriteToolLintStagedConfigFiles } from '../migrator.ts';
 import type { MigrationReport } from '../report.ts';
-import { rewritePackageScriptFields, warnMigration } from './shared.ts';
+import type { DependencyBag } from './shared.ts';
+import {
+  removeReplacedDevDependency,
+  rewritePackageScriptFields,
+  warnMigration,
+} from './shared.ts';
 
 export function detectPrettierProject(projectPath: string, packages?: Array<WorkspacePackage>) {
   const packageJsonPath = path.join(projectPath, 'package.json');
@@ -255,28 +260,19 @@ function rewritePrettierPackageJson(packageJsonPath: string): void {
   if (!fs.existsSync(packageJsonPath)) {
     return;
   }
-  editJsonFile<{
-    devDependencies?: Record<string, string>;
-    dependencies?: Record<string, string>;
-    scripts?: Record<string, string>;
-    'lint-staged'?: Record<string, string | Array<string>>;
-  }>(packageJsonPath, (pkg) => {
-    let changed = false;
-    // Remove prettier and prettier-plugin-* dependencies
-    if (pkg.devDependencies) {
-      for (const dep of Object.keys(pkg.devDependencies)) {
-        if (dep === 'prettier' || dep.startsWith('prettier-plugin-')) {
-          delete pkg.devDependencies[dep];
-          changed = true;
-        }
-      }
+  editJsonFile<
+    DependencyBag & {
+      scripts?: Record<string, string>;
+      'lint-staged'?: Record<string, string | Array<string>>;
     }
-    if (pkg.dependencies) {
-      for (const dep of Object.keys(pkg.dependencies)) {
-        if (dep === 'prettier' || dep.startsWith('prettier-plugin-')) {
-          delete pkg.dependencies[dep];
-          changed = true;
-        }
+  >(packageJsonPath, (pkg) => {
+    let changed = false;
+    for (const dep of Object.keys(pkg.devDependencies ?? {})) {
+      if (
+        (dep === 'prettier' || dep.startsWith('prettier-plugin-')) &&
+        removeReplacedDevDependency(pkg, dep)
+      ) {
+        changed = true;
       }
     }
     const scriptsChanged = rewritePackageScriptFields(pkg, rewritePrettier);

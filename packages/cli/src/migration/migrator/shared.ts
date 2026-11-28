@@ -491,6 +491,15 @@ export function declaresRuntimeDependency(pkg: DependencyBag, name: string): boo
   );
 }
 
+/** Remove a devDependency that Vite+ replaces. Returns whether it was removed. */
+export function removeReplacedDevDependency(pkg: DependencyBag, name: string): boolean {
+  if (pkg.devDependencies?.[name] === undefined || declaresRuntimeDependency(pkg, name)) {
+    return false;
+  }
+  delete pkg.devDependencies[name];
+  return true;
+}
+
 /**
  * Remove the bundled packages that Vite+ replaces. Returns whether the package
  * lists any of them as a devDependency, kept or not.

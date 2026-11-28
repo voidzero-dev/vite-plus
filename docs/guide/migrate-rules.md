@@ -137,6 +137,8 @@ What happens to each toolchain dependency, at a glance:
 
 Vite+ bundles Oxlint, Oxfmt, tsdown, `@vitest/browser`, and `@vitest/browser-preview`, so migration removes their `devDependencies` entries. A package that also lists one of them in `dependencies`, `optionalDependencies`, or `peerDependencies` keeps every declaration of it, including the development copy. Such a package publishes or runs the tool, and its consumers may not use Vite+. A tsdown plugin, for example, keeps `tsdown` as a peer and as the devDependency it tests against. A kept `catalog:` reference becomes the range its catalog entry pointed at, because migration still removes that entry.
 
+The same rule applies to the tools that migration replaces: ESLint and its plugins, Prettier and `prettier-plugin-*`, lint-staged, tsup, tsx, oxnode, and ts-node.
+
 ### Version Selection
 
 - `vite-plus` is pinned to the concrete version of the CLI running the migration, never the `latest` dist-tag.

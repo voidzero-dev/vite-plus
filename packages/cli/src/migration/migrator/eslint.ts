@@ -27,6 +27,7 @@ import type { MigrationReport } from '../report.ts';
 import {
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
+  removeReplacedDevDependency,
   rewritePackageScriptFields,
   rewriteScriptMap,
   warnMigration,
@@ -454,32 +455,19 @@ export function rewriteEslintPackageJson(
     'lint-staged'?: Record<string, string | Array<string>>;
   }>(packageJsonPath, (pkg) => {
     let changed = false;
-    for (const field of [
-      'devDependencies',
-      'dependencies',
-      'peerDependencies',
-      'optionalDependencies',
-    ] as const) {
-      const deps = pkg[field];
-      if (!deps) {
-        continue;
+    for (const name of Object.keys(pkg.devDependencies ?? {})) {
+      if (
+        !preserveJsPlugins.has(name) &&
+        isEslintEcosystemDep(name) &&
+        removeReplacedDevDependency(pkg, name)
+      ) {
+        changed = true;
       }
-      let removedAny = false;
-      for (const name of Object.keys(deps)) {
-        if (preserveJsPlugins.has(name)) {
-          continue;
-        }
-        if (isEslintEcosystemDep(name)) {
-          delete deps[name];
-          changed = true;
-          removedAny = true;
-        }
-      }
-      // Drop the field entirely if our cleanup emptied it — avoid
-      // leaving `"devDependencies": {}` noise in the output.
-      if (removedAny && Object.keys(deps).length === 0) {
-        delete pkg[field];
-      }
+    }
+    // Drop the field entirely if our cleanup emptied it — avoid
+    // leaving `"devDependencies": {}` noise in the output.
+    if (changed && Object.keys(pkg.devDependencies ?? {}).length === 0) {
+      delete pkg.devDependencies;
     }
     const scriptsChanged = rewritePackageScriptFields(pkg, rewriteEslint);
     return changed || scriptsChanged ? pkg : undefined;
