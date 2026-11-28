@@ -55,7 +55,8 @@ describe('completion Rust consumer handoff', () => {
     const root = workspace();
     const supplied = artifact(root, 'custom/host/ci', 100);
     artifact(root, 'target/release', 900);
-    artifact(root, 'target/other-triple/debug', 1000);
+    const foreign = artifact(root, 'target/other-triple/debug', 1000);
+    writeFileSync(foreign, '#!/bin/sh\nexit 93\n');
     const shadow = path.join(root, 'node_modules/.bin');
     mkdirSync(shadow, { recursive: true });
     writeFileSync(path.join(shadow, 'vp'), '#!/usr/bin/env node\nthrow new Error("Wrong entry");');
@@ -67,16 +68,6 @@ describe('completion Rust consumer handoff', () => {
         CARGO_BUILD_TARGET: 'other-triple',
       }),
     ).toBe(supplied);
-  });
-
-  it('does not inspect newer invalid foreign artifacts', () => {
-    const root = workspace();
-    const supplied = artifact(root, 'target/debug', 100);
-    const foreign = artifact(root, 'target/foreign/release', 200);
-    writeFileSync(foreign, '#!/bin/sh\nexit 93\n');
-    expect(resolveCompletionConsumer(root, { VP_COMPLETION_CONSUMER_BIN: supplied })).toBe(
-      supplied,
-    );
   });
 
   it.each(['target/debug', 'target/host-triple/release', 'custom build/host-triple/ci'])(

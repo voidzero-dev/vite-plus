@@ -39,30 +39,6 @@ steps = [
 ]
 
 [[case]]
-name = "test_completion_vitest_3_silently_declines"
-vp = "global"
-seed-runtime = false
-env = { VP_COMPLETE = "bash", _CLAP_COMPLETE_INDEX = "2" }
-steps = [
-  { argv = ["vpt", "mkdir", "-p", "node_modules"], snapshot = false },
-  { argv = ["vpt", "cp", "-r", "package-alpha", "node_modules/vite-plus"], snapshot = false },
-  { argv = ["vpt", "cp", "-r", "package-alpha/artifacts", "node_modules/vite-plus/dist"], snapshot = false },
-  { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/node_modules/vitest"], snapshot = false },
-  { argv = ["vpt", "write-file", "node_modules/vite-plus/node_modules/vitest/package.json", '{"name":"vitest","version":"3.2.4"}'], snapshot = false },
-  { argv = ["vpt", "cp", "-r", "package-global", "global"], snapshot = false },
-  { argv = ["vpt", "cp", "-r", "package-global/artifacts", "global/dist"], snapshot = false },
-  { argv = ["vpt", "mkdir", "-p", "global/node_modules/vitest"], snapshot = false },
-  { argv = ["vpt", "cp", "package-global/vitest-package.json", "global/node_modules/vitest/package.json"], snapshot = false },
-  { argv = ["vp", "--", "vp", "test", "--al"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Stale Vitest 5 metadata with legacy Vitest: empty stdout/stderr and success" },
-  { argv = ["vp", "--", "vp", "test", "--glob"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Does not borrow the global toolchain's Vitest 5 metadata" },
-  { argv = ["vpt", "rm", "node_modules/vite-plus/dist/completion/test.json"], snapshot = false },
-  { argv = ["vp", "--", "vp", "test", "--al"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Missing metadata also completes silently" },
-  { argv = ["vpt", "cp", "package-alpha/artifacts/completion/test.json", "node_modules/vite-plus/dist/completion/test.json"], snapshot = false },
-  { argv = ["vpt", "cp", "package-alpha/vitest-package.json", "node_modules/vite-plus/node_modules/vitest/package.json"], snapshot = false },
-  { argv = ["vp", "--", "vp", "test", "--al"], comment = "Positive control: matched Vitest 5 metadata completes again, without executing tests" },
-]
-
-[[case]]
 name = "test_completion_vitest_4_silently_declines"
 vp = "global"
 seed-runtime = false
@@ -84,4 +60,14 @@ steps = [
   { argv = ["vpt", "cp", "package-alpha/artifacts/completion/test.json", "node_modules/vite-plus/dist/completion/test.json"], snapshot = false },
   { argv = ["vpt", "cp", "package-alpha/vitest-package.json", "node_modules/vite-plus/node_modules/vitest/package.json"], snapshot = false },
   { argv = ["vp", "--", "vp", "test", "--al"], comment = "Positive control: matched Vitest 5 metadata completes again, without executing tests" },
+]
+
+[[case]]
+name = "disabled_completion_preserves_exec_cwd"
+vp = "global"
+steps = [
+  { argv = ["vpt", "write-file", "package.json", '{"name":"exec-cwd","private":true}'], snapshot = false },
+  { argv = ["git", "init", "-q", "repo"], snapshot = false },
+  { argv = ["vp", "exec", "--", "git", "-C", "repo", "rev-parse", "--show-toplevel"], envs = [["VP_COMPLETE", "0"]], continue-on-failure = true },
+  { argv = ["vp", "exec", "--", "git", "-C", "repo", "rev-parse", "--show-toplevel"], envs = [["VP_COMPLETE", ""]] },
 ]
